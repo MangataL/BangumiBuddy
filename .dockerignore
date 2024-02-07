@@ -1,0 +1,18 @@
+# 使用与.gitignore相同的规则
+backend/BangumiBuddy
+backend/web
+backend/test
+backend/*.db
+webui/logs
+webui/*.log
+webui/node_modules
+webui/.vite
+webui/dist
+
+# Docker特有的忽略项
+.git
+.github
+.vscode
+*.md
+Dockerfile
+docker-compose.yml 

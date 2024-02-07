@@ -1,0 +1,9 @@
+.idea
+.cursor
+.history
+.vscode
+.env
+node_modules
+.DS_Store
+test
+docker-compose.yml
