@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  bangumi-buddy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bangumi-buddy
+    restart: unless-stopped
+    ports:
+      - "6937:6937"
+    volumes:
+      - ./test/config:/config
+      - ./test/data:/data
+      - ~/bangumi/download:/download
+      - ~/bangumi/media:/video

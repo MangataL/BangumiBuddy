@@ -1,0 +1,32 @@
+<rss version="2.0">
+    <script/>
+    <channel>
+        <title>Mikan Project - GIRLS BAND CRY</title>
+        <link>http://mikanime.tv/RSS/Bangumi?bangumiId=3298&subgroupid=370</link>
+        <description>Mikan Project - GIRLS BAND CRY</description>
+        <item>
+            <guid isPermaLink="false">[喵萌Production&LoliHouse] GIRLS BAND CRY - 02 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]</guid>
+            <link>https://mikanime.tv/Home/Episode/3a2e456a689ead23ca8f49fdc74ba1872c6f0c12</link>
+            <title>[喵萌Production&LoliHouse] GIRLS BAND CRY - 02 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]</title>
+            <description>[喵萌Production&LoliHouse] GIRLS BAND CRY - 02 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕][477.02 MB]</description>
+            <torrent xmlns="https://mikanime.tv/0.1/">
+                <link>https://mikanime.tv/Home/Episode/3a2e456a689ead23ca8f49fdc74ba1872c6f0c12</link>
+                <contentLength>500191712</contentLength>
+                <pubDate>2024-04-14T00:35:38.777</pubDate>
+            </torrent>
+            <enclosure type="application/x-bittorrent" length="500191712" url="https://mikanime.tv/Download/20240414/3a2e456a689ead23ca8f49fdc74ba1872c6f0c12.torrent"/>
+        </item>
+        <item>
+            <guid isPermaLink="false">[喵萌Production&LoliHouse] GIRLS BAND CRY - 01 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]</guid>
+            <link>https://mikanime.tv/Home/Episode/b13d145d95d9acdd5fc50784a6906007b540b468</link>
+            <title>[喵萌Production&LoliHouse] GIRLS BAND CRY - 01 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]</title>
+            <description>[喵萌Production&LoliHouse] GIRLS BAND CRY - 01 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕][594.17 MB]</description>
+            <torrent xmlns="https://mikanime.tv/0.1/">
+                <link>https://mikanime.tv/Home/Episode/b13d145d95d9acdd5fc50784a6906007b540b468</link>
+                <contentLength>623032384</contentLength>
+                <pubDate>2024-04-07T18:50:03.444</pubDate>
+            </torrent>
+            <enclosure type="application/x-bittorrent" length="623032384" url="https://mikanime.tv/Download/20240407/b13d145d95d9acdd5fc50784a6906007b540b468.torrent"/>
+        </item>
+    </channel>
+</rss>
