@@ -1,0 +1,20 @@
+<rss version="2.0">
+    <script/>
+    <channel>
+        <title>Mikan Project - 吹响！悠风号 第三季</title>
+        <link>http://mikanani.me/RSS/Bangumi?bangumiId=3290&subgroupid=370</link>
+        <description>Mikan Project - 吹响！悠风号 第三季</description>
+        <item>
+            <guid isPermaLink="false">[千夏字幕组&LoliHouse] 吹响吧！上低音号 3 / Hibike! Euphonium 3 - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]</guid>
+            <link>https://mikanani.me/Home/Episode/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa</link>
+            <title>[千夏字幕组&LoliHouse] 吹响吧！上低音号 3 / Hibike! Euphonium 3 - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]</title>
+            <description>[千夏字幕组&LoliHouse] 吹响吧！上低音号 3 / Hibike! Euphonium 3 - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕][429 MB]</description>
+            <torrent xmlns="https://mikanani.me/0.1/">
+                <link>https://mikanani.me/Home/Episode/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa</link>
+                <contentLength>449839104</contentLength>
+                <pubDate>2024-06-14T22:54:27</pubDate>
+            </torrent>
+            <enclosure type="application/x-bittorrent" length="449839104" url="https://mikanani.me/Download/20240614/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa.torrent"/>
+        </item>
+    </channel>
+</rss>
