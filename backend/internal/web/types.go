@@ -35,6 +35,7 @@ type Torrent struct {
 	DownloadSpeed int64                    `json:"downloadSpeed"`
 	Progress      float64                  `json:"progress"`
 	RSSGUID       string                   `json:"rssGUID"`
+	CreatedAt     time.Time                `json:"createdAt"`
 }
 
 type File struct {

@@ -17,20 +17,23 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  HybridTooltip,
+  HybridTooltipContent,
+  HybridTooltipTrigger,
+} from "@/components/common/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/useToast";
 import subscriptionAPI, {
   ListRecentUpdatedTorrentsReq,
   RecentUpdatedTorrent,
   TorrentStatusSet,
 } from "@/api/subscription";
-import { AxiosError } from "axios";
 import { toZonedTime, format } from "date-fns-tz";
+import { TruncatedText } from "@/components/common/truncate-rss-item";
+import { formatDate } from "@/utils/time";
+import { extractErrorMessage } from "@/utils/error";
 
 interface RecentUpdatesDialogProps {
   open: boolean;
@@ -53,7 +56,7 @@ export function RecentUpdatesDialog({
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const pageSize = 10;
+  const pageSize = 5;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; // 获取当前浏览器的时区
 
   const getDayTime = (date: Date) => {
@@ -134,9 +137,7 @@ export function RecentUpdatesDialog({
       setTotal(data.total);
       setCurrentPage(page);
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "获取近期更新失败",
         description: description,
@@ -250,15 +251,9 @@ export function RecentUpdatesDialog({
     );
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const zonedDate = toZonedTime(date, timeZone);
-    return format(zonedDate, "yyyy/MM/dd HH:mm", { timeZone });
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] sm:max-h-[80vh] w-[95vw] sm:w-auto overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90dvh] sm:max-h-[80dvh] w-[95dvw] xs:w-[90dvw] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl sm:text-2xl font-bold">
             近期更新
@@ -273,9 +268,13 @@ export function RecentUpdatesDialog({
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="w-full justify-start mb-4 overflow-x-auto">
+            <TabsList className="w-full justify-center sm:justify-start mb-4 overflow-x-auto">
               {Object.entries(timeRanges).map(([key, range]) => (
-                <TabsTrigger key={key} value={key} className="min-w-fit">
+                <TabsTrigger
+                  key={key}
+                  value={key}
+                  className="min-w-fit text-sm px-2 py-1 sm:px-3"
+                >
                   {range.label}
                 </TabsTrigger>
               ))}
@@ -285,24 +284,42 @@ export function RecentUpdatesDialog({
               <TabsContent
                 key={key}
                 value={key}
-                className="flex-grow overflow-auto"
+                className="flex-grow overflow-auto min-h-[400px] max-h-[450px] transition-opacity duration-200"
               >
                 {loading ? (
                   <div className="rounded-md border overflow-auto">
                     <Table>
                       <TableBody>
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-8">
-                            加载中...
-                          </TableCell>
-                        </TableRow>
+                        {Array(pageSize)
+                          .fill(0)
+                          .map((_, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="w-14 sm:w-20 p-1 sm:p-2 hidden sm:table-cell">
+                                <Skeleton className="w-12 h-16 sm:w-16 sm:h-20 rounded-sm" />
+                              </TableCell>
+                              <TableCell className="align-top py-2 px-2 sm:px-4">
+                                <div className="flex flex-col space-y-2">
+                                  <Skeleton className="h-4 sm:h-5 w-[96px] sm:w-[160px]" />
+                                  <Skeleton className="h-3 sm:h-4 w-[150px] sm:w-[500px]" />
+                                </div>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-center w-20 sm:w-40 text-xs sm:text-sm px-1 sm:px-4">
+                                <Skeleton className="h-3 sm:h-4 w-[64px] sm:w-[96px] ml-auto" />
+                              </TableCell>
+                              <TableCell className="w-24 sm:w-32 text-center whitespace-nowrap px-1 sm:px-4">
+                                <div className="ml-auto">
+                                  <Skeleton className="h-5 sm:h-6 w-[48px] sm:w-[64px] ml-auto" />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
                       </TableBody>
                     </Table>
                   </div>
                 ) : torrents.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="flex items-center justify-center py-8 sm:py-12 text-center px-4">
                     <img
-                      src="/empty-updates.png"
+                      src="/logo.png"
                       alt="暂无更新"
                       onError={(e) => {
                         // 图片加载失败时使用emoji作为备用
@@ -310,13 +327,15 @@ export function RecentUpdatesDialog({
                         target.onerror = null; // 防止循环触发错误
                         target.style.display = "none";
                       }}
-                      className="w-32 h-32 mb-4"
+                      className="w-32 sm:h-32 mb-4"
                     />
-                    <div className="text-xl sm:text-2xl font-bold text-primary mt-4">
-                      现在还没有更新哦
-                    </div>
-                    <div className="text-secondary-foreground mt-2">
-                      稍后再来看看吧~
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="text-lg sm:text-xl font-bold text-primary mt-2 sm:mt-4">
+                        现在还没有更新哦
+                      </div>
+                      <div className="text-sm sm:text-base text-secondary-foreground mt-1 sm:mt-2">
+                        稍后再来看看吧~
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -336,7 +355,7 @@ export function RecentUpdatesDialog({
                                   className="w-12 h-16 sm:w-16 sm:h-20 object-cover rounded-sm"
                                 />
                               </TableCell>
-                              <TableCell className="align-top py-2">
+                              <TableCell className="align-top py-2 px-1 sm:px-4">
                                 <div className="flex flex-col h-full justify-between">
                                   <div className="font-medium text-sm sm:text-base">
                                     <span className="text-primary">
@@ -347,25 +366,27 @@ export function RecentUpdatesDialog({
                                     </span>
                                   </div>
                                   <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="text-xs sm:text-sm text-muted-foreground mt-1 truncate max-w-[200px] sm:max-w-[500px] cursor-default">
-                                          {torrent.rssItem}
+                                    <HybridTooltip>
+                                      <HybridTooltipTrigger asChild>
+                                        <div className="text-xs sm:text-sm text-muted-foreground mt-1 truncate max-w-[150px] sm:max-w-[500px] cursor-default">
+                                          <TruncatedText
+                                            text={torrent.rssItem}
+                                          />
                                         </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent
+                                      </HybridTooltipTrigger>
+                                      <HybridTooltipContent
                                         side="top"
                                         className="max-w-[250px] sm:max-w-md"
                                       >
-                                        <p className="break-words text-xs sm:text-sm">
+                                        <p className="sm:max-w-md break-words text-xs sm:text-sm">
                                           {torrent.rssItem}
                                         </p>
-                                      </TooltipContent>
-                                    </Tooltip>
+                                      </HybridTooltipContent>
+                                    </HybridTooltip>
                                   </TooltipProvider>
                                 </div>
                               </TableCell>
-                              <TableCell className="whitespace-nowrap text-right w-24 sm:w-40 text-xs sm:text-sm">
+                              <TableCell className="whitespace-nowrap text-center w-20 sm:w-40 text-xs sm:text-sm px-1 sm:px-4">
                                 <div className="flex flex-col sm:block">
                                   <span className="sm:inline">
                                     {
@@ -383,21 +404,24 @@ export function RecentUpdatesDialog({
                                   </span>
                                 </div>
                               </TableCell>
-                              <TableCell className="w-32 sm:w-32 text-right whitespace-nowrap">
+                              <TableCell className="w-24 sm:w-32 text-center whitespace-nowrap px-0 xs:px-1 sm:px-4">
                                 {torrent.statusDetail ? (
                                   <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
+                                    <HybridTooltip>
+                                      <HybridTooltipTrigger asChild>
                                         <div className="inline-block whitespace-nowrap">
                                           {renderStatus(torrent.status)}
                                         </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="bottom">
+                                      </HybridTooltipTrigger>
+                                      <HybridTooltipContent
+                                        side="bottom"
+                                        className="max-w-[250px] sm:max-w-[150px] break-words whitespace-normal"
+                                      >
                                         <p className="text-xs sm:text-sm">
                                           {torrent.statusDetail}
                                         </p>
-                                      </TooltipContent>
-                                    </Tooltip>
+                                      </HybridTooltipContent>
+                                    </HybridTooltip>
                                   </TooltipProvider>
                                 ) : (
                                   <div className="inline-block whitespace-nowrap">

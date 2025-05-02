@@ -143,7 +143,7 @@ func (n *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTrans
 	baseBody := fmt.Sprintf("季度: 第%d季\n字幕组: %s\n文件名: %s\nRSS订阅项: %s",
 		req.Season, req.ReleaseGroup, req.FileName, req.RSSGUID)
 
-	if !req.Transferred || req.Error != nil {
+	if req.Error != nil {
 		title = fmt.Sprintf("番剧转移失败：%s", req.BangumiName)
 
 		errorMsg := "未知错误"

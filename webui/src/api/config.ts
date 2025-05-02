@@ -51,7 +51,7 @@ export interface NoticeConfig {
     username: string;
     password: string;
     from: string;
-    to: string[];
+    to: string[] | null;
     ssl: boolean;
   };
   bark: {

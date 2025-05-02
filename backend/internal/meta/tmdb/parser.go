@@ -132,6 +132,7 @@ func getGenres(tv *tmdb.TVDetails) string {
 	return strings.Join(genres, ", ")
 }
 
+// TODO: 后期有必要可以改为多次分页去查找满足条件的，当前从简只查一页
 func (t *Client) Search(ctx context.Context, name string) (meta.Meta, error) {
 	if t.client == nil {
 		return meta.Meta{}, ErrTMDBTokenNotSet
@@ -147,8 +148,16 @@ func (t *Client) Search(ctx context.Context, name string) (meta.Meta, error) {
 	if len(tvs.Results) == 0 {
 		return meta.Meta{}, errs.NewNotFoundf("未搜索到番剧，解析出的番剧名称: %s", name)
 	}
-	tv := tvs.Results[0]
-	return t.Parse(ctx, int(tv.ID))
+	id := tvs.Results[0].ID
+	for _, tv := range tvs.Results {
+		for _, genre := range tv.GenreIDs {
+			if genre == animeGenreID {
+				id = tv.ID
+				break
+			}
+		}
+	}
+	return t.Parse(ctx, int(id))
 }
 
 func getYear(ctx context.Context, date string) string {

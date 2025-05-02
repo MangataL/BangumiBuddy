@@ -33,6 +33,10 @@ RUN go version && \
 
 FROM alpine:latest
 
+RUN apk add --no-cache tzdata \
+    && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
+
 WORKDIR /app
 RUN mkdir -p /data/log /config
 COPY --from=backend-builder /app/BangumiBuddy /app/

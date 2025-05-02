@@ -11,7 +11,6 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
-	"github.com/MangataL/BangumiBuddy/pkg/log"
 )
 
 var (
@@ -43,8 +42,6 @@ func New(db *gorm.DB) *Repository {
 // Save 保存番剧信息
 func (r *Repository) Save(ctx context.Context, bangumi subscriber.Bangumi) error {
 	model := fromBangumi(bangumi)
-	log.Debugf(ctx, "更新订阅: %+v", model)
-
 
 	// 使用 upsert 操作，如果存在则更新，不存在则插入
 	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{

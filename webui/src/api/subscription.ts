@@ -74,7 +74,7 @@ export interface RSSMatch {
   guid: string;
   match: boolean;
   processed: boolean;
-  title?: string; // 添加title可选字段用于显示
+  publishedAt: string;
 }
 
 // 文件信息
@@ -114,6 +114,7 @@ export interface Torrent {
   downloadSpeed: number;
   progress: number;
   rssGUID: string;
+  createdAt: string;
 }
 
 export interface RecentUpdatedTorrent {

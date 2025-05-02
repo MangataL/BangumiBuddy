@@ -152,7 +152,7 @@ func (t *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTrans
 		req.BangumiName, req.Season, req.ReleaseGroup, req.FileName, req.RSSGUID)
 
 	// 添加转移状态和详情
-	if !req.Transferred || req.Error != nil {
+	if req.Error != nil {
 		emoji = "❌"
 		errorMsg := "未知错误"
 		if req.Error != nil {

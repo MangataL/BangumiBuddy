@@ -47,13 +47,18 @@ import subscriptionAPI, {
 } from "@/api/subscription";
 import { MatchInput } from "../common/match-input";
 import { EpisodePositionInput } from "./episode-position-input";
-import { AxiosError } from "axios";
+import { extractErrorMessage } from "@/utils/error";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  HybridTooltip,
+  HybridTooltipContent,
+  HybridTooltipTrigger,
+} from "@/components/common/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   HoverCard,
@@ -85,6 +90,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDate } from "@/utils/time";
+import { useMobile } from "@/hooks/useMobile";
+import { TruncatedText } from "@/components/common/truncate-rss-item";
 
 export interface SubscriptionInit {
   id: string;
@@ -133,6 +141,7 @@ export function SubscriptionDetailDialog({
   const [refreshInterval, setRefreshInterval] = useState<number>(10000);
   const [showFileDetails, setShowFileDetails] = useState(false);
   const [selectedTorrent, setSelectedTorrent] = useState<Torrent | null>(null);
+  const isMobile = useMobile();
 
   // 添加定时器引用
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -148,16 +157,16 @@ export function SubscriptionDetailDialog({
     className?: string;
   }) => (
     <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger>
+      <HybridTooltip>
+        <HybridTooltipTrigger>
           <div className={cn("flex items-center justify-center", className)}>
             {children}
           </div>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-[200px] whitespace-normal break-words">
+        </HybridTooltipTrigger>
+        <HybridTooltipContent className="max-w-[200px] whitespace-normal break-words">
           {content}
-        </TooltipContent>
-      </Tooltip>
+        </HybridTooltipContent>
+      </HybridTooltip>
     </TooltipProvider>
   );
 
@@ -348,9 +357,7 @@ export function SubscriptionDetailDialog({
       const data = await subscriptionAPI.getBangumi(subscriptionID);
       setBangumiDetails(data);
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "获取番剧详情失败",
         description: description,
@@ -448,9 +455,7 @@ export function SubscriptionDetailDialog({
       });
       updateReleaseGroups(subscriptionID);
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "保存配置失败",
         description: description,
@@ -471,9 +476,7 @@ export function SubscriptionDetailDialog({
       // 重新加载文件列表
       loadTabData();
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "文件转移重试失败",
         description: description,
@@ -538,9 +541,7 @@ export function SubscriptionDetailDialog({
         description: "已完成RSS订阅项检测下载",
       });
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "RSS检测失败",
         description: description,
@@ -579,9 +580,7 @@ export function SubscriptionDetailDialog({
         }`,
       });
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "批量标记更新失败",
         description: description,
@@ -618,9 +617,7 @@ export function SubscriptionDetailDialog({
         setConfigLoaded(false);
       }
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "删除失败",
         description: description,
@@ -761,7 +758,7 @@ export function SubscriptionDetailDialog({
 
     return (
       <Dialog open={showFileDetails} onOpenChange={setShowFileDetails}>
-        <DialogContent className="w-[95vw] sm:max-w-[700px] max-h-[80vh] overflow-auto p-4 md:p-6">
+        <DialogContent className="w-[95dvw] sm:max-w-[700px] max-h-[80dvh] overflow-auto p-4 md:p-6">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl">
               文件转移详情
@@ -824,10 +821,10 @@ export function SubscriptionDetailDialog({
         }}
       >
         <div
-          className="animate-accordion-down shadow-xl subscription-detail-card bg-background rounded-xl"
+          className="animate-accordion-down shadow-xl subscription-detail-card bg-background rounded-xl scrollbar-hide"
           style={{
-            width: "min(92vw, 1000px)",
-            maxHeight: "92vh",
+            width: "min(92dvw, 1000px)",
+            maxHeight: "92dvh",
             overflow: "auto",
           }}
           onClick={(e) => e.stopPropagation()}
@@ -1059,7 +1056,7 @@ export function SubscriptionDetailDialog({
                         className="mt-0 ml-0 min-h-[550px] animate-in fade-in duration-300"
                       >
                         {loading && (
-                          <div className="flex justify-center items-center h-[50vh] md:h-[550px]">
+                          <div className="flex justify-center items-center h-[50dvh] md:h-[550px]">
                             加载中...
                           </div>
                         )}
@@ -1170,7 +1167,7 @@ export function SubscriptionDetailDialog({
                                 <Label
                                   htmlFor={`weekday-${subscriptionID}-${selectedSubGroup}`}
                                 >
-                                  播出时间
+                                  更新星期
                                 </Label>
                                 <select
                                   id={`weekday-${subscriptionID}-${selectedSubGroup}`}
@@ -1221,17 +1218,21 @@ export function SubscriptionDetailDialog({
                         className="mt-0 ml-0 min-h-[550px] animate-in fade-in duration-300"
                       >
                         <div className="space-y-4">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium">
-                                {selectedSubGroup} RSS订阅项
+                          <div className="flex flex-row justify-between items-center">
+                            <div className="flex items-center gap-1">
+                              <h4 className="font-bold text-sm md:text-base">
+                                {selectedSubGroup}
+                                <span className="hidden md:inline">
+                                  {" "}
+                                  RSS订阅项
+                                </span>
                               </h4>
                               <HoverCard>
                                 <HoverCardTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6 rounded-full hover:bg-muted"
+                                    className="h-4 w-4 sm:h-6 sm:w-6 rounded-full hover:bg-muted p-0 ml-0.5 mr-1.5"
                                   >
                                     <Info className="h-4 w-4 text-muted-foreground" />
                                   </Button>
@@ -1293,56 +1294,60 @@ export function SubscriptionDetailDialog({
                                 </HoverCardContent>
                               </HoverCard>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0">
                               {selectedItems.length > 0 && (
-                                <div className="flex flex-wrap gap-2 w-full md:w-auto mb-2 md:mb-0">
+                                <>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="rounded-xl text-xs md:text-sm flex-1 md:flex-none"
+                                    className="rounded-xl text-xs sm:text-sm sm:flex-none whitespace-nowrap"
                                     onClick={() => handleBatchMark(true)}
                                     disabled={loading}
                                   >
-                                    <CheckSquare className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                                    <span className="whitespace-nowrap">
-                                      标记已处理 ({selectedItems.length})
+                                    <CheckSquare className="h-4 w-4 -mr-1" />
+                                    <span className="hidden sm:inline -mr-1">
+                                      标记已处理
                                     </span>
+                                    <span>({selectedItems.length})</span>
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="rounded-xl text-xs md:text-sm flex-1 md:flex-none"
+                                    className="rounded-xl text-xs sm:text-sm sm:flex-none whitespace-nowrap"
                                     onClick={() => handleBatchMark(false)}
                                     disabled={loading}
                                   >
-                                    <CircleSlash className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                                    <span className="whitespace-nowrap">
-                                      标记未处理 ({selectedItems.length})
+                                    <CircleSlash className="h-4 w-4 -mr-1" />
+                                    <span className="hidden sm:inline -mr-1">
+                                      标记未处理
                                     </span>
+                                    <span>({selectedItems.length})</span>
                                   </Button>
-                                </div>
+                                </>
                               )}
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       size="sm"
-                                      className="rounded-xl anime-button text-xs md:text-sm ml-auto"
+                                      className="rounded-xl anime-button text-xs sm:text-sm whitespace-nowrap"
                                       onClick={handleRunTaskNow}
                                       disabled={loading}
                                     >
                                       <Play
                                         className={cn(
-                                          "h-3 w-3 md:h-4 md:w-4 -mr-1",
+                                          "h-4 w-4 sm:h-4 sm:w-4 mr-1",
                                           loading && "animate-spin"
                                         )}
                                       />
-                                      立即执行
+                                      <span className="hidden sm:inline">
+                                        立即执行
+                                      </span>
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent
                                     side="top"
-                                    className="text-xs max-w-[200px] whitespace-normal break-words"
+                                    className="text-xs max-w-[150px] whitespace-normal break-words"
                                   >
                                     立即检查RSS链接并下载未处理但已匹配的种子
                                   </TooltipContent>
@@ -1358,8 +1363,35 @@ export function SubscriptionDetailDialog({
                           )}
                           {!loading && rssMatches.length > 0 && (
                             <div className="relative">
-                              <ScrollArea className="h-[50vh] md:h-[450px]">
+                              <ScrollArea className="h-[50dvh] md:h-[450px]">
                                 <div className="space-y-2">
+                                  {/* 全选/全不选按钮区域 */}
+                                  <div className="flex gap-2 mb-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="rounded-xl text-xs"
+                                      onClick={() =>
+                                        setSelectedItems(
+                                          rssMatches.map((item) => item.guid)
+                                        )
+                                      }
+                                      disabled={rssMatches.length === 0}
+                                    >
+                                      全选
+                                    </Button>
+                                    {selectedItems.length > 0 && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="rounded-xl text-xs"
+                                        onClick={() => setSelectedItems([])}
+                                      >
+                                        全不选
+                                      </Button>
+                                    )}
+                                  </div>
+                                  {/* 订阅项内容块 */}
                                   {rssMatches.map((item, index) => (
                                     <div
                                       key={index}
@@ -1383,29 +1415,47 @@ export function SubscriptionDetailDialog({
                                             }}
                                           />
                                           <TooltipProvider>
-                                            <Tooltip delayDuration={200}>
-                                              <TooltipTrigger asChild>
-                                                <div className="flex-1">
+                                            <HybridTooltip delayDuration={200}>
+                                              <HybridTooltipTrigger asChild>
+                                                <div className="flex-1 flex items-center gap-2 min-w-0">
                                                   <span
                                                     className={cn(
-                                                      "line-clamp-1",
+                                                      "flex w-full max-w-[200px] sm:max-w-[500px]",
                                                       item.processed &&
                                                         "text-muted-foreground"
                                                     )}
                                                   >
-                                                    {item.title || item.guid}
+                                                    <TruncatedText
+                                                      text={item.guid}
+                                                    />
                                                   </span>
+                                                  {!isMobile && (
+                                                    <div className="w-32 text-xs text-muted-foreground text-center m-2 shrink-0">
+                                                      {formatDate(
+                                                        item.publishedAt
+                                                      )}
+                                                    </div>
+                                                  )}
                                                 </div>
-                                              </TooltipTrigger>
-                                              <TooltipContent
+                                              </HybridTooltipTrigger>
+                                              <HybridTooltipContent
                                                 side="top"
                                                 align="start"
                                                 sideOffset={5}
-                                                className="max-w-none w-[calc(100%-80px)] break-words text-xs"
+                                                className="break-words text-xs max-w-[300px] whitespace-normal"
                                               >
-                                                {item.title || item.guid}
-                                              </TooltipContent>
-                                            </Tooltip>
+                                                {item.guid}
+                                                {isMobile &&
+                                                  item.publishedAt && (
+                                                    <div className="mt-1 text-xs text-muted-foreground">
+                                                      发布时间：
+                                                      {formatDate(
+                                                        item.publishedAt
+                                                      )}
+                                                    </div>
+                                                  )}
+                                              </HybridTooltipContent>
+                                            </HybridTooltip>
                                           </TooltipProvider>
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -1443,7 +1493,7 @@ export function SubscriptionDetailDialog({
                           )}
                           {!loading && rssMatches.length === 0 && (
                             <div className="flex justify-center items-center h-[450px] text-muted-foreground">
-                              无RSS订阅项，请点击"立即检测"
+                              无RSS订阅项，请稍后再试
                             </div>
                           )}
                         </div>
@@ -1523,12 +1573,12 @@ export function SubscriptionDetailDialog({
                           </div>
 
                           {loading && (
-                            <div className="flex justify-center items-center h-[50vh] md:h-[500px]">
+                            <div className="flex justify-center items-center h-[50dvh] md:h-[500px]">
                               加载中...
                             </div>
                           )}
                           {!loading && torrents.length > 0 && (
-                            <ScrollArea className="h-[50vh] md:h-[500px]">
+                            <ScrollArea className="h-[50dvh] md:h-[500px]">
                               <div className="space-y-2">
                                 {torrents.map((torrent) => (
                                   <div
@@ -1537,18 +1587,25 @@ export function SubscriptionDetailDialog({
                                   >
                                     <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                                       <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger className="flex-1 mb-2 md:mb-0">
+                                        <HybridTooltip>
+                                          <HybridTooltipTrigger className="flex-1 mb-2 md:mb-0">
                                             <div className="text-left">
                                               <div className="line-clamp-1 text-primary font-medium">
-                                                {torrent.rssGUID}
+                                                <TruncatedText
+                                                  text={torrent.rssGUID}
+                                                />
                                               </div>
                                               <div className="line-clamp-1 text-xs text-muted-foreground bg-muted/50 rounded px-1 py-0.5 mt-0.5">
-                                                {torrent.name}
+                                                <TruncatedText
+                                                  text={torrent.name}
+                                                />
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">
+                                                {formatDate(torrent.createdAt)}
                                               </div>
                                             </div>
-                                          </TooltipTrigger>
-                                          <TooltipContent
+                                          </HybridTooltipTrigger>
+                                          <HybridTooltipContent
                                             side="top"
                                             className="max-w-[300px] md:max-w-[500px] w-auto"
                                           >
@@ -1566,8 +1623,8 @@ export function SubscriptionDetailDialog({
                                                 {torrent.name}
                                               </div>
                                             </div>
-                                          </TooltipContent>
-                                        </Tooltip>
+                                          </HybridTooltipContent>
+                                        </HybridTooltip>
                                       </TooltipProvider>
                                       <div className="flex items-center justify-end gap-1">
                                         {torrent.status ===
@@ -1693,7 +1750,7 @@ export function SubscriptionDetailDialog({
                             </ScrollArea>
                           )}
                           {!loading && torrents.length === 0 && (
-                            <div className="flex justify-center items-center h-[50vh] md:h-[500px] text-muted-foreground">
+                            <div className="flex justify-center items-center h-[50dvh] md:h-[500px] text-muted-foreground">
                               无媒体文件
                             </div>
                           )}

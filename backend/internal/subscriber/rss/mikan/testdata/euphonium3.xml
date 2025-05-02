@@ -12,7 +12,7 @@
             <torrent xmlns="https://mikanani.me/0.1/">
                 <link>https://mikanani.me/Home/Episode/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa</link>
                 <contentLength>449839104</contentLength>
-                <pubDate>2024-06-14T22:54:27.042</pubDate>
+                <pubDate>2024-06-14T22:54:27</pubDate>
             </torrent>
             <enclosure type="application/x-bittorrent" length="449839104" url="https://mikanani.me/Download/20240614/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa.torrent"/>
         </item>

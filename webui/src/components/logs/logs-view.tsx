@@ -51,7 +51,8 @@ export default function LogsView() {
     try {
       setLoading(true);
       const logData = await LogService.getLogs(
-        logLevel !== "all" ? logLevel : undefined
+        logLevel !== "all" ? logLevel : undefined,
+        searchQuery || undefined
       );
       setLogs(logData);
     } catch (error) {
@@ -61,24 +62,18 @@ export default function LogsView() {
     }
   };
 
-  // 首次加载和日志级别变化时获取日志
+  // 首次加载和日志级别或搜索查询变化时获取日志
   useEffect(() => {
     loadLogs();
-  }, [logLevel]);
+  }, [logLevel, searchQuery]);
 
   // 处理刷新按钮点击
   const handleRefresh = () => {
     loadLogs();
   };
 
-  // Filter logs based on search query
-  const filteredLogs = logs.filter((log) => {
-    const searchMatch =
-      searchQuery === "" ||
-      log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      formatTimestamp(log.ts).includes(searchQuery);
-    return searchMatch;
-  });
+  // 不再需要前端过滤，直接使用后台返回的日志
+  const filteredLogs = logs;
 
   const getLogIcon = (level: string) => {
     switch (level.toLowerCase()) {

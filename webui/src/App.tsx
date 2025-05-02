@@ -6,7 +6,7 @@ import NavigationService from "@/utils/navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { AuthProvider } from "@/contexts/auth";
-
+import { TouchProvider } from "@/components/common/tooltip";
 // 创建一个QueryClient实例
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,11 +30,10 @@ export default function App({ children }: { children: React.ReactNode }) {
         <AuthProvider>
           <ThemeProvider
             attribute="class"
-            defaultTheme="light"
+            defaultTheme="system"
             enableSystem
-            disableTransitionOnChange
           >
-            {children}
+            <TouchProvider>{children}</TouchProvider>
           </ThemeProvider>
         </AuthProvider>
         <ReactQueryDevtools initialIsOpen={false} /> {/* 开发工具 */}

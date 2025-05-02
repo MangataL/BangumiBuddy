@@ -16,6 +16,7 @@ export default defineConfig({
   server: {
     port: 6936,
     open: true,
+    host: true,
     proxy: {
       "/apis": {
         target: "http://localhost:6937",

@@ -51,6 +51,7 @@ type RSS struct {
 type RSSItem struct {
 	GUID        string
 	TorrentLink string
+	PublishedAt time.Time
 }
 
 // SubscribeReq 订阅请求
@@ -92,9 +93,10 @@ type UpdateSubscribeReq struct {
 
 // RSSMatch RSS匹配
 type RSSMatch struct {
-	GUID      string `json:"guid"`
-	Match     bool   `json:"match"`
-	Processed bool   `json:"processed"`
+	GUID        string    `json:"guid"`
+	Match       bool      `json:"match"`
+	Processed   bool      `json:"processed"`
+	PublishedAt time.Time `json:"publishedAt"`
 }
 
 // MarkRSSRecordReq 标记RSS记录请求

@@ -75,6 +75,7 @@ type Torrent struct {
 	RSSGUID        string        // 标记是哪个RSS项
 	CreatedAt      time.Time     // 创建时间
 	UpdatedAt      time.Time     // 更新时间
+	FileNames      []string      // 种子文件名
 }
 
 // TorrentStatus 种子状态

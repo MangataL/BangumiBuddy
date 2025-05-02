@@ -19,12 +19,11 @@ import {
 } from "@/components/ui/select";
 import { subscriptionAPI } from "@/api/subscription";
 import { useToast } from "@/hooks/useToast";
-import { AxiosError } from "axios";
 import { MatchInput } from "../common/match-input";
 import { EpisodePositionInput } from "./episode-position-input";
-import { getSortedWeekDays } from "@/utils/weekday";
+import { getSortedWeekDays } from "@/utils/time";
 import { ParseRSSResponse, SubscribeRequest } from "@/api/subscription";
-
+import { extractErrorMessage } from "@/utils/error";
 interface ConfirmSubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -93,9 +92,6 @@ export function ConfirmSubscriptionDialog({
       case "season":
         if (!value) error = "请填写季度";
         break;
-      case "airWeekday":
-        if (value === 0) error = "请选择更新星期";
-        break;
       case "tmdbID":
         if (!value) error = "请填写TMDB ID";
         break;
@@ -152,9 +148,7 @@ export function ConfirmSubscriptionDialog({
         onSubscribed();
       }
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>).response?.data?.error ||
-        "订阅失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "订阅失败",
         description: description,
@@ -176,7 +170,7 @@ export function ConfirmSubscriptionDialog({
       open={Boolean(open && parseRSSRsp.name)}
       onOpenChange={handleOpenChange}
     >
-      <DialogContent className="max-w-md rounded-xl border-primary/20 bg-card/95 backdrop-blur-md">
+      <DialogContent className="max-w-md w-[95dvw] max-h-[90dvh] overflow-y-auto rounded-xl border-primary/20 bg-card/95 backdrop-blur-md sm:max-w-md scrollbar-hide">
         <DialogHeader>
           <DialogTitle className="text-xl anime-gradient-text">
             订阅信息
@@ -275,10 +269,11 @@ export function ConfirmSubscriptionDialog({
             <Label htmlFor="tmdbid">TMDBID</Label>
             <Input
               id="tmdbid"
-              value={bangumiInfo.tmdbID}
-              onChange={(e) =>
-                updateBangumiInfo("tmdbID", parseInt(e.target.value))
-              }
+              value={bangumiInfo.tmdbID || ""}
+              onChange={(e) => {
+                const value = e.target.value.trim();
+                updateBangumiInfo("tmdbID", value ? parseInt(value) : 0);
+              }}
               className={`rounded-xl ${
                 fieldErrors.tmdbID ? "border-destructive" : ""
               }`}
@@ -364,7 +359,7 @@ export function ConfirmSubscriptionDialog({
             onChange={(value) => updateBangumiInfo("episodeLocation", value)}
           />
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="outline"
             onClick={() => handleOpenChange(false)}

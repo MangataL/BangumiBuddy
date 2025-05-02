@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/auth";
+import { useToast } from "@/hooks/useToast";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,9 +11,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
+      toast({
+        title: "登陆过期",
+        variant: "destructive",
+        description: "登陆信息已过期，请重新登陆",
+      });
       // 将当前路径作为redirect参数
       const redirectPath = `${location.pathname}${location.search}`;
       navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
@@ -26,4 +33,4 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // 如果已认证，渲染子组件
   return isAuthenticated ? <>{children}</> : null;
-} 
+}

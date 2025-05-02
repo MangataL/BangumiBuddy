@@ -7,7 +7,7 @@ import { useState } from "react";
 
 interface MatchInputProps {
   label: string;
-  items: string[];
+  items: string[] | null;
   placeholder?: string;
   onChange: (items: string[]) => void;
 }
@@ -19,16 +19,17 @@ export function MatchInput({
   onChange,
 }: MatchInputProps) {
   const [value, setValue] = useState("");
+  const safeItems = items || [];
 
   const handleAdd = () => {
     if (value.trim()) {
-      onChange([...items, value.trim()]);
+      onChange([...safeItems, value.trim()]);
       setValue("");
     }
   };
 
   const handleRemove = (item: string) => {
-    onChange(items.filter((i) => i !== item));
+    onChange(safeItems.filter((i) => i !== item));
   };
 
   return (
@@ -57,7 +58,7 @@ export function MatchInput({
         </Button>
       </div>
       <div className="flex flex-wrap gap-2 mt-2">
-        {items.map((item, index) => (
+        {safeItems.map((item, index) => (
           <Badge
             key={index}
             variant="secondary"

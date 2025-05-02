@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,6 +26,7 @@ type torrentSchema struct {
 	RSSGUID        string    `gorm:"type:varchar(255)"`
 	CreatedAt      time.Time `gorm:"type:datetime;autoCreateTime;index"`
 	UpdatedAt      time.Time `gorm:"type:datetime;autoUpdateTime"`
+	FileNames      string    `gorm:"type:text"`
 }
 
 // TableName 指定表名
@@ -46,6 +48,7 @@ func (m *torrentSchema) ToTorrent() Torrent {
 		RSSGUID:        m.RSSGUID,
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
+		FileNames:      strings.Split(m.FileNames, ";"),
 	}
 }
 
@@ -60,6 +63,7 @@ func (m *torrentSchema) FromTorrent(t Torrent) {
 	m.TransferType = t.TransferType
 	m.Name = t.Name
 	m.RSSGUID = t.RSSGUID
+	m.FileNames = strings.Join(t.FileNames, ";")
 }
 
 func NewTorrentOperator(db *gorm.DB) TorrentOperator {
@@ -80,6 +84,9 @@ func (t *torrentOperator) SetTorrentStatus(ctx context.Context, hash string, sta
 	}
 	if opts != nil && opts.TransferType != "" {
 		updates["transfer_type"] = opts.TransferType
+	}
+	if opts != nil && len(opts.FileNames) > 0 {
+		updates["file_names"] = strings.Join(opts.FileNames, ",")
 	}
 	return t.db.WithContext(ctx).Model(&torrentSchema{}).Where("hash = ?", hash).Updates(updates).Error
 }
@@ -162,7 +169,7 @@ func (t *torrentOperator) List(ctx context.Context, filter TorrentFilter) ([]Tor
 	}
 	// 获取总数
 	var total int64
-	err := query.Model(&torrentSchema{}).Count(&total).Error
+	err := query.WithContext(ctx).Model(&torrentSchema{}).Count(&total).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -180,7 +187,6 @@ func (t *torrentOperator) List(ctx context.Context, filter TorrentFilter) ([]Tor
 			Desc: filter.Order.Way == "desc",
 		})
 	}
-	
 
 	// 执行查询
 	err = query.Find(&models).Error

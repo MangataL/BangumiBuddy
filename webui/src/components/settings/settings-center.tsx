@@ -17,12 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  HybridTooltip,
+  HybridTooltipContent,
+  HybridTooltipTrigger,
+} from "@/components/common/tooltip";
 import {
   Download,
   Tv,
@@ -43,10 +43,10 @@ import {
   type TransferConfig,
   type NoticeConfig,
 } from "@/api/config";
-import { AxiosError } from "axios";
 import { MatchInput } from "@/components/common/match-input";
 import { Switch } from "@/components/ui/switch";
 import { PasswordInput } from "../common/password-input";
+import { extractErrorMessage } from "@/utils/error";
 
 export default function SettingsCenter() {
   const { toast } = useToast();
@@ -74,10 +74,24 @@ export default function SettingsCenter() {
   >("none");
   const [isChecking, setIsChecking] = useState(false);
 
+  // 下载设置表单验证
+  const [downloadErrors, setDownloadErrors] = useState({
+    tvSavePath: "",
+    movieSavePath: "",
+    host: "",
+    username: "",
+    password: "",
+  });
+
   // TMDB配置状态
   const [tmdbConfig, setTmdbConfig] = useState<TMDBConfig>({
     tmdbToken: "",
     alternateURL: false,
+  });
+
+  // 元数据设置表单验证
+  const [metadataErrors, setMetadataErrors] = useState({
+    tmdbToken: "",
   });
 
   // 订阅配置状态
@@ -89,12 +103,25 @@ export default function SettingsCenter() {
       autoStop: false,
     });
 
+  // 订阅设置表单验证
+  const [subscriptionErrors, setSubscriptionErrors] = useState({
+    rssCheckInterval: "",
+  });
+
   // 文件转移配置状态
   const [transferConfig, setTransferConfig] = useState<TransferConfig>({
     interval: 15,
     tvPath: "",
     tvFormat: "",
     transferType: "hardlink",
+  });
+
+  // 文件转移设置表单验证
+  const [transferErrors, setTransferErrors] = useState({
+    interval: "",
+    tvPath: "",
+    tvFormat: "",
+    transferType: "",
   });
 
   // 通知配置状态
@@ -127,6 +154,299 @@ export default function SettingsCenter() {
     },
   });
 
+  // 通知设置表单验证
+  const [noticeErrors, setNoticeErrors] = useState({
+    type: "",
+    // Telegram 错误
+    telegramToken: "",
+    telegramChatID: "",
+    // Email 错误
+    emailHost: "",
+    emailUsername: "",
+    emailPassword: "",
+    emailFrom: "",
+    emailTo: "",
+    // Bark 错误
+    barkServerPath: "",
+  });
+
+  // 验证下载设置表单字段
+  const validateDownloadField = (field: string, value: any) => {
+    let error = "";
+    switch (field) {
+      case "tvSavePath":
+        if (!value.trim()) error = "请填写番剧保存位置";
+        break;
+      case "movieSavePath":
+        if (!value.trim()) error = "请填写剧场版保存位置";
+        break;
+      case "host":
+        if (!value.trim()) error = "请填写下载器地址";
+        else if (!value.startsWith("http://") && !value.startsWith("https://"))
+          error = "下载器地址必须以http://或https://开头";
+        break;
+      case "username":
+        if (!value.trim()) error = "请填写用户名";
+        break;
+      case "password":
+        if (!value.trim()) error = "请填写密码";
+        break;
+    }
+    setDownloadErrors((prev) => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  // 更新下载管理器配置并验证
+  const updateDownloadManagerConfig = (
+    field: keyof DownloadManagerConfig,
+    value: string
+  ) => {
+    validateDownloadField(field, value);
+    setDownloadManagerConfig((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setDownloadManagerConfigChanged(true);
+  };
+
+  // 更新下载器配置并验证
+  const updateDownloaderConfig = (field: string, value: string) => {
+    validateDownloadField(field, value);
+    setDownloaderConfig((prev) => ({
+      ...prev,
+      qbittorrent: {
+        ...prev.qbittorrent,
+        [field]: value,
+      },
+    }));
+    setDownloaderConfigChanged(true);
+  };
+
+  // 验证订阅设置表单字段
+  const validateSubscriptionField = (field: string, value: any) => {
+    let error = "";
+    switch (field) {
+      case "rssCheckInterval":
+        if (!value || value <= 0) error = "检查间隔必须大于0";
+        break;
+    }
+    setSubscriptionErrors((prev) => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  // 更新订阅配置并验证
+  const updateSubscriptionConfig = (
+    field: keyof SubscriptionConfig,
+    value: any
+  ) => {
+    if (field === "rssCheckInterval") {
+      validateSubscriptionField(field, value);
+    }
+    setSubscriptionConfig((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // 验证元数据设置表单字段
+  const validateMetadataField = (field: string, value: any) => {
+    let error = "";
+    switch (field) {
+      case "tmdbToken":
+        if (!value.trim()) error = "请填写TMDB Token";
+        break;
+    }
+    setMetadataErrors((prev) => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  // 更新TMDB配置并验证
+  const updateTmdbConfig = (field: keyof TMDBConfig, value: any) => {
+    if (field === "tmdbToken") {
+      validateMetadataField(field, value);
+    }
+    setTmdbConfig((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // 验证文件转移设置表单字段
+  const validateTransferField = (field: string, value: any) => {
+    let error = "";
+    switch (field) {
+      case "interval":
+        if (!value || value <= 0) error = "检查间隔必须大于0";
+        break;
+      case "tvPath":
+        if (!value.trim()) error = "请填写番剧路径";
+        break;
+      case "tvFormat":
+        if (!value.trim()) error = "请填写番剧重命名格式";
+        else if (!value.includes("{name}")) error = "格式中必须包含{name}变量";
+        break;
+      case "transferType":
+        if (!value.trim()) error = "请选择转移类型";
+        break;
+    }
+    setTransferErrors((prev) => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  // 更新文件转移配置并验证
+  const updateTransferConfig = (field: keyof TransferConfig, value: any) => {
+    validateTransferField(field, value);
+    setTransferConfig((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  // 验证通知设置表单字段
+  const validateNoticeField = (field: string, value: any) => {
+    let error = "";
+    switch (field) {
+      case "type":
+        if (!value.trim()) error = "请选择通知类型";
+        break;
+      // Telegram 字段
+      case "telegramToken":
+        if (!value.trim()) error = "请填写Bot Token";
+        else if (!value.includes(":")) error = "Bot Token格式不正确";
+        break;
+      case "telegramChatID":
+        if (!value) error = "请填写Chat ID";
+        break;
+
+      // Email 字段
+      case "emailHost":
+        if (!value.trim()) error = "请填写SMTP服务器";
+        break;
+      case "emailUsername":
+        if (!value.trim()) error = "请填写用户名";
+        break;
+      case "emailPassword":
+        if (!value.trim()) error = "请填写密码";
+        break;
+      case "emailFrom":
+        if (!value.trim()) error = "请填写发件人";
+        break;
+      case "emailTo":
+        if (!value.trim()) error = "请填写收件人";
+        break;
+
+      // Bark 字段
+      case "barkServerPath":
+        if (!value.trim()) error = "请填写服务器通知地址";
+        else if (!value.startsWith("http://") && !value.startsWith("https://"))
+          error = "服务器通知地址必须以http://或https://开头";
+        break;
+    }
+    setNoticeErrors((prev) => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  // 更新Telegram配置并验证
+  const updateTelegramConfig = (
+    field: keyof typeof noticeConfig.telegram,
+    value: any
+  ) => {
+    const noticeField = field === "token" ? "telegramToken" : "telegramChatID";
+    validateNoticeField(noticeField, value);
+    setNoticeConfig((prev) => ({
+      ...prev,
+      telegram: {
+        ...prev.telegram,
+        [field]: value,
+      },
+    }));
+  };
+
+  // 更新Email配置并验证
+  const updateEmailConfig = (
+    field: keyof typeof noticeConfig.email,
+    value: any
+  ) => {
+    const noticeField = `email${
+      field.charAt(0).toUpperCase() + field.slice(1)
+    }`;
+    if (field !== "ssl") {
+      validateNoticeField(noticeField, value);
+    }
+    setNoticeConfig((prev) => ({
+      ...prev,
+      email: {
+        ...prev.email,
+        [field]: value,
+      },
+    }));
+  };
+
+  // 更新Bark配置并验证
+  const updateBarkConfig = (
+    field: keyof typeof noticeConfig.bark,
+    value: any
+  ) => {
+    if (field === "serverPath") {
+      validateNoticeField("barkServerPath", value);
+    }
+    setNoticeConfig((prev) => ({
+      ...prev,
+      bark: {
+        ...prev.bark,
+        [field]: value,
+      },
+    }));
+  };
+
+  // 检查各tab表单是否有错误
+  const hasDownloadErrors = () => {
+    return Object.values(downloadErrors).some((error) => error !== "");
+  };
+
+  const hasMetadataErrors = () => {
+    return Object.values(metadataErrors).some((error) => error !== "");
+  };
+
+  const hasSubscriptionErrors = () => {
+    return Object.values(subscriptionErrors).some((error) => error !== "");
+  };
+
+  const hasTransferErrors = () => {
+    return Object.values(transferErrors).some((error) => error !== "");
+  };
+
+  const hasNoticeErrors = () => {
+    // 只检查当前启用的通知类型的错误
+    if (!noticeConfig.enabled) return false;
+
+    const relevantErrors: string[] = [];
+    switch (noticeConfig.type) {
+      case "telegram":
+        relevantErrors.push(
+          noticeErrors.telegramToken,
+          noticeErrors.telegramChatID
+        );
+        break;
+      case "email":
+        relevantErrors.push(
+          noticeErrors.emailHost,
+          noticeErrors.emailUsername,
+          noticeErrors.emailPassword,
+          noticeErrors.emailFrom,
+          noticeErrors.emailTo
+        );
+        break;
+      case "bark":
+        relevantErrors.push(noticeErrors.barkServerPath);
+        break;
+      default:
+        relevantErrors.push(noticeErrors.type);
+    }
+
+    return relevantErrors.some((error) => error !== "");
+  };
+
   // 加载配置函数
   const loadConfigs = async () => {
     try {
@@ -146,15 +466,81 @@ export default function SettingsCenter() {
       setSubscriptionConfig(subscription);
       setTransferConfig(transfer);
       setNoticeConfig(notice);
+
+      // 初始验证所有表单字段
+      validateInitialFields(
+        downloader,
+        manager,
+        tmdb,
+        subscription,
+        transfer,
+        notice
+      );
     } catch (error) {
-      const desc =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "请检查网络连接后重试";
+      const desc = extractErrorMessage(error);
       toast({
         title: "加载配置失败",
         description: desc,
         variant: "destructive",
       });
+    }
+  };
+
+  // 初始验证所有配置字段
+  const validateInitialFields = (
+    downloader: DownloaderConfig,
+    manager: DownloadManagerConfig,
+    tmdb: TMDBConfig,
+    subscription: SubscriptionConfig,
+    transfer: TransferConfig,
+    notice: NoticeConfig
+  ) => {
+    // 验证下载设置
+    validateDownloadField("tvSavePath", manager.tvSavePath);
+    validateDownloadField("movieSavePath", manager.movieSavePath);
+    validateDownloadField("host", downloader.qbittorrent.host);
+    validateDownloadField("username", downloader.qbittorrent.username);
+    validateDownloadField("password", downloader.qbittorrent.password);
+
+    // 验证元数据设置
+    validateMetadataField("tmdbToken", tmdb.tmdbToken);
+
+    // 验证订阅设置
+    validateSubscriptionField(
+      "rssCheckInterval",
+      subscription.rssCheckInterval
+    );
+
+    // 验证文件转移设置
+    validateTransferField("interval", transfer.interval);
+    validateTransferField("tvPath", transfer.tvPath);
+    validateTransferField("tvFormat", transfer.tvFormat);
+    validateTransferField("transferType", transfer.transferType);
+
+    // 验证通知设置
+    if (notice.enabled) {
+      validateNoticeSettings(notice);
+    }
+  };
+
+  // 验证所有通知设置
+  const validateNoticeSettings = (notice: NoticeConfig) => {
+    validateNoticeField("type", notice.type);
+    switch (notice.type) {
+      case "telegram":
+        validateNoticeField("telegramToken", notice.telegram.token);
+        validateNoticeField("telegramChatID", notice.telegram.chatID);
+        break;
+      case "email":
+        validateNoticeField("emailHost", notice.email.host);
+        validateNoticeField("emailUsername", notice.email.username);
+        validateNoticeField("emailPassword", notice.email.password);
+        validateNoticeField("emailFrom", notice.email.from);
+        validateNoticeField("emailTo", notice.email.to?.join(",") || "");
+        break;
+      case "bark":
+        validateNoticeField("barkServerPath", notice.bark.serverPath);
+        break;
     }
   };
 
@@ -180,11 +566,9 @@ export default function SettingsCenter() {
       });
     } catch (error) {
       setConnectionStatus("error");
-      const desc =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "请检查网络连接后重试";
+      const desc = extractErrorMessage(error);
       toast({
-        title: "连接失败",
+        title: "下载器连接失败",
         description: desc,
         variant: "destructive",
       });
@@ -195,6 +579,7 @@ export default function SettingsCenter() {
 
   // 更新收件人列表
   const handleEmailRecipientsChange = (value: string) => {
+    validateNoticeField("emailTo", value);
     // 将逗号分隔的邮件地址转换为数组
     const recipients = value
       .split(",")
@@ -264,10 +649,7 @@ export default function SettingsCenter() {
         }设置`,
       });
     } catch (error) {
-      const desc =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "请检查网络连接后重试";
-      console.error(desc);
+      const desc = extractErrorMessage(error);
       toast({
         title: "保存设置失败",
         description: desc,
@@ -276,8 +658,46 @@ export default function SettingsCenter() {
     }
   };
 
+  // 更新通知点配置
+  const updateNoticePoints = (
+    field: keyof typeof noticeConfig.noticePoints,
+    value: boolean
+  ) => {
+    setNoticeConfig((prev) => ({
+      ...prev,
+      noticePoints: {
+        ...prev.noticePoints,
+        [field]: value,
+      },
+    }));
+  };
+
+  // 更新通知类型
+  const updateNoticeType = (type: "telegram" | "email" | "bark") => {
+    setNoticeConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        type: type,
+      };
+      validateNoticeSettings(newConfig);
+      return newConfig;
+    });
+  };
+
+  // 更新通知启用状态
+  const updateNoticeEnabled = (enabled: boolean) => {
+    setNoticeConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        enabled: enabled,
+      };
+      validateNoticeSettings(newConfig);
+      return newConfig;
+    });
+  };
+
   return (
-    <div className="space-y-6 h-[calc(100vh-6rem)] overflow-y-auto pb-10">
+    <div className="space-y-6 h-[calc(100dvh-6rem)] overflow-y-auto pb-10 scrollbar-hide">
       <div>
         <h1 className="text-3xl font-bold anime-gradient-text flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-primary animate-pulse" />
@@ -305,28 +725,28 @@ export default function SettingsCenter() {
             value="metadata"
             className="flex items-center gap-2 rounded-xl"
           >
-            <Search className="h-4 w-4" />
+            <Search className="icon-button" />
             <span className="hidden sm:inline">元数据设置</span>
           </TabsTrigger>
           <TabsTrigger
             value="subscription"
             className="flex items-center gap-2 rounded-xl"
           >
-            <Tv className="h-4 w-4" />
+            <Tv className="icon-button" />
             <span className="hidden sm:inline">订阅设置</span>
           </TabsTrigger>
           <TabsTrigger
             value="transfer"
             className="flex items-center gap-2 rounded-xl"
           >
-            <FolderSync className="h-4 w-4" />
+            <FolderSync className="icon-button" />
             <span className="hidden sm:inline">文件转移设置</span>
           </TabsTrigger>
           <TabsTrigger
             value="notice"
             className="flex items-center gap-2 rounded-xl"
           >
-            <Bell className="h-4 w-4" />
+            <Bell className="icon-button" />
             <span className="hidden sm:inline">通知设置</span>
           </TabsTrigger>
         </TabsList>
@@ -349,15 +769,18 @@ export default function SettingsCenter() {
                     id="anime-path"
                     value={downloadManagerConfig.tvSavePath}
                     onChange={(e) => {
-                      setDownloadManagerConfig((prev) => ({
-                        ...prev,
-                        tvSavePath: e.target.value,
-                      }));
-                      setDownloadManagerConfigChanged(true);
+                      updateDownloadManagerConfig("tvSavePath", e.target.value);
                     }}
                     placeholder="/path/to/anime"
-                    className="rounded-xl"
+                    className={`rounded-xl ${
+                      downloadErrors.tvSavePath ? "border-destructive" : ""
+                    }`}
                   />
+                  {downloadErrors.tvSavePath && (
+                    <span className="text-sm text-destructive">
+                      {downloadErrors.tvSavePath}
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="movie-path">剧场版保存位置</Label>
@@ -365,15 +788,21 @@ export default function SettingsCenter() {
                     id="movie-path"
                     value={downloadManagerConfig.movieSavePath}
                     onChange={(e) => {
-                      setDownloadManagerConfig((prev) => ({
-                        ...prev,
-                        movieSavePath: e.target.value,
-                      }));
-                      setDownloadManagerConfigChanged(true);
+                      updateDownloadManagerConfig(
+                        "movieSavePath",
+                        e.target.value
+                      );
                     }}
                     placeholder="/path/to/movies"
-                    className="rounded-xl"
+                    className={`rounded-xl ${
+                      downloadErrors.movieSavePath ? "border-destructive" : ""
+                    }`}
                   />
+                  {downloadErrors.movieSavePath && (
+                    <span className="text-sm text-destructive">
+                      {downloadErrors.movieSavePath}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -441,18 +870,18 @@ export default function SettingsCenter() {
                       id="downloader-url"
                       value={downloaderConfig.qbittorrent.host}
                       onChange={(e) => {
-                        setDownloaderConfig((prev) => ({
-                          ...prev,
-                          qbittorrent: {
-                            ...prev.qbittorrent,
-                            host: e.target.value,
-                          },
-                        }));
-                        setDownloaderConfigChanged(true);
+                        updateDownloaderConfig("host", e.target.value);
                       }}
                       placeholder="http://localhost:8080"
-                      className="rounded-xl placeholder-gray-400"
+                      className={`rounded-xl placeholder-gray-400 ${
+                        downloadErrors.host ? "border-destructive" : ""
+                      }`}
                     />
+                    {downloadErrors.host && (
+                      <span className="text-sm text-destructive">
+                        {downloadErrors.host}
+                      </span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -462,18 +891,18 @@ export default function SettingsCenter() {
                         id="downloader-username"
                         value={downloaderConfig.qbittorrent.username}
                         onChange={(e) => {
-                          setDownloaderConfig((prev) => ({
-                            ...prev,
-                            qbittorrent: {
-                              ...prev.qbittorrent,
-                              username: e.target.value,
-                            },
-                          }));
-                          setDownloaderConfigChanged(true);
+                          updateDownloaderConfig("username", e.target.value);
                         }}
                         placeholder="admin"
-                        className="rounded-xl placeholder-gray-400"
+                        className={`rounded-xl placeholder-gray-400 ${
+                          downloadErrors.username ? "border-destructive" : ""
+                        }`}
                       />
+                      {downloadErrors.username && (
+                        <span className="text-sm text-destructive">
+                          {downloadErrors.username}
+                        </span>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="downloader-password">密码</Label>
@@ -481,17 +910,17 @@ export default function SettingsCenter() {
                         id="downloader-password"
                         value={downloaderConfig.qbittorrent.password}
                         onChange={(e) => {
-                          setDownloaderConfig((prev) => ({
-                            ...prev,
-                            qbittorrent: {
-                              ...prev.qbittorrent,
-                              password: e.target.value,
-                            },
-                          }));
-                          setDownloaderConfigChanged(true);
+                          updateDownloaderConfig("password", e.target.value);
                         }}
-                        className="rounded-xl placeholder-gray-400"
+                        className={`rounded-xl placeholder-gray-400 ${
+                          downloadErrors.password ? "border-destructive" : ""
+                        }`}
                       />
+                      {downloadErrors.password && (
+                        <span className="text-sm text-destructive">
+                          {downloadErrors.password}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -500,6 +929,7 @@ export default function SettingsCenter() {
               <Button
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
                 onClick={() => handleSaveSettings("download")}
+                disabled={hasDownloadErrors()}
               >
                 保存下载设置
               </Button>
@@ -522,22 +952,26 @@ export default function SettingsCenter() {
                   id="tmdb-token"
                   value={tmdbConfig.tmdbToken}
                   onChange={(e) =>
-                    setTmdbConfig((prev) => ({
-                      ...prev,
-                      tmdbToken: e.target.value,
-                    }))
+                    updateTmdbConfig("tmdbToken", e.target.value)
                   }
                   placeholder="输入您的TMDB Token"
-                  className="rounded-xl placeholder-gray-400"
+                  className={`rounded-xl placeholder-gray-400 ${
+                    metadataErrors.tmdbToken ? "border-destructive" : ""
+                  }`}
                 />
+                {metadataErrors.tmdbToken && (
+                  <span className="text-sm text-destructive">
+                    {metadataErrors.tmdbToken}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Label htmlFor="use-alternative-url">使用备用地址</Label>
                   <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                    <HybridTooltip>
+                      <HybridTooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -545,11 +979,11 @@ export default function SettingsCenter() {
                         >
                           <Info className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
+                      </HybridTooltipTrigger>
+                      <HybridTooltipContent>
                         <p>备用地址使用api.tmdb.org/3，无代理的情况下可选</p>
-                      </TooltipContent>
-                    </Tooltip>
+                      </HybridTooltipContent>
+                    </HybridTooltip>
                   </TooltipProvider>
                 </div>
                 <Select
@@ -577,6 +1011,7 @@ export default function SettingsCenter() {
               <Button
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
                 onClick={() => handleSaveSettings("metadata")}
+                disabled={hasMetadataErrors()}
               >
                 保存元数据设置
               </Button>
@@ -597,24 +1032,34 @@ export default function SettingsCenter() {
                 <Label htmlFor="check-interval">检查间隔（分钟）</Label>
                 <Input
                   id="check-interval"
+                  placeholder="30"
                   type="number"
                   value={subscriptionConfig.rssCheckInterval}
                   onChange={(e) =>
-                    setSubscriptionConfig((prev) => ({
-                      ...prev,
-                      rssCheckInterval: parseInt(e.target.value) || 30,
-                    }))
+                    updateSubscriptionConfig(
+                      "rssCheckInterval",
+                      parseInt(e.target.value)
+                    )
                   }
-                  className="rounded-xl placeholder-gray-400"
+                  className={`rounded-xl placeholder-gray-400 ${
+                    subscriptionErrors.rssCheckInterval
+                      ? "border-destructive"
+                      : ""
+                  }`}
                 />
+                {subscriptionErrors.rssCheckInterval && (
+                  <span className="text-sm text-destructive">
+                    {subscriptionErrors.rssCheckInterval}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Label htmlFor="auto-stop">自动停止订阅</Label>
                   <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                    <HybridTooltip>
+                      <HybridTooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -622,13 +1067,13 @@ export default function SettingsCenter() {
                         >
                           <Info className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
+                      </HybridTooltipTrigger>
+                      <HybridTooltipContent>
                         <p>
                           当下载到最后一集时，自动停止订阅（可以避免下载字幕组后续更新的合集），按需启动
                         </p>
-                      </TooltipContent>
-                    </Tooltip>
+                      </HybridTooltipContent>
+                    </HybridTooltip>
                   </TooltipProvider>
                 </div>
                 <div className="flex items-center gap-2">
@@ -674,6 +1119,7 @@ export default function SettingsCenter() {
               <Button
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
                 onClick={() => handleSaveSettings("subscription")}
+                disabled={hasSubscriptionErrors()}
               >
                 保存订阅设置
               </Button>
@@ -698,23 +1144,29 @@ export default function SettingsCenter() {
                   <Input
                     id="transfer-interval"
                     type="number"
-                    value={transferConfig.interval}
+                    placeholder="1"
+                    value={transferConfig.interval || ""}
+                    min={1}
                     onChange={(e) =>
-                      setTransferConfig((prev) => ({
-                        ...prev,
-                        interval: parseInt(e.target.value) || 15,
-                      }))
+                      updateTransferConfig("interval", parseInt(e.target.value))
                     }
-                    className="rounded-xl placeholder-gray-400"
+                    className={`rounded-xl placeholder-gray-400 ${
+                      transferErrors.interval ? "border-destructive" : ""
+                    }`}
                   />
+                  {transferErrors.interval && (
+                    <span className="text-sm text-destructive">
+                      {transferErrors.interval}
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="transfer-method">文件转移方式</Label>
                     <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
+                      <HybridTooltip>
+                        <HybridTooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -722,8 +1174,8 @@ export default function SettingsCenter() {
                           >
                             <Info className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
+                        </HybridTooltipTrigger>
+                        <HybridTooltipContent>
                           <p>
                             硬链接：同一文件的多个引用，占用相同空间，删除源文件不影响
                           </p>
@@ -734,21 +1186,29 @@ export default function SettingsCenter() {
                           <br />
                           <p>软链接：类似快捷方式，指向原始文件</p>
                           <p>优点：可跨磁盘/文件系统</p>
-                          <p>缺点：源文件删除后链接失效，需保持源文件。并且额外占用极少量的磁盘空间</p>
-                        </TooltipContent>
-                      </Tooltip>
+                          <p>
+                            缺点：源文件删除后链接失效，需保持源文件。并且额外占用极少量的磁盘空间
+                          </p>
+                        </HybridTooltipContent>
+                      </HybridTooltip>
                     </TooltipProvider>
                   </div>
                   <Select
                     value={transferConfig.transferType}
-                    onValueChange={(value: "hardlink") =>
+                    onValueChange={(value: "hardlink" | "softlink") => {
+                      validateTransferField("transferType", value);
                       setTransferConfig((prev) => ({
                         ...prev,
                         transferType: value,
-                      }))
-                    }
+                      }));
+                    }}
                   >
-                    <SelectTrigger id="transfer-method" className="rounded-xl">
+                    <SelectTrigger
+                      id="transfer-method"
+                      className={`rounded-xl ${
+                        transferErrors.transferType ? "border-destructive" : ""
+                      }`}
+                    >
                       <SelectValue placeholder="选择文件转移方式" />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
@@ -756,6 +1216,11 @@ export default function SettingsCenter() {
                       <SelectItem value="softlink">软链接</SelectItem>
                     </SelectContent>
                   </Select>
+                  {transferErrors.transferType && (
+                    <span className="text-sm text-destructive">
+                      {transferErrors.transferType}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -768,22 +1233,26 @@ export default function SettingsCenter() {
                     id="transfer-anime-path"
                     value={transferConfig.tvPath}
                     onChange={(e) =>
-                      setTransferConfig((prev) => ({
-                        ...prev,
-                        tvPath: e.target.value,
-                      }))
+                      updateTransferConfig("tvPath", e.target.value)
                     }
                     placeholder="/path/to/anime/library"
-                    className="rounded-xl placeholder-gray-400"
+                    className={`rounded-xl placeholder-gray-400 ${
+                      transferErrors.tvPath ? "border-destructive" : ""
+                    }`}
                   />
+                  {transferErrors.tvPath && (
+                    <span className="text-sm text-destructive">
+                      {transferErrors.tvPath}
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="transfer-tv-format">番剧重命名格式</Label>
                     <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
+                      <HybridTooltip>
+                        <HybridTooltipTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -791,8 +1260,8 @@ export default function SettingsCenter() {
                           >
                             <Info className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
+                        </HybridTooltipTrigger>
+                        <HybridTooltipContent>
                           <p>{`在文件转移时，会按照定义的格式对媒体库文件做重命名并转移`}</p>
                           <p>{`重命名格式本身是媒体库路径下的相对路径`}</p>
                           <p>{`支持使用占位符变量，当前支持的变量如下：`}</p>
@@ -800,31 +1269,36 @@ export default function SettingsCenter() {
                           <p>{`{year}=年份`}</p>
                           <p>{`{season}=季数`}</p>
                           <p>{`{episode}=集数`}</p>
-                          <p>{`{season_episode}=季集数，等价于S{season}E{episode}`}</p>
+                          <p>{`{season_episode}=季集数，等价于SXXEXX，与{season}和{episode}的区别是，如果季数或集数小于10，会自动补0`}</p>
                           <p>{`{origin_name}=原始文件名，不包含扩展名`}</p>
                           <p>{`{release_group}=压制组/字幕组`}</p>
-                        </TooltipContent>
-                      </Tooltip>
+                        </HybridTooltipContent>
+                      </HybridTooltip>
                     </TooltipProvider>
                   </div>
                   <Input
                     id="transfer-tv-format"
                     value={transferConfig.tvFormat}
                     onChange={(e) =>
-                      setTransferConfig((prev) => ({
-                        ...prev,
-                        tvFormat: e.target.value,
-                      }))
+                      updateTransferConfig("tvFormat", e.target.value)
                     }
-                    placeholder="{name}/Season {season}/{name} - S{season}E{episode}.{ext}"
-                    className="rounded-xl placeholder-gray-400"
+                    placeholder="{name}/Season {season}/{name} {season_episode}"
+                    className={`rounded-xl placeholder-gray-400 ${
+                      transferErrors.tvFormat ? "border-destructive" : ""
+                    }`}
                   />
+                  {transferErrors.tvFormat && (
+                    <span className="text-sm text-destructive">
+                      {transferErrors.tvFormat}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <Button
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
                 onClick={() => handleSaveSettings("transfer")}
+                disabled={hasTransferErrors()}
               >
                 保存文件转移设置
               </Button>
@@ -847,12 +1321,9 @@ export default function SettingsCenter() {
                   <Switch
                     id="notice-enabled"
                     checked={noticeConfig.enabled}
-                    onCheckedChange={(checked) =>
-                      setNoticeConfig((prev) => ({
-                        ...prev,
-                        enabled: checked,
-                      }))
-                    }
+                    onCheckedChange={(checked) => {
+                      updateNoticeEnabled(checked);
+                    }}
                   />
                   <Label htmlFor="notice-enabled" className="font-medium">
                     启用通知
@@ -869,13 +1340,14 @@ export default function SettingsCenter() {
                       <Select
                         value={noticeConfig.type}
                         onValueChange={(value: "telegram" | "email" | "bark") =>
-                          setNoticeConfig((prev) => ({
-                            ...prev,
-                            type: value,
-                          }))
+                          updateNoticeType(value)
                         }
                       >
-                        <SelectTrigger className="rounded-xl">
+                        <SelectTrigger
+                          className={`rounded-xl ${
+                            noticeErrors.type ? "border-destructive" : ""
+                          }`}
+                        >
                           <SelectValue placeholder="选择通知类型" />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
@@ -884,6 +1356,11 @@ export default function SettingsCenter() {
                           <SelectItem value="bark">Bark</SelectItem>
                         </SelectContent>
                       </Select>
+                      {noticeErrors.type && (
+                        <span className="text-sm text-destructive">
+                          {noticeErrors.type}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -895,8 +1372,8 @@ export default function SettingsCenter() {
                         <div className="flex items-center gap-2">
                           <Label htmlFor="telegram-token">Bot Token</Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -904,38 +1381,41 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
                                 <p>从BotFather获取的Bot Token</p>
                                 <p>
                                   格式: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
                                 </p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                         <Input
                           id="telegram-token"
                           value={noticeConfig.telegram.token}
                           onChange={(e) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              telegram: {
-                                ...prev.telegram,
-                                token: e.target.value,
-                              },
-                            }))
+                            updateTelegramConfig("token", e.target.value)
                           }
                           placeholder="输入您的Telegram Bot Token"
-                          className="rounded-xl placeholder-gray-400"
+                          className={`rounded-xl placeholder-gray-400 ${
+                            noticeErrors.telegramToken
+                              ? "border-destructive"
+                              : ""
+                          }`}
                         />
+                        {noticeErrors.telegramToken && (
+                          <span className="text-sm text-destructive">
+                            {noticeErrors.telegramToken}
+                          </span>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <Label htmlFor="telegram-chat-id">Chat ID</Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -943,13 +1423,13 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>目标聊天的Chat ID</p>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
+                                <p>Chat ID</p>
                                 <p>可通过@userinfobot获取个人账号的Chat ID</p>
                                 <p>群组可通过@RawDataBot获取</p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                         <Input
@@ -957,17 +1437,23 @@ export default function SettingsCenter() {
                           type="number"
                           value={noticeConfig.telegram.chatID || ""}
                           onChange={(e) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              telegram: {
-                                ...prev.telegram,
-                                chatID: parseInt(e.target.value) || 0,
-                              },
-                            }))
+                            updateTelegramConfig(
+                              "chatID",
+                              parseInt(e.target.value) || 0
+                            )
                           }
-                          placeholder="输入目标聊天ID"
-                          className="rounded-xl placeholder-gray-400"
+                          placeholder="输入Chat ID"
+                          className={`rounded-xl placeholder-gray-400 ${
+                            noticeErrors.telegramChatID
+                              ? "border-destructive"
+                              : ""
+                          }`}
                         />
+                        {noticeErrors.telegramChatID && (
+                          <span className="text-sm text-destructive">
+                            {noticeErrors.telegramChatID}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -980,8 +1466,8 @@ export default function SettingsCenter() {
                         <div className="flex items-center gap-2">
                           <Label htmlFor="email-server">SMTP服务器</Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -989,29 +1475,30 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
                                 <p>邮件服务器地址，不包含端口</p>
                                 <p>例如: smtp.gmail.com, smtp.qq.com</p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                         <Input
                           id="email-server"
                           value={noticeConfig.email.host}
                           onChange={(e) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              email: {
-                                ...prev.email,
-                                host: e.target.value,
-                              },
-                            }))
+                            updateEmailConfig("host", e.target.value)
                           }
                           placeholder="smtp.example.com"
-                          className="rounded-xl placeholder-gray-400"
+                          className={`rounded-xl placeholder-gray-400 ${
+                            noticeErrors.emailHost ? "border-destructive" : ""
+                          }`}
                         />
+                        {noticeErrors.emailHost && (
+                          <span className="text-sm text-destructive">
+                            {noticeErrors.emailHost}
+                          </span>
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -1020,13 +1507,7 @@ export default function SettingsCenter() {
                             id="email-ssl"
                             checked={noticeConfig.email.ssl}
                             onCheckedChange={(checked) =>
-                              setNoticeConfig((prev) => ({
-                                ...prev,
-                                email: {
-                                  ...prev.email,
-                                  ssl: checked,
-                                },
-                              }))
+                              updateEmailConfig("ssl", checked)
                             }
                           />
                           <Label htmlFor="email-ssl">使用SSL</Label>
@@ -1040,17 +1521,20 @@ export default function SettingsCenter() {
                             id="email-username"
                             value={noticeConfig.email.username}
                             onChange={(e) =>
-                              setNoticeConfig((prev) => ({
-                                ...prev,
-                                email: {
-                                  ...prev.email,
-                                  username: e.target.value,
-                                },
-                              }))
+                              updateEmailConfig("username", e.target.value)
                             }
                             placeholder="username@example.com"
-                            className="rounded-xl placeholder-gray-400"
+                            className={`rounded-xl placeholder-gray-400 ${
+                              noticeErrors.emailUsername
+                                ? "border-destructive"
+                                : ""
+                            }`}
                           />
+                          {noticeErrors.emailUsername && (
+                            <span className="text-sm text-destructive">
+                              {noticeErrors.emailUsername}
+                            </span>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="email-password">密码</Label>
@@ -1058,16 +1542,19 @@ export default function SettingsCenter() {
                             id="email-password"
                             value={noticeConfig.email.password}
                             onChange={(e) =>
-                              setNoticeConfig((prev) => ({
-                                ...prev,
-                                email: {
-                                  ...prev.email,
-                                  password: e.target.value,
-                                },
-                              }))
+                              updateEmailConfig("password", e.target.value)
                             }
-                            className="rounded-xl placeholder-gray-400"
+                            className={`rounded-xl placeholder-gray-400 ${
+                              noticeErrors.emailPassword
+                                ? "border-destructive"
+                                : ""
+                            }`}
                           />
+                          {noticeErrors.emailPassword && (
+                            <span className="text-sm text-destructive">
+                              {noticeErrors.emailPassword}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -1077,30 +1564,38 @@ export default function SettingsCenter() {
                           id="email-from"
                           value={noticeConfig.email.from}
                           onChange={(e) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              email: {
-                                ...prev.email,
-                                from: e.target.value,
-                              },
-                            }))
+                            updateEmailConfig("from", e.target.value)
                           }
-                          placeholder="BangumiBuddy <noreply@example.com>"
-                          className="rounded-xl placeholder-gray-400"
+                          placeholder="user1@example.com"
+                          className={`rounded-xl placeholder-gray-400 ${
+                            noticeErrors.emailFrom ? "border-destructive" : ""
+                          }`}
                         />
+                        {noticeErrors.emailFrom && (
+                          <span className="text-sm text-destructive">
+                            {noticeErrors.emailFrom}
+                          </span>
+                        )}
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="email-to">收件人</Label>
                         <Input
                           id="email-to"
-                          value={noticeConfig.email.to.join(", ")}
+                          value={noticeConfig.email.to?.join(",") || ""}
                           onChange={(e) =>
                             handleEmailRecipientsChange(e.target.value)
                           }
-                          placeholder="user1@example.com, user2@example.com"
-                          className="rounded-xl placeholder-gray-400"
+                          placeholder="user1@example.com,user2@example.com"
+                          className={`rounded-xl placeholder-gray-400 ${
+                            noticeErrors.emailTo ? "border-destructive" : ""
+                          }`}
                         />
+                        {noticeErrors.emailTo && (
+                          <span className="text-sm text-destructive">
+                            {noticeErrors.emailTo}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1115,8 +1610,8 @@ export default function SettingsCenter() {
                             服务器通知地址
                           </Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1124,38 +1619,41 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
                                 <p>
                                   Bark服务器通知地址，一般为https://api.day.app/your_device_key
                                 </p>
                                 <p>自定义服务器需包含http://或https://前缀</p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                         <Input
                           id="bark-server-url"
                           value={noticeConfig.bark.serverPath}
                           onChange={(e) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              bark: {
-                                ...prev.bark,
-                                serverPath: e.target.value,
-                              },
-                            }))
+                            updateBarkConfig("serverPath", e.target.value)
                           }
                           placeholder="https://api.day.app/your_device_key"
-                          className="rounded-xl placeholder-gray-400"
+                          className={`rounded-xl placeholder-gray-400 ${
+                            noticeErrors.barkServerPath
+                              ? "border-destructive"
+                              : ""
+                          }`}
                         />
+                        {noticeErrors.barkServerPath && (
+                          <span className="text-sm text-destructive">
+                            {noticeErrors.barkServerPath}
+                          </span>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <Label htmlFor="bark-sound">通知铃声</Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1163,26 +1661,20 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
                                 <p>通知铃声名称，留空则不启用铃声</p>
                                 <p>支持系统铃声如alarm, bell, chime等</p>
                                 <p>完整列表请参考Bark应用</p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                         <Input
                           id="bark-sound"
                           value={noticeConfig.bark.sound}
                           onChange={(e) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              bark: {
-                                ...prev.bark,
-                                sound: e.target.value,
-                              },
-                            }))
+                            updateBarkConfig("sound", e.target.value)
                           }
                           placeholder=""
                           className="rounded-xl placeholder-gray-400"
@@ -1193,8 +1685,8 @@ export default function SettingsCenter() {
                         <div className="flex items-center gap-2">
                           <Label htmlFor="bark-interruption">中断级别</Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1202,8 +1694,8 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
                                 <p>通知中断级别，控制通知显示方式</p>
                                 <p>
                                   passive: 仅将通知添加到通知列表，不会亮屏提醒
@@ -1214,20 +1706,14 @@ export default function SettingsCenter() {
                                   时效性通知，可在专注状态下显示通知
                                 </p>
                                 <p>critical: 重要警告, 在静音模式下也会响铃</p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                         <Select
                           value={noticeConfig.bark.interruption}
                           onValueChange={(value) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              bark: {
-                                ...prev.bark,
-                                interruption: value,
-                              },
-                            }))
+                            updateBarkConfig("interruption", value)
                           }
                         >
                           <SelectTrigger className="rounded-xl">
@@ -1250,19 +1736,13 @@ export default function SettingsCenter() {
                             id="bark-auto-save"
                             checked={noticeConfig.bark.autoSave}
                             onCheckedChange={(checked) =>
-                              setNoticeConfig((prev) => ({
-                                ...prev,
-                                bark: {
-                                  ...prev.bark,
-                                  autoSave: checked,
-                                },
-                              }))
+                              updateBarkConfig("autoSave", checked)
                             }
                           />
                           <Label htmlFor="bark-auto-save">自动保存通知</Label>
                           <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                            <HybridTooltip>
+                              <HybridTooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1270,11 +1750,11 @@ export default function SettingsCenter() {
                                 >
                                   <Info className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
+                              </HybridTooltipTrigger>
+                              <HybridTooltipContent>
                                 <p>开启后，通知会自动保存到客户端</p>
-                              </TooltipContent>
-                            </Tooltip>
+                              </HybridTooltipContent>
+                            </HybridTooltip>
                           </TooltipProvider>
                         </div>
                       </div>
@@ -1286,8 +1766,8 @@ export default function SettingsCenter() {
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-semibold">事件订阅</h3>
                       <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
+                        <HybridTooltip>
+                          <HybridTooltipTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1295,16 +1775,16 @@ export default function SettingsCenter() {
                             >
                               <Info className="h-3.5 w-3.5 text-muted-foreground" />
                             </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
+                          </HybridTooltipTrigger>
+                          <HybridTooltipContent>
                             <p>选择需要接收通知的事件类型</p>
                             <br />
                             <p>番剧更新: 当发现新剧集时通知</p>
                             <p>下载完成: 当下载任务完成时通知</p>
                             <p>转移媒体库: 当文件成功转移到媒体库时通知</p>
                             <p>异常通知: 当系统发生错误时通知</p>
-                          </TooltipContent>
-                        </Tooltip>
+                          </HybridTooltipContent>
+                        </HybridTooltip>
                       </TooltipProvider>
                     </div>
                     <div className="space-y-4 pl-4 border-l-2 border-primary/10">
@@ -1318,13 +1798,7 @@ export default function SettingsCenter() {
                             noticeConfig.noticePoints.subscriptionUpdated
                           }
                           onCheckedChange={(checked) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              noticePoints: {
-                                ...prev.noticePoints,
-                                subscriptionUpdated: checked,
-                              },
-                            }))
+                            updateNoticePoints("subscriptionUpdated", checked)
                           }
                         />
                       </div>
@@ -1337,13 +1811,7 @@ export default function SettingsCenter() {
                           id="notice-downloaded"
                           checked={noticeConfig.noticePoints.downloaded}
                           onCheckedChange={(checked) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              noticePoints: {
-                                ...prev.noticePoints,
-                                downloaded: checked,
-                              },
-                            }))
+                            updateNoticePoints("downloaded", checked)
                           }
                         />
                       </div>
@@ -1356,13 +1824,7 @@ export default function SettingsCenter() {
                           id="notice-transferred"
                           checked={noticeConfig.noticePoints.transferred}
                           onCheckedChange={(checked) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              noticePoints: {
-                                ...prev.noticePoints,
-                                transferred: checked,
-                              },
-                            }))
+                            updateNoticePoints("transferred", checked)
                           }
                         />
                       </div>
@@ -1375,13 +1837,7 @@ export default function SettingsCenter() {
                           id="notice-error"
                           checked={noticeConfig.noticePoints.error}
                           onCheckedChange={(checked) =>
-                            setNoticeConfig((prev) => ({
-                              ...prev,
-                              noticePoints: {
-                                ...prev.noticePoints,
-                                error: checked,
-                              },
-                            }))
+                            updateNoticePoints("error", checked)
                           }
                         />
                       </div>
@@ -1393,6 +1849,7 @@ export default function SettingsCenter() {
               <Button
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
                 onClick={() => handleSaveSettings("notice")}
+                disabled={hasNoticeErrors()}
               >
                 保存通知设置
               </Button>

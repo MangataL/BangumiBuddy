@@ -1,82 +1,102 @@
-import * as React from "react"
-import { useLocalStorage } from "@/hooks/useLocalStorage"
+import * as React from "react";
 
-type Theme = "light" | "dark" | "system"
+type Theme = "light" | "dark" | "system";
 
 interface ThemeProviderProps extends React.HTMLAttributes<HTMLElement> {
-  children: React.ReactNode
-  attribute?: string
-  defaultTheme?: Theme
-  enableSystem?: boolean
-  disableTransitionOnChange?: boolean
+  children: React.ReactNode;
+  attribute?: string;
+  defaultTheme?: Theme;
+  enableSystem?: boolean;
 }
 
 interface ThemeContextProps {
-  theme?: Theme
-  setTheme: (theme: Theme) => void
+  theme?: Theme;
+  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = React.createContext<ThemeContextProps>({
   theme: undefined,
   setTheme: () => {},
-})
+});
 
 function ThemeProvider({
   children,
   attribute = "class",
   defaultTheme = "system",
   enableSystem = true,
-  disableTransitionOnChange = false,
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useLocalStorage<Theme>("theme", defaultTheme)
+  const [theme, setThemeState] = React.useState<Theme>(() => {
+    return ThemeStorage.getTheme(defaultTheme);
+  });
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
-      return
+      return;
     }
 
-    const root = window.document.documentElement
+    const root = window.document.documentElement;
 
     function updateTheme(theme: Theme) {
-      if (!theme) return
+      if (!theme) return;
 
-      const isSystem = theme === "system"
-      const nextTheme = isSystem ? getSystemTheme() : theme
+      const isSystem = theme === "system";
+      const nextTheme = isSystem ? getSystemTheme() : theme;
+      setThemeState(nextTheme);
 
       if (attribute === "class") {
-        root.classList.remove("light", "dark")
+        root.classList.remove("light", "dark");
         if (nextTheme !== "system") {
-          root.classList.add(nextTheme)
+          root.classList.add(nextTheme);
         }
       } else {
-        root.setAttribute("data-theme", nextTheme)
+        root.setAttribute("data-theme", nextTheme);
       }
     }
 
-    updateTheme(theme)
+    updateTheme(theme);
 
     if (enableSystem) {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
         if (theme === "system") {
-          updateTheme(theme)
+          updateTheme(theme);
         }
-      }
-      mediaQuery.addEventListener("change", handleChange)
-      return () => mediaQuery.removeEventListener("change", handleChange)
+      };
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
     }
-  }, [theme, attribute, enableSystem])
+  }, [theme, attribute, enableSystem]);
 
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>
+  const setTheme = React.useCallback((theme: Theme) => {
+    ThemeStorage.setTheme(theme);
+    setThemeState(theme);
+  }, []);
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 function useTheme() {
-  return React.useContext(ThemeContext)
+  return React.useContext(ThemeContext);
 }
 
 function getSystemTheme(): Theme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }
 
-export { ThemeProvider, useTheme }
+export { ThemeProvider, useTheme };
 
+class ThemeStorage {
+  static setTheme(theme: Theme) {
+    sessionStorage.setItem("theme", theme);
+  }
+
+  static getTheme(defaultTheme: Theme): Theme {
+    return (sessionStorage.getItem("theme") as Theme) || defaultTheme;
+  }
+}

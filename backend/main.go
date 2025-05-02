@@ -216,8 +216,7 @@ func main() {
 	apisRouter.GET("/logs", ginrouter.GetLogContent)
 
 	r.NoRoute(func(c *gin.Context) {
-		log.Debugf(context.Background(), "no route %s", c.Request.URL.Path)
-		c.FileFromFS("/web/index.html", http.FS(html))
+		http.ServeFileFS(c.Writer, c.Request, html, "/web/index.html")
 	})
 
 	if err := r.Run("[::]:6937"); err != nil {

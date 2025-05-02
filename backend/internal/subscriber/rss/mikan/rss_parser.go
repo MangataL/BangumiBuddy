@@ -2,8 +2,11 @@ package mikan
 
 import (
 	"context"
+	"encoding/xml"
+	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/mmcdole/gofeed"
 	"github.com/nssteinbrenner/anitogo"
@@ -29,7 +32,7 @@ func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error)
 		return subscriber.RSS{}, errors.WithMessage(err, "解析RSS失败")
 	}
 	items := getItems(ctx, feed.Items)
-	rg := parseReleaseGroup(ctx, items)
+	rg := parseReleaseGroup(items)
 	return subscriber.RSS{
 		BangumiName:  getBangumiName(ctx, feed.Title),
 		ReleaseGroup: rg,
@@ -37,7 +40,7 @@ func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error)
 	}, nil
 }
 
-func parseReleaseGroup(ctx context.Context, items []subscriber.RSSItem) string {
+func parseReleaseGroup(items []subscriber.RSSItem) string {
 	if len(items) == 0 {
 		return ""
 	}
@@ -73,7 +76,28 @@ func getItems(ctx context.Context, items []*gofeed.Item) []subscriber.RSSItem {
 		rssItems = append(rssItems, subscriber.RSSItem{
 			GUID:        item.GUID,
 			TorrentLink: item.Enclosures[0].URL,
+			PublishedAt: parsePublishedAt(ctx, item),
 		})
 	}
 	return rssItems
+}
+
+func parsePublishedAt(ctx context.Context, item *gofeed.Item) time.Time {
+	if torrent, ok := item.Custom["torrent"]; ok {
+		wrappedData := fmt.Sprintf("<torrent>%s</torrent>", strings.TrimSpace(torrent))
+		var pubDate struct {
+			PubDate string `xml:"pubDate"`
+		}
+		if err := xml.Unmarshal([]byte(wrappedData), &pubDate); err != nil {
+			log.Warnf(ctx, "解析发布时间失败: %v", err)
+			return time.Time{}
+		}
+		t, err := time.ParseInLocation("2006-01-02T15:04:05.999", pubDate.PubDate, time.Local)
+		if err != nil {
+			log.Warnf(ctx, "解析发布时间失败: %v", err)
+			return time.Time{}
+		}
+		return t
+	}
+	return time.Time{}
 }

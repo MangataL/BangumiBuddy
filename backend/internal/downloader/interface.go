@@ -47,4 +47,5 @@ type TorrentOperator interface {
 // SetTorrentStatusOptions 设置种子文件状态选项
 type SetTorrentStatusOptions struct {
 	TransferType string
+	FileNames    []string
 }

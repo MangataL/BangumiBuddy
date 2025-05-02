@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,10 +32,12 @@ func TestParser_Parse(t *testing.T) {
 					{
 						GUID:        "[喵萌Production&LoliHouse] GIRLS BAND CRY - 02 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
 						TorrentLink: "https://mikanime.tv/Download/20240414/3a2e456a689ead23ca8f49fdc74ba1872c6f0c12.torrent",
+						PublishedAt: time.Date(2024, 4, 14, 0, 35, 38, 0, time.Local),
 					},
 					{
 						GUID:        "[喵萌Production&LoliHouse] GIRLS BAND CRY - 01 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
 						TorrentLink: "https://mikanime.tv/Download/20240407/b13d145d95d9acdd5fc50784a6906007b540b468.torrent",
+						PublishedAt: time.Date(2024, 4, 7, 18, 50, 3, 0, time.Local),
 					},
 				},
 			},
@@ -49,6 +52,7 @@ func TestParser_Parse(t *testing.T) {
 					{
 						GUID:        "[千夏字幕组&LoliHouse] 吹响吧！上低音号 3 / Hibike! Euphonium 3 - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
 						TorrentLink: "https://mikanani.me/Download/20240614/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa.torrent",
+						PublishedAt: time.Date(2024, 6, 14, 22, 54, 27, 0, time.Local),
 					},
 				},
 			},
@@ -64,6 +68,7 @@ func TestParser_Parse(t *testing.T) {
 					{
 						GUID:        "[LoliHouse] 为美好的世界献上祝福！3 / Kono Subarashii Sekai ni Shukufuku wo! S3 - 10 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
 						TorrentLink: "https://mikanani.me/Download/20240613/305bcdb1dc367d1684d8350188beab851c8d75e1.torrent",
+						PublishedAt: time.Date(2024, 6, 13, 13, 2, 6, 0, time.Local),
 					},
 				},
 			},
@@ -108,6 +113,6 @@ func TestParseReleaseGroup(t *testing.T) {
 		},
 	}
 
-	rg := parseReleaseGroup(context.Background(), items)
+	rg := parseReleaseGroup(items)
 	assert.Equal(t, "ANi", rg)
 }

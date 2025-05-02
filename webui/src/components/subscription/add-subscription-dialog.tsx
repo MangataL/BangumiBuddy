@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/useToast";
 import { AxiosError } from "axios";
 import { ConfirmSubscriptionDialog } from "./confirm-subscription-dialog";
 import { ParseRSSResponse } from "@/api/subscription";
+import { extractErrorMessage } from "@/utils/error";
 
 export interface AddSubscriptionDialogProps {
   open: boolean;
@@ -64,9 +65,7 @@ export function AddSubscriptionDialog({
         handleOpenChange(false);
         setParseDialogOpen(true);
       } catch (error) {
-        const description =
-          (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-          "请检查RSS链接是否正确";
+        const description = extractErrorMessage(error, "未知原因失败，请检查RSS链接是否正确");
         toast({
           title: "解析RSS链接失败",
           description: description,
@@ -84,9 +83,7 @@ export function AddSubscriptionDialog({
             <DialogTitle className="text-xl anime-gradient-text">
               添加订阅
             </DialogTitle>
-            <DialogDescription>
-              请输入RSS订阅链接，我们将解析订阅内容
-            </DialogDescription>
+            <DialogDescription>请输入RSS订阅链接</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -106,7 +103,7 @@ export function AddSubscriptionDialog({
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => handleOpenChange(false)}

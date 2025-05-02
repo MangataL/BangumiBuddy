@@ -1,11 +1,8 @@
-import type { Config } from "tailwindcss"
+import type { Config } from "tailwindcss";
 
 const config = {
   darkMode: ["class"],
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   prefix: "",
   theme: {
     container: {
@@ -16,6 +13,9 @@ const config = {
       },
     },
     extend: {
+      screens: {
+        xs: "400px",
+      },
       fontFamily: {
         poppins: [
           "var(--font-inter)",
@@ -123,7 +123,6 @@ const config = {
     },
   },
   plugins: [require("tailwindcss-animate")],
-} satisfies Config
+} satisfies Config;
 
-export default config
-
+export default config;

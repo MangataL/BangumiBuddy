@@ -4,8 +4,6 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from "axios";
-import { TokenService } from "@/utils/token";
-import NavigationService from "@/utils/navigation";
 import AuthService from "@/utils/auth-service";
 
 export interface ErrorResponse {
@@ -28,22 +26,18 @@ const authRequestInterceptor = async (config: InternalAxiosRequestConfig) => {
     return config;
   }
 
-  const accessToken = TokenService.getAccessToken();
+  const accessToken = await AuthService.getAccessToken();
   if (!accessToken) {
-    NavigationService.navigateToLogin(window.location.pathname);
-    throw new Error("登陆过期");
+    AuthService.handleUnauthorized();
+    return Promise.reject(new Error("登陆信息已过期，请重新登陆"));
   }
-
   config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
 };
 
 const errorInterceptor = (error: AxiosError<unknown>) => {
   if (error.response?.status === 401) {
-    TokenService.clearTokens();
-    // 使用AuthService处理未授权状态
     AuthService.handleUnauthorized();
-    NavigationService.navigateToLogin(window.location.pathname);
   }
   return Promise.reject(error);
 };

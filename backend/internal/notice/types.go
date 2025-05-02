@@ -35,6 +35,5 @@ type NoticeTransferredReq struct {
 	ReleaseGroup  string
 	Poster        string
 	MediaFilePath string
-	Transferred   bool
 	Error         error
 }

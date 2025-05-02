@@ -231,7 +231,17 @@ func (m *Manager) checkDownloadStatus() {
 
 			if torrent.Status != currentStatus ||
 				(currentStatus == TorrentStatusDownloadError && torrent.StatusDetail != statusDetail) {
-				if err := m.torrentOp.SetTorrentStatus(ctx, torrent.Hash, currentStatus, statusDetail, &SetTorrentStatusOptions{}); err != nil {
+				var fileNames []string
+				if currentStatus == TorrentStatusDownloaded {
+					fileNames, err = m.downloader.GetTorrentFileNames(ctx, torrent.Hash)
+					if err != nil {
+						log.Errorf(ctx, "获取种子文件名失败 [%s]: %v", status.Hash, err)
+						return
+					}
+				}
+				if err := m.torrentOp.SetTorrentStatus(ctx, torrent.Hash, currentStatus, statusDetail, &SetTorrentStatusOptions{
+					FileNames: fileNames,
+				}); err != nil {
 					log.Errorf(ctx, "更新种子状态失败 [%s]: %v", status.Hash, err)
 				}
 				if _, ok := needNoticeStatus[currentStatus]; ok {

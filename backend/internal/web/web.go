@@ -4,12 +4,14 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"os"
 	"slices"
 
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	"github.com/MangataL/BangumiBuddy/internal/utils"
+	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/samber/lo"
 )
 
@@ -99,6 +101,10 @@ func (w *Web) ListBangumis(ctx context.Context, req subscriber.ListBangumiReq) (
 func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]Torrent, error) {
 	ts, _, err := w.torrentOperator.List(ctx, downloader.TorrentFilter{
 		SubscriptionID: subscriptionID,
+		Order: downloader.Order{
+			Field: "name",
+			Way:   "desc",
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -112,6 +118,7 @@ func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]
 			Status:       t.Status,
 			StatusDetail: t.StatusDetail,
 			RSSGUID:      t.RSSGUID,
+			CreatedAt:    t.CreatedAt,
 		}
 		if t.Status != downloader.TorrentStatusTransferred && t.Status != downloader.TorrentStatusTransferredError {
 			ds, err := w.downloader.GetDownloadStatuses(ctx, []string{t.Hash})
@@ -136,11 +143,7 @@ func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
 	if err != nil {
 		return err
 	}
-	originFileNames, err := w.downloader.GetTorrentFileNames(ctx, req.Hash)
-	if err != nil {
-		return err
-	}
-	for _, name := range originFileNames {
+	for _, name := range torrent.FileNames {
 		filePath := torrent.Path + name
 		transferFile, err := w.transfer.GetTransferFile(ctx, filePath)
 		if err != nil {
@@ -155,18 +158,20 @@ func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
 	}
 	if req.DeleteOriginFiles {
 		if err := w.downloader.DeleteTorrent(ctx, req.Hash); err != nil {
-			return err
+			log.Warnf(ctx, "通过下载器删除种子失败，尝试手动清理: %v", err)
+			for _, name := range torrent.FileNames {
+				filePath := torrent.Path + name
+				if err := os.Remove(filePath); err != nil {
+					return err
+				}
+			}
+			return w.torrentOperator.Delete(ctx, req.Hash)
 		}
 	}
 	return nil
 }
 
 func (w *Web) DeleteSubscription(ctx context.Context, subscriptionID string, deleteFiles bool) error {
-	if err := w.transfer.DeleteTransferCache(ctx, transfer.DeleteFileTransferredReq{
-		SubscriptionID: subscriptionID,
-	}); err != nil {
-		return err
-	}
 	if deleteFiles {
 		files, _, err := w.torrentOperator.List(ctx, downloader.TorrentFilter{
 			SubscriptionID: subscriptionID,
@@ -183,6 +188,11 @@ func (w *Web) DeleteSubscription(ctx context.Context, subscriptionID string, del
 			}
 		}
 	}
+	if err := w.transfer.DeleteTransferCache(ctx, transfer.DeleteFileTransferredReq{
+		SubscriptionID: subscriptionID,
+	}); err != nil {
+		return err
+	}
 	if err := w.subscriber.DeleteSubscription(ctx, subscriptionID); err != nil {
 		return err
 	}
@@ -190,16 +200,12 @@ func (w *Web) DeleteSubscription(ctx context.Context, subscriptionID string, del
 }
 
 func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) {
-	files, err := w.downloader.GetTorrentFileNames(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
 	torrent, err := w.torrentOperator.Get(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-	tfs := make([]File, 0, len(files))
-	for _, fileName := range files {
+	tfs := make([]File, 0, len(torrent.FileNames))
+	for _, fileName := range torrent.FileNames {
 		filePath := torrent.Path + fileName
 		if utils.IsMediaFile(filePath) {
 			file := File{FileName: filePath}
@@ -219,7 +225,7 @@ func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) 
 }
 
 func (w *Web) ListRecentUpdatedTorrents(ctx context.Context, req ListRecentUpdatedTorrentsReq) (ListRecentUpdatedTorrentsResp, error) {
-	torrents, _, err := w.torrentOperator.List(ctx, downloader.TorrentFilter{
+	torrents, total, err := w.torrentOperator.List(ctx, downloader.TorrentFilter{
 		Page: downloader.Page{
 			Num:  req.Page,
 			Size: req.PageSize,
@@ -261,7 +267,7 @@ func (w *Web) ListRecentUpdatedTorrents(ctx context.Context, req ListRecentUpdat
 		})
 	}
 	return ListRecentUpdatedTorrentsResp{
-		Total:    len(torrents),
+		Total:    total,
 		Torrents: torrentsResp,
 	}, nil
 }

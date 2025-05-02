@@ -3,11 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  HybridTooltip,
+  HybridTooltipContent,
+  HybridTooltipTrigger,
+} from "@/components/common/tooltip";
 
 interface EpisodePositionInputProps {
   value: string;
@@ -23,8 +25,8 @@ export function EpisodePositionInput({
       <div className="flex items-center gap-2">
         <Label htmlFor="episodePosition">集数定位</Label>
         <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <HybridTooltip>
+            <HybridTooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
@@ -32,8 +34,8 @@ export function EpisodePositionInput({
               >
                 <Info className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs space-y-2">
+            </HybridTooltipTrigger>
+            <HybridTooltipContent className="max-w-xs space-y-2">
               <p>
                 集数定位用来确定文件名中集数的位置，用于部分文件命名不标准的订阅源，一般不需要设置。
               </p>
@@ -54,8 +56,8 @@ export function EpisodePositionInput({
                 </code>
                 中的01，获取到正确的集数
               </p>
-            </TooltipContent>
-          </Tooltip>
+            </HybridTooltipContent>
+          </HybridTooltip>
         </TooltipProvider>
       </div>
       <Input

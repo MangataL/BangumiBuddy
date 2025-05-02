@@ -27,46 +27,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     const token = TokenService.getAccessToken();
-    return !!token && !TokenService.isTokenExpired(token);
+    if (!token || TokenService.isTokenExpired(token)) {
+      const refreshToken = TokenService.getRefreshToken();
+      if (!refreshToken || TokenService.isTokenExpired(refreshToken)) {
+        return false;
+      }
+    }
+    return true;
   });
+
+  const handleUnauthorized = () => {
+    TokenService.clearTokens();
+    setIsAuthenticated(false);
+  };
+
+  const handleTokenExpiry = () => {
+    const token = TokenService.getAccessToken();
+    if (!token || TokenService.isTokenExpired(token)) {
+      const refreshToken = TokenService.getRefreshToken();
+      if (refreshToken && !TokenService.isTokenExpired(refreshToken)) {
+        refreshAccessToken();
+      } else {
+        handleUnauthorized();
+      }
+    }
+  };
+
+  const getAccessToken = async (): Promise<string | null> => {
+    let token = TokenService.getAccessToken();
+    if (!token || TokenService.isTokenExpired(token)) {
+      token = await refreshAccessToken(); // 等待刷新完成
+    }
+    return token;
+  };
 
   useEffect(() => {
     // 监听 token 过期
-    const checkTokenExpiry = () => {
-      const token = TokenService.getAccessToken();
-      if (!token || TokenService.isTokenExpired(token)) {
-        const refreshToken = TokenService.getRefreshToken();
-        if (refreshToken && !TokenService.isTokenExpired(refreshToken)) {
-          refreshAccessToken();
-        } else {
-          setIsAuthenticated(false);
-          TokenService.clearTokens();
-          navigate("/login");
-        }
-      }
-    };
-
-    const interval = setInterval(checkTokenExpiry, 60000); // 每分钟检查一次
+    const interval = setInterval(handleTokenExpiry, 60*1000); // 每分钟检查一次
     return () => clearInterval(interval);
   }, [navigate]);
 
   useEffect(() => {
-    // 注册401未授权处理回调
-    const handleUnauthorized = () => {
-      setIsAuthenticated(false);
-    };
-
     AuthService.registerLogoutCallback(handleUnauthorized);
+    AuthService.setGetAccessToken(getAccessToken);
 
     return () => {
       AuthService.unregisterLogoutCallback();
     };
   }, []);
 
-  const refreshAccessToken = async () => {
+  const refreshAccessToken = async (): Promise<string | null> => {
     try {
       const refreshToken = TokenService.getRefreshToken();
-      if (!refreshToken) return;
+      if (!refreshToken || TokenService.isTokenExpired(refreshToken)) {
+        return null;
+      }
 
       const response = await authApi.refreshToken(refreshToken);
       TokenService.storeTokens(
@@ -76,10 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         true
       );
-      setIsAuthenticated(true);
+      return TokenService.getAccessToken();
     } catch (err) {
-      setIsAuthenticated(false);
-      navigate("/login");
+      console.error("refreshAccessToken error", err);
+      return null;
     }
   };
 

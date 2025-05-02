@@ -3,6 +3,7 @@ package gin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os/exec"
 	"slices"
@@ -13,7 +14,7 @@ import (
 )
 
 // GetLogContent 获取日志文件内容
-// GET /apis/v1/logs?level=debug
+// GET /apis/v1/logs?level=debug&keyword=error
 func GetLogContent(c *gin.Context) {
 	fileName := log.GetFileName()
 	if fileName == "" {
@@ -21,15 +22,18 @@ func GetLogContent(c *gin.Context) {
 		return
 	}
 	level := c.Query("level")
-	// level参数可选，空值时返回全量日志
-	logs, err := grepLogs(level)
+	keyword := c.Query("keyword")
+	// level和keyword参数可选
+	logs, err := grepLogs(level, keyword)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// 按时间戳倒序排序
 	slices.SortFunc(logs, func(a, b LogEntry) int {
 		return int(b.Ts - a.Ts)
 	})
+
 	c.JSON(http.StatusOK, logs)
 }
 
@@ -41,15 +45,28 @@ type LogEntry struct {
 }
 
 // grepLogs 使用 grep 过滤日志文件
-func grepLogs(level string) ([]LogEntry, error) {
+func grepLogs(level, keyword string) ([]LogEntry, error) {
 	var cmd *exec.Cmd
-	// 判断level是否为空，为空时返回全量日志
-	if level == "" {
-		cmd = exec.Command("cat", log.GetFileName())
+
+	// 根据过滤条件构建命令
+	if level == "" && keyword == "" {
+		// 无过滤条件，直接返回最新50条
+		cmdStr := fmt.Sprintf("tail -n 50 %s", log.GetFileName())
+		cmd = exec.Command("sh", "-c", cmdStr)
+	} else if level != "" && keyword == "" {
+		// 先按级别过滤，再获取最新50条
+		cmdStr := fmt.Sprintf("grep -i '\"level\":\"%s\"' %s | tail -n 50", level, log.GetFileName())
+		cmd = exec.Command("sh", "-c", cmdStr)
+	} else if level == "" && keyword != "" {
+		// 先按关键字过滤，再获取最新50条
+		cmdStr := fmt.Sprintf("grep -i \"%s\" %s | tail -n 50", keyword, log.GetFileName())
+		cmd = exec.Command("sh", "-c", cmdStr)
 	} else {
-		// 使用通配符 app.log* 匹配主文件和备份文件
-		cmd = exec.Command("grep", "-i", `"level":"`+level+`"`, log.GetFileName())
+		// 同时按级别和关键字过滤，再获取最新50条
+		cmdStr := fmt.Sprintf("grep -i '\"level\":\"%s\"' %s | grep -i \"%s\" | tail -n 50", level, log.GetFileName(), keyword)
+		cmd = exec.Command("sh", "-c", cmdStr)
 	}
+
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
@@ -79,6 +96,8 @@ func grepLogs(level string) ([]LogEntry, error) {
 		}
 		logs = append(logs, entry)
 	}
-
+	if len(logs) == 0 {
+		return []LogEntry{}, nil
+	}
 	return logs, nil
 }

@@ -14,6 +14,8 @@ services:
     image: mangatal/bangumi-buddy:latest
     container_name: bangumi-buddy
     restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai # 替换为你当前时区，默认是中国时区
     ports:
       - "6937:6937" # 前者替换为你自定义的端口或自行改为host模式
     volumes:

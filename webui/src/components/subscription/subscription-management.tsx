@@ -17,7 +17,7 @@ import subscriptionAPI, {
   BangumiBase,
   ReleaseGroupSubscription,
 } from "@/api/subscription";
-import { AxiosError } from "axios";
+import { extractErrorMessage } from "@/utils/error";
 
 export default function SubscriptionManagement() {
   const { toast } = useToast();
@@ -45,9 +45,7 @@ export default function SubscriptionManagement() {
       // 短暂显示刷新成功状态
       setTimeout(() => setRefreshSuccess(false), 500);
     } catch (error) {
-      const description =
-        (error as AxiosError<{ error: string }>)?.response?.data?.error ||
-        "未知原因失败，请重试";
+      const description = extractErrorMessage(error);
       toast({
         title: "获取番剧列表失败",
         description: description,
@@ -99,11 +97,11 @@ export default function SubscriptionManagement() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] hide-scrollbar">
+    <div className="flex flex-col h-[calc(100dvh-4rem)] hide-scrollbar">
       <div className="flex-none space-y-6 pb-6">
         <div className="flex flex-row items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold anime-gradient-text flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+          <h1 className="text-2xl xs:text-3xl font-bold anime-gradient-text flex items-center gap-2">
+            <Sparkles className="h-4 w-4 xs:h-6 xs:w-6 text-primary animate-pulse" />
             <span className="flex flex-row">订阅管理</span>
           </h1>
           <div className="flex flex-wrap gap-2 justify-end">
@@ -111,7 +109,7 @@ export default function SubscriptionManagement() {
               className="rounded-xl anime-button bg-gradient-to-r from-primary to-blue-500 hover:opacity-90 p-2 sm:px-3 sm:py-2 aspect-square sm:aspect-auto"
               onClick={() => setAddDialogOpen(true)}
             >
-              <Plus className="h-4 w-4 sm:mr-2" />
+              <Plus className="icon-button" />
               <span className="hidden sm:inline">添加订阅</span>
             </Button>
             <AddSubscriptionDialog
@@ -125,7 +123,7 @@ export default function SubscriptionManagement() {
               className="rounded-xl anime-button p-2 sm:px-3 sm:py-2 aspect-square sm:aspect-auto"
               onClick={() => setCalendarDialogOpen(true)}
             >
-              <Calendar className="h-4 w-4 sm:mr-2" />
+              <Calendar className="icon-button" />
               <span className="hidden sm:inline">订阅日历</span>
             </Button>
             <SubscriptionCalendarDialog
@@ -138,7 +136,7 @@ export default function SubscriptionManagement() {
               className="rounded-xl anime-button p-2 sm:px-3 sm:py-2 aspect-square sm:aspect-auto"
               onClick={() => setRecentUpdatesDialogOpen(true)}
             >
-              <Clock className="h-4 w-4 sm:mr-2" />
+              <Clock className="icon-button" />
               <span className="hidden sm:inline">近期更新</span>
             </Button>
             <RecentUpdatesDialog
@@ -158,7 +156,7 @@ export default function SubscriptionManagement() {
             >
               <RefreshCw
                 className={cn(
-                  "h-4 w-4 sm:mr-2",
+                  "icon-button",
                   loading && "animate-spin",
                   refreshSuccess &&
                     "text-green-500 animate-[spin_1s_ease-in-out]"
@@ -177,7 +175,7 @@ export default function SubscriptionManagement() {
           refreshSuccess && "animate-[pulse_0.5s_ease-in-out]"
         )}
       >
-        <div className="flex flex-wrap gap-4 p-4">
+        <div className="flex flex-wrap gap-4 p-4 pb-10">
           {bangumis.map((bangumi) => (
             <div
               key={bangumi.bangumiName + bangumi.season}
@@ -185,7 +183,7 @@ export default function SubscriptionManagement() {
             >
               <Card
                 className={cn(
-                  "anime-card overflow-hidden border-primary/10 cursor-pointer transition-all duration-300 hover:scale-105 w-[160px]",
+                  "anime-card overflow-hidden border-primary/10 cursor-pointer transition-all duration-300 hover:scale-105 w-[130px] xs:w-[160px]",
                   selectedBangumi?.bangumiName === bangumi.bangumiName &&
                     selectedBangumi?.season === bangumi.season &&
                     "scale-105 border-primary/30 shadow-lg"
@@ -193,7 +191,7 @@ export default function SubscriptionManagement() {
                 onClick={() => handleBangumiClick(bangumi)}
               >
                 <div className="flex flex-col h-full">
-                  <div className="relative w-full h-[240px] overflow-hidden group">
+                  <div className="relative w-full h-[195px] xs:h-[240px] overflow-hidden group">
                     <img
                       src={
                         bangumi.posterURL ||

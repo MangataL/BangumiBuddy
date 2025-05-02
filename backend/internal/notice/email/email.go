@@ -238,14 +238,14 @@ func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownlo
 // NoticeTransferred 实现Notifier接口，通知资源转移状态
 func (n *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTransferredReq) error {
 	var subject string
-	if req.Transferred && req.Error == nil {
+	if req.Error == nil {
 		subject = fmt.Sprintf("番剧转移成功：%s", req.BangumiName)
 	} else {
 		subject = fmt.Sprintf("番剧转移失败：%s", req.BangumiName)
 	}
 
 	var statusMsg, statusColor, detailsHtml string
-	if !req.Transferred || req.Error != nil {
+	if req.Error != nil {
 		statusMsg = "转移媒体库失败"
 		statusColor = "#FF3B30" // 红色
 

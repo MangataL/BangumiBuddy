@@ -441,9 +441,10 @@ func (s *Subscriber) GetRSSMatch(ctx context.Context, subscriptionID string) ([]
 	matches := make([]RSSMatch, 0, len(rss.Items))
 	for _, item := range rss.Items {
 		matches = append(matches, RSSMatch{
-			GUID:      item.GUID,
-			Match:     s.matchesFilters(ctx, item.GUID, bangumi.IncludeRegs, bangumi.ExcludeRegs),
-			Processed: processedMap[item.GUID],
+			GUID:        item.GUID,
+			Match:       s.matchesFilters(ctx, item.GUID, bangumi.IncludeRegs, bangumi.ExcludeRegs),
+			Processed:   processedMap[item.GUID],
+			PublishedAt: item.PublishedAt,
 		})
 	}
 	return matches, nil

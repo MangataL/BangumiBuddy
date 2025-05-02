@@ -138,12 +138,8 @@ func (t *transferError) ErrorOrNil() error {
 	return errors.New(errMsg)
 }
 
-func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torrent) error {
-	fileNames, err := t.downloader.GetTorrentFileNames(ctx, torrent.Hash)
-	if err != nil {
-		return errors.WithMessage(err, "获取种子文件名失败")
-	}
-
+func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torrent) (err error) {
+	fileNames := torrent.FileNames
 	transferErr := &transferError{fileNum: len(fileNames)}
 	for _, fileName := range fileNames {
 		path := torrent.Path + fileName
@@ -198,7 +194,7 @@ func (t *Transfer) transferForSubscribe(ctx context.Context, torrent downloader.
 	}
 
 	episode, newFilePath, transferd, err := t.transfer(ctx, meta, checkPriority)
-	if torrent.Status != downloader.TorrentStatusTransferredError || err == nil {
+	if (torrent.Status != downloader.TorrentStatusTransferredError && err != nil) || transferd {
 		if err := t.notifier.NoticeTransferred(ctx, notice.NoticeTransferredReq{
 			RSSGUID:       torrent.RSSGUID,
 			FileName:      fileName,
@@ -207,7 +203,6 @@ func (t *Transfer) transferForSubscribe(ctx context.Context, torrent downloader.
 			ReleaseGroup:  bangumi.ReleaseGroup,
 			Poster:        bangumi.PosterURL,
 			MediaFilePath: strings.TrimPrefix(newFilePath, t.config.TVPath),
-			Transferred:   transferd,
 			Error:         err,
 		}); err != nil {
 			log.Warnf(ctx, "通知转移失败: %v", err)
@@ -395,13 +390,13 @@ func (t *Transfer) generateNewFilePath(format string, meta Meta, episode int) st
 	result = strings.ReplaceAll(result, "{year}", meta.Year)
 	result = strings.ReplaceAll(result, "{release_group}", meta.ReleaseGroup)
 
-	episodeStr := utils.FormatNumber(episode)
+	episodeStr := strconv.Itoa(episode)
 	result = strings.ReplaceAll(result, "{episode}", episodeStr)
 
-	seasonStr := utils.FormatNumber(meta.Season)
+	seasonStr := strconv.Itoa(meta.Season)
 	result = strings.ReplaceAll(result, "{season}", seasonStr)
 
-	seasonEpisode := fmt.Sprintf("S%sE%s", seasonStr, episodeStr)
+	seasonEpisode := fmt.Sprintf("S%sE%s", utils.FormatNumber(meta.Season), utils.FormatNumber(episode))
 	result = strings.ReplaceAll(result, "{season_episode}", seasonEpisode)
 
 	originName := utils.GetFileBaseName(meta.FileName)

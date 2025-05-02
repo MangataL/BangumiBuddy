@@ -125,6 +125,10 @@
   -webkit-text-fill-color: transparent;
 }
 
+.icon-button {
+  @apply h-4 w-4 sm:mr-2;
+}
+
 .anime-border {
   position: relative;
   border-radius: 0.75rem;
@@ -183,6 +187,16 @@
 
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-primary;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari, and Opera */
 }
 
 /* 自定义垂直导航样式 */
