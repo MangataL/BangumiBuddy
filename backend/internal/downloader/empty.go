@@ -13,7 +13,7 @@ type Empty struct{
 }
 
 // AddTorrent implements Downloader.
-func (e *Empty) AddTorrent(ctx context.Context, torrentLink string, savePath string) error {
+func (e *Empty) AddTorrent(ctx context.Context, torrentLink string, savePath string, stopCondition string) error {
 	return ErrDownloaderNotSet
 }
 
@@ -45,4 +45,14 @@ func (e *Empty) ListTorrentsStatus(ctx context.Context) ([]DownloadStatus, error
 // SetLocation implements Downloader.
 func (e *Empty) SetLocation(ctx context.Context, hash string, savePath string) error {
 	return ErrDownloaderNotSet
+}
+
+// ContinueDownload implements Downloader.
+func (e *Empty) ContinueDownload(ctx context.Context, hash string) error {
+	return ErrDownloaderNotSet
+}
+
+// GetTorrentSavePath implements Downloader.
+func (e *Empty) GetTorrentSavePath(ctx context.Context, hash string) (string, error) {
+	return "", ErrDownloaderNotSet
 }

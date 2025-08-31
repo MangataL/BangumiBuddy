@@ -3,7 +3,14 @@ import type React from "react";
 import { cn } from "@/lib/utils";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Calendar, RefreshCw, Sparkles, Clock } from "lucide-react";
+import {
+  Plus,
+  Calendar,
+  RefreshCw,
+  Sparkles,
+  Clock,
+  Filter,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,13 +40,18 @@ export default function SubscriptionManagement() {
   const [bangumis, setBangumis] = useState<BangumiBase[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
+  const [showActiveOnly, setShowActiveOnly] = useState(() => {
+    const saved = localStorage.getItem("subscription-show-active-only");
+    return saved ? JSON.parse(saved) : false;
+  });
 
   // 获取番剧列表
   const fetchBangumis = useCallback(async () => {
     try {
       setLoading(true);
       setRefreshSuccess(false);
-      const data = await subscriptionAPI.listBangumisBase();
+      const params = showActiveOnly ? { active: true } : undefined;
+      const data = await subscriptionAPI.listBangumisBase(params);
       setBangumis(data);
       setRefreshSuccess(true);
       // 短暂显示刷新成功状态
@@ -54,7 +66,15 @@ export default function SubscriptionManagement() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showActiveOnly]);
+
+  // 保存过滤状态到 sessionStorage
+  useEffect(() => {
+    localStorage.setItem(
+      "subscription-show-active-only",
+      JSON.stringify(showActiveOnly)
+    );
+  }, [showActiveOnly]);
 
   // 初始化加载
   useEffect(() => {
@@ -99,12 +119,34 @@ export default function SubscriptionManagement() {
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)] hide-scrollbar">
       <div className="flex-none space-y-6 pb-6">
-        <div className="flex flex-row items-center justify-between gap-4">
-          <h1 className="text-2xl xs:text-3xl font-bold anime-gradient-text flex items-center gap-2">
-            <Sparkles className="h-4 w-4 xs:h-6 xs:w-6 text-primary animate-pulse" />
-            <span className="flex flex-row">订阅管理</span>
-          </h1>
-          <div className="flex flex-wrap gap-2 justify-end">
+        <div className="flex flex-row items-center justify-between gap-1.5 xs:gap-4">
+          <div className="flex items-center gap-1.5 xs:gap-3 flex-shrink-0">
+            <h1 className="text-xl xs:text-2xl sm:text-3xl font-bold anime-gradient-text flex items-center gap-1.5 xs:gap-2">
+              <Sparkles className="h-4 w-4 xs:h-5 xs:w-5 sm:h-6 sm:w-6 text-primary animate-pulse flex-shrink-0" />
+              <span className="flex flex-row whitespace-nowrap">订阅管理</span>
+            </h1>
+            <Button
+              variant={showActiveOnly ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "rounded-xl anime-button transition-all duration-300 h-7 w-7 xs:h-8 xs:w-auto xs:px-3 p-0 xs:p-2 flex-shrink-0",
+                showActiveOnly &&
+                  "bg-gradient-to-r from-primary to-blue-500 hover:opacity-90 shadow-md scale-105"
+              )}
+              onClick={() => setShowActiveOnly(!showActiveOnly)}
+            >
+              <Filter
+                className={cn(
+                  "h-3.5 w-3.5 xs:h-4 xs:w-4 transition-transform duration-300",
+                  showActiveOnly && "text-white"
+                )}
+              />
+              <span className="hidden xs:inline ml-1 text-xs whitespace-nowrap">
+                只看启用
+              </span>
+            </Button>
+          </div>
+          <div className="flex gap-1.5 xs:gap-2 justify-end flex-shrink-0">
             <Button
               className="rounded-xl anime-button bg-gradient-to-r from-primary to-blue-500 hover:opacity-90 p-2 sm:px-3 sm:py-2 aspect-square sm:aspect-auto"
               onClick={() => setAddDialogOpen(true)}

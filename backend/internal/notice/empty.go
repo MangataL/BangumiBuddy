@@ -21,7 +21,12 @@ func (e *Empty) NoticeSubscriptionUpdated(ctx context.Context, req NoticeSubscri
 	return ErrNofierNotSet
 }
 
-// NoticeTransferred implements Notifier.
-func (e *Empty) NoticeTransferred(ctx context.Context, req NoticeTransferredReq) error {
+// NoticeSubscriptionTransferred implements Notifier.
+func (e *Empty) NoticeSubscriptionTransferred(ctx context.Context, req NoticeSubscriptionTransferredReq) error {
+	return ErrNofierNotSet
+}
+
+// NoticeTaskTransferred implements Notifier.
+func (e *Empty) NoticeTaskTransferred(ctx context.Context, req NoticeTaskTransferredReq) error {
 	return ErrNofierNotSet
 }

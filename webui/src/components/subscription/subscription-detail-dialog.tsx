@@ -7,18 +7,18 @@ import {
   FileBox,
   Star,
   Save,
-  ArrowUpFromLine,
   CircleSlash,
   CheckSquare,
   Info,
   Play,
   Trash2,
   Loader2,
-  Download,
   CheckCircle2,
   PauseCircle,
-  ArrowUpCircle,
-  FileSymlink,
+  CircleArrowDown,
+  CircleAlert,
+  CircleX,
+  CircleArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -93,20 +93,11 @@ import {
 import { formatDate } from "@/utils/time";
 import { useMobile } from "@/hooks/useMobile";
 import { TruncatedText } from "@/components/common/truncate-rss-item";
+import { torrentCanTransfer } from "@/utils/util";
 
 export interface SubscriptionInit {
   id: string;
   releaseGroups: ReleaseGroupSubscription[];
-}
-
-interface ConfigState {
-  active: boolean;
-  includes: string[];
-  excludes: string[];
-  priority: number;
-  episodeOffset: number;
-  episodePosition: string;
-  episodeTotalNum: number;
 }
 
 interface SubscriptionDetailDialogProps {
@@ -181,7 +172,7 @@ export function SubscriptionDetailDialog({
             className="h-8 w-8 rounded-full"
             onClick={() => handleRetryTransfer(hash)}
           >
-            <ArrowUpFromLine className="h-4 w-4" />
+            <CircleArrowRight className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>转移文件</TooltipContent>
@@ -1118,7 +1109,7 @@ export function SubscriptionDetailDialog({
                                   onChange={(e) =>
                                     setBangumiDetails((prev) => ({
                                       ...prev!,
-                                      priority: Number(e.target.value),
+                                      priority: parseInt(e.target.value),
                                     }))
                                   }
                                   className="rounded-xl"
@@ -1528,7 +1519,7 @@ export function SubscriptionDetailDialog({
                                   <div className="text-sm space-y-2 text-muted-foreground">
                                     <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 flex items-center justify-center">
-                                        <Download className="w-5 h-5 text-green-500" />
+                                        <CircleArrowDown className="w-5 h-5 text-green-500" />
                                       </div>
                                       <span>已下载完成</span>
                                     </div>
@@ -1540,7 +1531,7 @@ export function SubscriptionDetailDialog({
                                     </div>
                                     <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 flex items-center justify-center">
-                                        <ArrowUpCircle className="w-5 h-5 text-yellow-500" />
+                                        <CircleX className="w-5 h-5 text-yellow-500" />
                                       </div>
                                       <span>未知状态，程序异常</span>
                                     </div>
@@ -1552,7 +1543,7 @@ export function SubscriptionDetailDialog({
                                     </div>
                                     <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 flex items-center justify-center">
-                                        <Download className="w-5 h-5 text-destructive" />
+                                        <CircleArrowDown className="w-5 h-5 text-destructive" />
                                       </div>
                                       <span>
                                         下载失败，鼠标悬浮在图标上查看原因
@@ -1560,7 +1551,7 @@ export function SubscriptionDetailDialog({
                                     </div>
                                     <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 flex items-center justify-center">
-                                        <FileSymlink className="w-5 h-5 text-destructive" />
+                                        <CircleAlert className="w-5 h-5 text-destructive" />
                                       </div>
                                       <span>
                                         转移失败，鼠标悬浮在图标上查看原因
@@ -1652,7 +1643,7 @@ export function SubscriptionDetailDialog({
                                           <StatusTooltip
                                             content={`下载失败：${torrent.statusDetail}`}
                                           >
-                                            <Download className="w-5 h-5 text-destructive" />
+                                            <CircleArrowDown className="w-5 h-5 text-destructive" />
                                           </StatusTooltip>
                                         ) : torrent.status ===
                                           TorrentStatusSet.TransferredError ? (
@@ -1660,13 +1651,13 @@ export function SubscriptionDetailDialog({
                                             <StatusTooltip
                                               content={`转移失败：${torrent.statusDetail}`}
                                             >
-                                              <FileSymlink className="w-5 h-5 text-destructive" />
+                                              <CircleAlert className="w-5 h-5 text-destructive" />
                                             </StatusTooltip>
                                           </div>
                                         ) : torrent.status ===
                                           TorrentStatusSet.Downloaded ? (
                                           <StatusTooltip content="已下载">
-                                            <Download className="w-5 h-5 text-green-500" />
+                                            <CircleArrowDown className="w-5 h-5 text-green-500" />
                                           </StatusTooltip>
                                         ) : torrent.status ===
                                           TorrentStatusSet.Transferred ? (
@@ -1693,15 +1684,10 @@ export function SubscriptionDetailDialog({
                                           </TooltipProvider>
                                         ) : (
                                           <StatusTooltip content="未知">
-                                            <ArrowUpCircle className="w-5 h-5 text-yellow-500" />
+                                            <CircleX className="w-5 h-5 text-yellow-500" />
                                           </StatusTooltip>
                                         )}
-                                        {(torrent.status ===
-                                          TorrentStatusSet.Downloaded ||
-                                          torrent.status ===
-                                            TorrentStatusSet.TransferredError ||
-                                          torrent.status ===
-                                            TorrentStatusSet.Transferred) && (
+                                        {torrentCanTransfer(torrent.status) && (
                                           <TransferButton hash={torrent.hash} />
                                         )}
                                         <DropdownMenu>

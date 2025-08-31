@@ -30,12 +30,41 @@ export interface SubscriptionConfig {
   autoStop: boolean;
 }
 
+// 字幕重命名配置类型
+export interface SubtitleRenameConfig {
+  enabled: boolean;
+  simpleChineseExts: string[];
+  simpleChineseRenameExt: string;
+  traditionalChineseExts: string[];
+  traditionalChineseRenameExt: string;
+}
+
 // 文件转移配置类型
 export interface TransferConfig {
   interval: number;
   tvPath: string;
   tvFormat: string;
   transferType: string;
+  subtitleRename: SubtitleRenameConfig;
+  moviePath: string;
+  movieFormat: string;
+  enableSubtitleSubset: boolean; // 是否开启字幕子集化
+}
+
+// 字幕操作器配置类型
+export interface SubtitleOperatorConfig {
+  useOTF: boolean; // 使用OTF字体
+  useSimilarFont: boolean; // 使用相似字体
+  useSystemFontsDir: boolean; // 使用系统字体目录
+  coverExistSubFont: boolean; // 覆盖已存在的子集字体
+  generateNewFile: boolean; // 生成新文件
+  checkGlyphs: boolean; // 检查字形
+}
+
+// 字体库状态类型
+export interface FontMetaSetStats {
+  total: number; // 字体总数
+  initDone: boolean; // 是否已初始化
 }
 
 // 通知配置类型
@@ -111,6 +140,20 @@ export const configAPI = {
     http.get("/config/notice") as Promise<NoticeConfig>,
   setNoticeConfig: (config: NoticeConfig): Promise<void> =>
     http.put("/config/notice", config) as Promise<void>,
+
+  // 字幕操作器配置
+  getSubtitleOperatorConfig: (): Promise<SubtitleOperatorConfig> =>
+    http.get("/config/subtitle") as Promise<SubtitleOperatorConfig>,
+  setSubtitleOperatorConfig: (config: SubtitleOperatorConfig): Promise<void> =>
+    http.put("/config/subtitle", config) as Promise<void>,
+
+  // 初始化字幕字体库
+  initSubtitleFontMetaSet: (): Promise<void> =>
+    http.post("/subtitle/meta-sets") as Promise<void>,
+
+  // 获取字体库状态
+  getSubtitleFontMetaSetStats: (): Promise<FontMetaSetStats> =>
+    http.get("/subtitle/meta-sets/stats") as Promise<FontMetaSetStats>,
 
   // 检查qBittorrent连通性
   checkQBittorrentConnection: (config: QBittorrentConfig): Promise<void> =>

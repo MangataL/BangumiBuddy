@@ -32,6 +32,8 @@ import {
   Search,
   CheckCircle,
   Bell,
+  Settings,
+  AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import {
@@ -42,10 +44,13 @@ import {
   type SubscriptionConfig,
   type TransferConfig,
   type NoticeConfig,
+  type SubtitleOperatorConfig,
+  type FontMetaSetStats,
 } from "@/api/config";
 import { MatchInput } from "@/components/common/match-input";
 import { Switch } from "@/components/ui/switch";
 import { PasswordInput } from "../common/password-input";
+import { ToolsSettings } from "./tools-settings";
 import { extractErrorMessage } from "@/utils/error";
 
 export default function SettingsCenter() {
@@ -114,6 +119,16 @@ export default function SettingsCenter() {
     tvPath: "",
     tvFormat: "",
     transferType: "hardlink",
+    subtitleRename: {
+      enabled: false,
+      simpleChineseExts: [],
+      simpleChineseRenameExt: ".zh",
+      traditionalChineseExts: [],
+      traditionalChineseRenameExt: ".zh-hant",
+    },
+    moviePath: "",
+    movieFormat: "",
+    enableSubtitleSubset: false,
   });
 
   // 文件转移设置表单验证
@@ -122,6 +137,8 @@ export default function SettingsCenter() {
     tvPath: "",
     tvFormat: "",
     transferType: "",
+    moviePath: "",
+    movieFormat: "",
   });
 
   // 通知配置状态
@@ -168,6 +185,12 @@ export default function SettingsCenter() {
     emailTo: "",
     // Bark 错误
     barkServerPath: "",
+  });
+
+  // 字体库状态
+  const [fontStats, setFontStats] = useState<FontMetaSetStats>({
+    total: 0,
+    initDone: false,
   });
 
   // 验证下载设置表单字段
@@ -287,6 +310,13 @@ export default function SettingsCenter() {
         break;
       case "transferType":
         if (!value.trim()) error = "请选择转移类型";
+        break;
+      case "moviePath":
+        if (!value.trim()) error = "请填写剧场版路径";
+        break;
+      case "movieFormat":
+        if (!value.trim()) error = "请填写剧场版重命名格式";
+        else if (!value.includes("{name}")) error = "格式中必须包含{name}变量";
         break;
     }
     setTransferErrors((prev) => ({ ...prev, [field]: error }));
@@ -447,6 +477,17 @@ export default function SettingsCenter() {
     return relevantErrors.some((error) => error !== "");
   };
 
+  // 加载字体库状态
+  const loadFontStats = async () => {
+    try {
+      const stats = await configAPI.getSubtitleFontMetaSetStats();
+      setFontStats(stats);
+    } catch (error) {
+      // 字体库状态加载失败不影响其他配置的加载
+      console.warn("Failed to load font stats:", error);
+    }
+  };
+
   // 加载配置函数
   const loadConfigs = async () => {
     try {
@@ -516,6 +557,8 @@ export default function SettingsCenter() {
     validateTransferField("tvPath", transfer.tvPath);
     validateTransferField("tvFormat", transfer.tvFormat);
     validateTransferField("transferType", transfer.transferType);
+    validateTransferField("moviePath", transfer.moviePath);
+    validateTransferField("movieFormat", transfer.movieFormat);
 
     // 验证通知设置
     if (notice.enabled) {
@@ -547,6 +590,7 @@ export default function SettingsCenter() {
   // 加载配置
   useEffect(() => {
     loadConfigs();
+    loadFontStats();
   }, []);
 
   // 检查qBittorrent连通性
@@ -699,9 +743,9 @@ export default function SettingsCenter() {
   return (
     <div className="space-y-6 h-[calc(100dvh-6rem)] overflow-y-auto pb-10 scrollbar-hide">
       <div>
-        <h1 className="text-3xl font-bold anime-gradient-text flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary animate-pulse" />
-          设置中心
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Sparkles className="h-6 w-6 text-primary animate-pulse anime-gradient-text" />
+          <span className="anime-gradient-text">设置中心</span>
         </h1>
         <p className="text-muted-foreground">
           管理您的下载器、订阅和文件转移设置
@@ -713,7 +757,7 @@ export default function SettingsCenter() {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-5 rounded-xl p-1">
+        <TabsList className="grid w-full grid-cols-6 rounded-xl p-1">
           <TabsTrigger
             value="download"
             className="flex items-center gap-2 rounded-xl"
@@ -748,6 +792,13 @@ export default function SettingsCenter() {
           >
             <Bell className="icon-button" />
             <span className="hidden sm:inline">通知设置</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="tools"
+            className="flex items-center gap-2 rounded-xl"
+          >
+            <Settings className="icon-button" />
+            <span className="hidden sm:inline">工具设置</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1075,8 +1126,6 @@ export default function SettingsCenter() {
                       </HybridTooltipContent>
                     </HybridTooltip>
                   </TooltipProvider>
-                </div>
-                <div className="flex items-center gap-2">
                   <Switch
                     id="auto-stop"
                     checked={subscriptionConfig.autoStop}
@@ -1222,34 +1271,11 @@ export default function SettingsCenter() {
                     </span>
                   )}
                 </div>
-              </div>
 
-              {/* 媒体库配置 */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">媒体库配置</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="transfer-anime-path">番剧路径</Label>
-                  <Input
-                    id="transfer-anime-path"
-                    value={transferConfig.tvPath}
-                    onChange={(e) =>
-                      updateTransferConfig("tvPath", e.target.value)
-                    }
-                    placeholder="/path/to/anime/library"
-                    className={`rounded-xl placeholder-gray-400 ${
-                      transferErrors.tvPath ? "border-destructive" : ""
-                    }`}
-                  />
-                  {transferErrors.tvPath && (
-                    <span className="text-sm text-destructive">
-                      {transferErrors.tvPath}
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-2">
+                <div className="space-y-4">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="transfer-tv-format">番剧重命名格式</Label>
+                    <Label htmlFor="subtitle-rename-enabled">字幕重命名</Label>
+
                     <TooltipProvider>
                       <HybridTooltip>
                         <HybridTooltipTrigger asChild>
@@ -1262,36 +1288,296 @@ export default function SettingsCenter() {
                           </Button>
                         </HybridTooltipTrigger>
                         <HybridTooltipContent>
-                          <p>{`在文件转移时，会按照定义的格式对媒体库文件做重命名并转移`}</p>
-                          <p>{`重命名格式本身是媒体库路径下的相对路径`}</p>
-                          <p>{`支持使用占位符变量，当前支持的变量如下：`}</p>
-                          <p>{`{name}=番剧名称`}</p>
-                          <p>{`{year}=年份`}</p>
-                          <p>{`{season}=季数`}</p>
-                          <p>{`{episode}=集数`}</p>
-                          <p>{`{season_episode}=季集数，等价于SXXEXX，与{season}和{episode}的区别是，如果季数或集数小于10，会自动补0`}</p>
-                          <p>{`{origin_name}=原始文件名，不包含扩展名`}</p>
-                          <p>{`{release_group}=压制组/字幕组`}</p>
+                          <p>启用后可以为不同语言的字幕指定重命名规则</p>
+                          <p>
+                            例如：将.chs、.zh-cn等简体中文字幕统一重命名为.zh
+                          </p>
                         </HybridTooltipContent>
                       </HybridTooltip>
                     </TooltipProvider>
+                    <Switch
+                      id="subtitle-rename-enabled"
+                      checked={transferConfig.subtitleRename.enabled}
+                      onCheckedChange={(checked) =>
+                        setTransferConfig((prev) => ({
+                          ...prev,
+                          subtitleRename: {
+                            ...prev.subtitleRename,
+                            enabled: checked,
+                          },
+                        }))
+                      }
+                    />
                   </div>
-                  <Input
-                    id="transfer-tv-format"
-                    value={transferConfig.tvFormat}
-                    onChange={(e) =>
-                      updateTransferConfig("tvFormat", e.target.value)
-                    }
-                    placeholder="{name}/Season {season}/{name} {season_episode}"
-                    className={`rounded-xl placeholder-gray-400 ${
-                      transferErrors.tvFormat ? "border-destructive" : ""
-                    }`}
-                  />
-                  {transferErrors.tvFormat && (
-                    <span className="text-sm text-destructive">
-                      {transferErrors.tvFormat}
-                    </span>
+
+                  {transferConfig.subtitleRename.enabled && (
+                    <div className="space-y-4 pl-4 border-l-2 border-primary/10">
+                      <MatchInput
+                        label="简体中文字幕后缀名列表"
+                        items={transferConfig.subtitleRename.simpleChineseExts}
+                        placeholder="添加简体中文字幕后缀名，如 .chs"
+                        onChange={(items) =>
+                          setTransferConfig((prev) => ({
+                            ...prev,
+                            subtitleRename: {
+                              ...prev.subtitleRename,
+                              simpleChineseExts: items,
+                            },
+                          }))
+                        }
+                      />
+
+                      <div className="space-y-2">
+                        <Label htmlFor="simple-chinese-rename-ext">
+                          简体中文字幕重命名后缀
+                        </Label>
+                        <Input
+                          id="simple-chinese-rename-ext"
+                          value={
+                            transferConfig.subtitleRename.simpleChineseRenameExt
+                          }
+                          onChange={(e) =>
+                            setTransferConfig((prev) => ({
+                              ...prev,
+                              subtitleRename: {
+                                ...prev.subtitleRename,
+                                simpleChineseRenameExt: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder=".zh"
+                          className="rounded-xl placeholder-gray-400"
+                        />
+                      </div>
+
+                      <MatchInput
+                        label="繁体中文字幕后缀名列表"
+                        items={
+                          transferConfig.subtitleRename.traditionalChineseExts
+                        }
+                        placeholder="添加繁体中文字幕后缀名，如 .cht"
+                        onChange={(items) =>
+                          setTransferConfig((prev) => ({
+                            ...prev,
+                            subtitleRename: {
+                              ...prev.subtitleRename,
+                              traditionalChineseExts: items,
+                            },
+                          }))
+                        }
+                      />
+
+                      <div className="space-y-2">
+                        <Label htmlFor="traditional-chinese-rename-ext">
+                          繁体中文字幕重命名后缀
+                        </Label>
+                        <Input
+                          id="traditional-chinese-rename-ext"
+                          value={
+                            transferConfig.subtitleRename
+                              .traditionalChineseRenameExt
+                          }
+                          onChange={(e) =>
+                            setTransferConfig((prev) => ({
+                              ...prev,
+                              subtitleRename: {
+                                ...prev.subtitleRename,
+                                traditionalChineseRenameExt: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder=".zh-hant"
+                          className="rounded-xl placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
                   )}
+                </div>
+
+                {/* 字幕子集化开关 */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="subtitle-subsetting-enabled">
+                      字幕子集化
+                    </Label>
+                    <TooltipProvider>
+                      <HybridTooltip>
+                        <HybridTooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-full"
+                          >
+                            <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </HybridTooltipTrigger>
+                        <HybridTooltipContent>
+                          <p>启用后将对字幕文件进行字体子集化处理</p>
+                          <p>字幕子集化相关介绍详见工具配置-字幕子集化一栏</p>
+                          {!fontStats.initDone && (
+                            <p className="text-orange-500 mt-2">
+                              在工具设置中初始化字体库后才能启用此功能
+                            </p>
+                          )}
+                        </HybridTooltipContent>
+                      </HybridTooltip>
+                    </TooltipProvider>
+                    <Switch
+                      id="subtitle-subsetting-enabled"
+                      checked={transferConfig.enableSubtitleSubset || false}
+                      onCheckedChange={(checked) =>
+                        setTransferConfig((prev) => ({
+                          ...prev,
+                          enableSubtitleSubset: checked,
+                        }))
+                      }
+                      disabled={!fontStats.initDone}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 媒体库配置 */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">媒体库配置</h3>
+
+                {/* 番剧配置 */}
+                <div className="space-y-4 pl-4 border-l-2 border-primary/10">
+                  <h4 className="text-base font-medium">番剧配置</h4>
+                  <div className="space-y-2">
+                    <Label htmlFor="transfer-anime-path">媒体库路径</Label>
+                    <Input
+                      id="transfer-anime-path"
+                      value={transferConfig.tvPath}
+                      onChange={(e) =>
+                        updateTransferConfig("tvPath", e.target.value)
+                      }
+                      placeholder="/path/to/anime/library"
+                      className={`rounded-xl placeholder-gray-400 ${
+                        transferErrors.tvPath ? "border-destructive" : ""
+                      }`}
+                    />
+                    {transferErrors.tvPath && (
+                      <span className="text-sm text-destructive">
+                        {transferErrors.tvPath}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="transfer-tv-format">重命名格式</Label>
+                      <TooltipProvider>
+                        <HybridTooltip>
+                          <HybridTooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 rounded-full"
+                            >
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </HybridTooltipTrigger>
+                          <HybridTooltipContent>
+                            <p>{`在文件转移时，会按照定义的格式对媒体库文件做重命名并转移`}</p>
+                            <p>{`重命名格式本身是媒体库路径下的相对路径`}</p>
+                            <p>{`支持使用占位符变量，当前支持的变量如下：`}</p>
+                            <p>{`{name}=番剧名称`}</p>
+                            <p>{`{year}=年份`}</p>
+                            <p>{`{season}=季数`}</p>
+                            <p>{`{episode}=集数`}</p>
+                            <p>{`{season_episode}=季集数，等价于SXXEXX，与{season}和{episode}的区别是，如果季数或集数小于10，会自动补0`}</p>
+                            <p>{`{origin_name}=原始文件名，不包含扩展名`}</p>
+                            <p>{`{release_group}=压制组/字幕组`}</p>
+                          </HybridTooltipContent>
+                        </HybridTooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Input
+                      id="transfer-tv-format"
+                      value={transferConfig.tvFormat}
+                      onChange={(e) =>
+                        updateTransferConfig("tvFormat", e.target.value)
+                      }
+                      placeholder="{name}/Season {season}/{name} {season_episode}"
+                      className={`rounded-xl placeholder-gray-400 ${
+                        transferErrors.tvFormat ? "border-destructive" : ""
+                      }`}
+                    />
+                    {transferErrors.tvFormat && (
+                      <span className="text-sm text-destructive">
+                        {transferErrors.tvFormat}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 剧场版配置 */}
+                <div className="space-y-4 pl-4 border-l-2 border-primary/10">
+                  <h4 className="text-base font-medium">剧场版配置</h4>
+                  <div className="space-y-2">
+                    <Label htmlFor="transfer-movie-path">媒体库路径</Label>
+                    <Input
+                      id="transfer-movie-path"
+                      value={transferConfig.moviePath}
+                      onChange={(e) =>
+                        updateTransferConfig("moviePath", e.target.value)
+                      }
+                      placeholder="/path/to/movie/library"
+                      className={`rounded-xl placeholder-gray-400 ${
+                        transferErrors.moviePath ? "border-destructive" : ""
+                      }`}
+                    />
+                    {transferErrors.moviePath && (
+                      <span className="text-sm text-destructive">
+                        {transferErrors.moviePath}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="transfer-movie-format">重命名格式</Label>
+                      <TooltipProvider>
+                        <HybridTooltip>
+                          <HybridTooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 rounded-full"
+                            >
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </HybridTooltipTrigger>
+                          <HybridTooltipContent>
+                            <p>{`在文件转移时，会按照定义的格式对媒体库文件做重命名并转移`}</p>
+                            <p>{`重命名格式本身是媒体库路径下的相对路径`}</p>
+                            <p>{`支持使用占位符变量，当前支持的变量如下：`}</p>
+                            <p>{`{name}=剧场版名称`}</p>
+                            <p>{`{year}=年份`}</p>
+                            <p>{`{origin_name}=原始文件名，不包含扩展名`}</p>
+                            <p>{`{release_group}=压制组/字幕组`}</p>
+                          </HybridTooltipContent>
+                        </HybridTooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Input
+                      id="transfer-movie-format"
+                      value={transferConfig.movieFormat}
+                      onChange={(e) =>
+                        updateTransferConfig("movieFormat", e.target.value)
+                      }
+                      placeholder="{name}/{name} {year}"
+                      className={`rounded-xl placeholder-gray-400 ${
+                        transferErrors.movieFormat ? "border-destructive" : ""
+                      }`}
+                    />
+                    {transferErrors.movieFormat && (
+                      <span className="text-sm text-destructive">
+                        {transferErrors.movieFormat}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1318,6 +1604,9 @@ export default function SettingsCenter() {
               {/* 通知开关 */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
+                  <Label htmlFor="notice-enabled" className="font-medium">
+                    启用通知
+                  </Label>
                   <Switch
                     id="notice-enabled"
                     checked={noticeConfig.enabled}
@@ -1325,9 +1614,6 @@ export default function SettingsCenter() {
                       updateNoticeEnabled(checked);
                     }}
                   />
-                  <Label htmlFor="notice-enabled" className="font-medium">
-                    启用通知
-                  </Label>
                 </div>
               </div>
 
@@ -1503,6 +1789,7 @@ export default function SettingsCenter() {
 
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
+                          <Label htmlFor="email-ssl">使用SSL</Label>
                           <Switch
                             id="email-ssl"
                             checked={noticeConfig.email.ssl}
@@ -1510,7 +1797,6 @@ export default function SettingsCenter() {
                               updateEmailConfig("ssl", checked)
                             }
                           />
-                          <Label htmlFor="email-ssl">使用SSL</Label>
                         </div>
                       </div>
 
@@ -1732,6 +2018,7 @@ export default function SettingsCenter() {
 
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
+                          <Label htmlFor="bark-auto-save">自动保存通知</Label>
                           <Switch
                             id="bark-auto-save"
                             checked={noticeConfig.bark.autoSave}
@@ -1739,7 +2026,6 @@ export default function SettingsCenter() {
                               updateBarkConfig("autoSave", checked)
                             }
                           />
-                          <Label htmlFor="bark-auto-save">自动保存通知</Label>
                           <TooltipProvider>
                             <HybridTooltip>
                               <HybridTooltipTrigger asChild>
@@ -1855,6 +2141,10 @@ export default function SettingsCenter() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="tools">
+          <ToolsSettings onFontStatsUpdate={loadFontStats} />
         </TabsContent>
       </Tabs>
     </div>

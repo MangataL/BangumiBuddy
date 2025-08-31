@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/MangataL/BangumiBuddy/internal/notice"
-	"github.com/MangataL/BangumiBuddy/internal/utils"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 // notifier 实现notice.Notifier接口，通过邮件发送通知
@@ -158,10 +158,16 @@ func (n *notifier) NoticeSubscriptionUpdated(ctx context.Context, req notice.Not
 // NoticeDownloaded 实现Notifier接口，通知资源下载状态
 func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownloadedReq) error {
 	var subject string
-	if req.Failed {
-		subject = fmt.Sprintf("番剧下载失败：%s", req.TorrentName)
+	title := ""
+	if req.RSSGUID != "" {
+		title = "番剧"
 	} else {
-		subject = fmt.Sprintf("番剧下载完成：%s", req.TorrentName)
+		title = "磁力任务"
+	}
+	if req.Failed {
+		subject = fmt.Sprintf("%s下载失败：%s", title, req.TorrentName)
+	} else {
+		subject = fmt.Sprintf("%s下载完成：%s", title, req.TorrentName)
 	}
 
 	var statusMsg, statusColor, detailsHtml string
@@ -200,6 +206,17 @@ func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownlo
 		</div>`, sizeInfo, costInfo, speedInfo)
 	}
 
+	// 如果 RSSGUID 为空，则不展示对应信息
+	rssRow := ""
+	if strings.TrimSpace(req.RSSGUID) != "" {
+		rssRow = fmt.Sprintf(`
+			<tr style="background-color: #f9f9f9;">
+				<td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea;"><strong style="color: #555;">RSS订阅项:</strong></td>
+				<td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea; word-break: break-all;"><code style="background-color: #f0f0f0; padding: 3px 6px; border-radius: 4px; font-size: 13px; color: #333;">%s</code></td>
+			</tr>
+		`, req.RSSGUID)
+	}
+
 	// 构建HTML邮件内容
 	htmlBody := fmt.Sprintf(`
 	<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;">
@@ -213,10 +230,7 @@ func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownlo
 				<td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea; width: 30%%;"><strong style="color: #555;">文件名:</strong></td>
 				<td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea; word-break: break-all;"><code style="background-color: #f0f0f0; padding: 3px 6px; border-radius: 4px; font-size: 13px; color: #333;">%s</code></td>
 			</tr>
-			<tr style="background-color: #f9f9f9;">
-				<td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea;"><strong style="color: #555;">RSS订阅项:</strong></td>
-				<td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea; word-break: break-all;"><code style="background-color: #f0f0f0; padding: 3px 6px; border-radius: 4px; font-size: 13px; color: #333;">%s</code></td>
-			</tr>
+			%s
 		</table>
 		
 		<div style="margin: 25px 0; text-align: center; background-color: %s; color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
@@ -230,13 +244,13 @@ func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownlo
 			<p style="margin-top: 5px; font-size: 12px;">© %d BangumiBuddy</p>
 		</div>
 	</div>
-	`, req.TorrentName, req.RSSGUID, statusColor, statusMsg, detailsHtml, time.Now().Year())
+	`, req.TorrentName, rssRow, statusColor, statusMsg, detailsHtml, time.Now().Year())
 
 	return n.sendEmail(subject, htmlBody)
 }
 
-// NoticeTransferred 实现Notifier接口，通知资源转移状态
-func (n *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTransferredReq) error {
+// NoticeSubscriptionTransferred 实现Notifier接口，通知资源转移状态
+func (n *notifier) NoticeSubscriptionTransferred(ctx context.Context, req notice.NoticeSubscriptionTransferredReq) error {
 	var subject string
 	if req.Error == nil {
 		subject = fmt.Sprintf("番剧转移成功：%s", req.BangumiName)
@@ -320,6 +334,111 @@ func (n *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTrans
 			fmt.Sprintf(`<div style="text-align: center; margin-bottom: 25px;">
 				<img src="%s" alt="番剧海报" style="max-width: 180px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); margin-bottom: 20px;">`, req.Poster), 1)
 	}
+
+	return n.sendEmail(subject, htmlBody)
+}
+
+// NoticeTaskTransferred 实现Notifier接口，通知任务转移状态
+func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeTaskTransferredReq) error {
+	var subject string
+	var statusMsg, statusColor, detailsHtml string
+
+	// 判断转移状态
+	successCount := len(req.MediaFilePaths)
+	hasFailures := req.Error != nil
+
+	if successCount == 0 && hasFailures {
+		// 全部转移失败
+		subject = fmt.Sprintf("磁力任务转移失败：%s", req.BangumiName)
+		statusMsg = "全部转移失败"
+		statusColor = "#FF3B30" // 红色
+		detailsHtml = fmt.Sprintf(`
+        <div style="margin-top: 20px; color: #FF3B30; background-color: #FFEBE9; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <strong>错误详情:</strong> %s
+        </div>`, req.Error.Error())
+	} else if successCount > 0 && !hasFailures {
+		// 全部转移成功
+		subject = fmt.Sprintf("磁力任务转移成功：%s", req.BangumiName)
+		statusMsg = fmt.Sprintf("全部转移成功 (%d个文件)", successCount)
+		statusColor = "#34C759" // 绿色
+
+		// 构建成功文件列表
+		fileListHtml := `
+        <div style="margin-top: 25px; background-color: #F5F9FF; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; margin-bottom: 15px; color: #0A84FF; font-size: 16px;">转移成功的文件</h3>`
+
+		for originFile, mediaFile := range req.MediaFilePaths {
+			fileListHtml += fmt.Sprintf(`
+            <div style="margin-bottom: 10px; padding: 10px; border-left: 3px solid #34C759; background-color: #ffffff;">
+                <div style="font-size: 13px; color: #666; margin-bottom: 3px;">原始文件:</div>
+                <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all; margin-bottom: 8px;">%s</code>
+                <div style="font-size: 13px; color: #666; margin-bottom: 3px;">媒体库路径:</div>
+                <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">%s</code>
+            </div>`, originFile, mediaFile)
+		}
+		fileListHtml += `</div>`
+		detailsHtml = fileListHtml
+	} else {
+		// 部分成功，部分失败
+		subject = fmt.Sprintf("磁力任务转移部分成功：%s", req.BangumiName)
+		statusMsg = fmt.Sprintf("%d个文件转移成功", successCount)
+		statusColor = "#FF9500" // 橙色
+
+		detailsHtml = ""
+
+		// 添加成功文件列表
+		if successCount > 0 {
+			detailsHtml += `
+        <div style="margin-top: 25px; background-color: #F5F9FF; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; margin-bottom: 15px; color: #34C759; font-size: 16px;">转移成功的文件</h3>`
+
+			for originFile, mediaFile := range req.MediaFilePaths {
+				detailsHtml += fmt.Sprintf(`
+            <div style="margin-bottom: 10px; padding: 10px; border-left: 3px solid #34C759; background-color: #ffffff;">
+                <div style="font-size: 13px; color: #666; margin-bottom: 3px;">原始文件:</div>
+                <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all; margin-bottom: 8px;">%s</code>
+                <div style="font-size: 13px; color: #666; margin-bottom: 3px;">媒体库路径:</div>
+                <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">%s</code>
+            </div>`, originFile, mediaFile)
+			}
+			detailsHtml += `</div>`
+		}
+
+		// 添加失败信息
+		if hasFailures {
+			detailsHtml += fmt.Sprintf(`
+        <div style="margin-top: 20px; color: #FF3B30; background-color: #FFEBE9; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <strong>转移失败详情:</strong> %s
+        </div>`, req.Error.Error())
+		}
+	}
+
+	htmlBody := fmt.Sprintf(`
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 25px;">
+            <h1 style="color: #0A84FF; margin: 0; font-size: 24px; font-weight: 600;">磁力任务转移通知</h1>
+            <div style="width: 50px; height: 3px; background-color: #0A84FF; margin: 15px auto;"></div>
+        </div>
+
+        <table style="width: 100%%; border-collapse: collapse; margin-bottom: 25px;">
+            <tr>
+                <td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea; width: 30%%;"><strong style="color: #555;">种子名:</strong></td>
+                <td style="padding: 12px 15px; border-bottom: 1px solid #eaeaea; word-break: break-all;"><code style="background-color: #f0f0f0; padding: 3px 6px; border-radius: 4px; font-size: 13px; color: #333;">%s</code></td>
+            </tr>
+        </table>
+
+        <div style="margin: 25px 0; text-align: center; background-color: %s; color: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            <strong style="font-size: 16px;">%s</strong>
+        </div>
+
+        %s
+
+        <div style="margin-top: 35px; padding-top: 20px; border-top: 1px solid #eaeaea; font-size: 13px; color: #999; text-align: center;">
+            <p>此邮件由 BangumiBuddy 系统自动发送，请勿回复</p>
+            <p style="margin-top: 5px; font-size: 12px;">© %d BangumiBuddy</p>
+        </div>
+    </div>
+    `, req.TorrentName, statusColor, statusMsg, detailsHtml, time.Now().Year())
 
 	return n.sendEmail(subject, htmlBody)
 }

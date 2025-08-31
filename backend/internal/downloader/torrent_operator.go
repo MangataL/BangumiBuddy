@@ -20,8 +20,8 @@ type torrentSchema struct {
 	Path           string    `gorm:"type:varchar(2048)"`
 	Status         string    `gorm:"type:varchar(255)"`
 	StatusDetail   string    `gorm:"type:text"`
-	SubscriptionID string    `gorm:"type:varchar(36)"`
-	TMDBID         int       `gorm:"type:int"`
+	SubscriptionID string    `gorm:"type:varchar(36);not null;index;default:''"`
+	TaskID         string    `gorm:"type:varchar(36);not null;index;default:''"`
 	TransferType   string    `gorm:"type:varchar(16)"`
 	RSSGUID        string    `gorm:"type:varchar(255)"`
 	CreatedAt      time.Time `gorm:"type:datetime;autoCreateTime;index"`
@@ -34,6 +34,8 @@ func (torrentSchema) TableName() string {
 	return "torrents"
 }
 
+const fileNamesSeparator = "|#"
+
 // ToTorrent 将数据库模型转换为业务模型
 func (m *torrentSchema) ToTorrent() Torrent {
 	return Torrent{
@@ -42,13 +44,13 @@ func (m *torrentSchema) ToTorrent() Torrent {
 		Status:         TorrentStatus(m.Status),
 		StatusDetail:   m.StatusDetail,
 		SubscriptionID: m.SubscriptionID,
-		TMDBID:         m.TMDBID,
+		TaskID:         m.TaskID,
 		Name:           m.Name,
 		TransferType:   m.TransferType,
 		RSSGUID:        m.RSSGUID,
 		CreatedAt:      m.CreatedAt,
 		UpdatedAt:      m.UpdatedAt,
-		FileNames:      strings.Split(m.FileNames, ";"),
+		FileNames:      strings.Split(m.FileNames, fileNamesSeparator),
 	}
 }
 
@@ -59,11 +61,11 @@ func (m *torrentSchema) FromTorrent(t Torrent) {
 	m.Status = string(t.Status)
 	m.StatusDetail = t.StatusDetail
 	m.SubscriptionID = t.SubscriptionID
-	m.TMDBID = t.TMDBID
+	m.TaskID = t.TaskID
 	m.TransferType = t.TransferType
 	m.Name = t.Name
 	m.RSSGUID = t.RSSGUID
-	m.FileNames = strings.Join(t.FileNames, ";")
+	m.FileNames = strings.Join(t.FileNames, fileNamesSeparator)
 }
 
 func NewTorrentOperator(db *gorm.DB) TorrentOperator {
@@ -86,7 +88,7 @@ func (t *torrentOperator) SetTorrentStatus(ctx context.Context, hash string, sta
 		updates["transfer_type"] = opts.TransferType
 	}
 	if opts != nil && len(opts.FileNames) > 0 {
-		updates["file_names"] = strings.Join(opts.FileNames, ",")
+		updates["file_names"] = strings.Join(opts.FileNames, fileNamesSeparator)
 	}
 	return t.db.WithContext(ctx).Model(&torrentSchema{}).Where("hash = ?", hash).Updates(updates).Error
 }
@@ -113,7 +115,7 @@ func (t *torrentOperator) Save(ctx context.Context, torrent Torrent) error {
 				END`, TorrentStatusTransferred, TorrentStatusTransferredError, model.Status),
 			"status_detail":   model.StatusDetail,
 			"subscription_id": model.SubscriptionID,
-			"tmdb_id":         model.TMDBID,
+			"task_id":         model.TaskID,
 			"transfer_type":   model.TransferType,
 			"rss_guid":        model.RSSGUID,
 		}),
@@ -156,8 +158,8 @@ func (t *torrentOperator) List(ctx context.Context, filter TorrentFilter) ([]Tor
 		query = query.Where("subscription_id = ?", filter.SubscriptionID)
 	}
 
-	if filter.TMDBID != 0 {
-		query = query.Where("tmdbid = ?", filter.TMDBID)
+	if filter.TaskID != "" {
+		query = query.Where("task_id = ?", filter.TaskID)
 	}
 
 	if !filter.StartTime.IsZero() {
@@ -167,6 +169,15 @@ func (t *torrentOperator) List(ctx context.Context, filter TorrentFilter) ([]Tor
 	if !filter.EndTime.IsZero() {
 		query = query.Where("created_at <= ?", filter.EndTime)
 	}
+
+	if filter.MagnetTask != nil {
+		if *filter.MagnetTask {
+			query = query.Where("task_id <> ''")
+		} else {
+			query = query.Where("task_id = ''")
+		}
+	}
+
 	// 获取总数
 	var total int64
 	err := query.WithContext(ctx).Model(&torrentSchema{}).Count(&total).Error
@@ -174,19 +185,8 @@ func (t *torrentOperator) List(ctx context.Context, filter TorrentFilter) ([]Tor
 		return nil, 0, err
 	}
 
-	// 应用分页
-	if !filter.Page.Empty() {
-		query = query.Limit(filter.Page.Size).Offset((filter.Page.Num - 1) * filter.Page.Size)
-	}
-
-	if !filter.Order.Empty() {
-		query = query.Order(clause.OrderByColumn{
-			Column: clause.Column{
-				Name: filter.Order.Field,
-			},
-			Desc: filter.Order.Way == "desc",
-		})
-	}
+	query = filter.Page.Apply(query)
+	query = filter.Order.Apply(query)
 
 	// 执行查询
 	err = query.Find(&models).Error
@@ -206,4 +206,12 @@ func (t *torrentOperator) List(ctx context.Context, filter TorrentFilter) ([]Tor
 // Delete 删除种子文件
 func (t *torrentOperator) Delete(ctx context.Context, hash string) error {
 	return t.db.WithContext(ctx).Where("hash = ?", hash).Delete(&torrentSchema{}).Error
+}
+
+func (t *torrentOperator) DeleteBySubscriptionID(ctx context.Context, subscriptionID string) error {
+	return t.db.WithContext(ctx).Where("subscription_id = ?", subscriptionID).Delete(&torrentSchema{}).Error
+}
+
+func (t *torrentOperator) DeleteByTaskID(ctx context.Context, taskID string) error {
+	return t.db.WithContext(ctx).Where("task_id = ?", taskID).Delete(&torrentSchema{}).Error
 }

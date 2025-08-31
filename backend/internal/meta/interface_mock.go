@@ -49,17 +49,17 @@ func (mr *MockParserMockRecorder) Parse(ctx, id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockParser)(nil).Parse), ctx, id)
 }
 
-// Search mocks base method.
-func (m *MockParser) Search(ctx context.Context, name string) (Meta, error) {
+// SearchTV mocks base method.
+func (m *MockParser) SearchTV(ctx context.Context, name string) (Meta, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Search", ctx, name)
+	ret := m.ctrl.Call(m, "SearchTV", ctx, name)
 	ret0, _ := ret[0].(Meta)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Search indicates an expected call of Search.
-func (mr *MockParserMockRecorder) Search(ctx, name interface{}) *gomock.Call {
+// SearchTV indicates an expected call of SearchTV.
+func (mr *MockParserMockRecorder) SearchTV(ctx, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockParser)(nil).Search), ctx, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTV", reflect.TypeOf((*MockParser)(nil).SearchTV), ctx, name)
 }

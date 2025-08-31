@@ -89,8 +89,8 @@ func (a *Adapter) NoticeSubscriptionUpdated(ctx context.Context, req notice.Noti
 	return a.notifier.NoticeSubscriptionUpdated(ctx, req)
 }
 
-// NoticeTransferred implements notice.Notifier.
-func (a *Adapter) NoticeTransferred(ctx context.Context, req notice.NoticeTransferredReq) error {
+// NoticeSubscriptionTransferred implements notice.Notifier.
+func (a *Adapter) NoticeSubscriptionTransferred(ctx context.Context, req notice.NoticeSubscriptionTransferredReq) error {
 	if !a.config.Enabled {
 		return nil
 	}
@@ -100,5 +100,19 @@ func (a *Adapter) NoticeTransferred(ctx context.Context, req notice.NoticeTransf
 	if req.Error == nil && (a.config.NoticePoints.Transferred == nil || !*a.config.NoticePoints.Transferred) {
 		return nil
 	}
-	return a.notifier.NoticeTransferred(ctx, req)
+	return a.notifier.NoticeSubscriptionTransferred(ctx, req)
+}
+
+// NoticeTaskTransferred implements notice.Notifier.
+func (a *Adapter) NoticeTaskTransferred(ctx context.Context, req notice.NoticeTaskTransferredReq) error {
+	if !a.config.Enabled {
+		return nil
+	}
+	if req.Error != nil && (a.config.NoticePoints.Error == nil || !*a.config.NoticePoints.Error) {
+		return nil
+	}
+	if req.Error == nil && (a.config.NoticePoints.Transferred == nil || !*a.config.NoticePoints.Transferred) {
+		return nil
+	}
+	return a.notifier.NoticeTaskTransferred(ctx, req)
 }

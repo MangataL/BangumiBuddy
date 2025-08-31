@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
+	"github.com/MangataL/BangumiBuddy/internal/magnet"
 )
 
 type BangumiBase struct {
@@ -68,4 +69,33 @@ type RecentUpdatedTorrent struct {
 	RSSItem      string                   `json:"rssItem"`
 	Status       downloader.TorrentStatus `json:"status"`
 	StatusDetail string                   `json:"statusDetail"`
+}
+
+type MagnetTask struct {
+	magnet.Task          `json:",inline"`
+	DownloadStatus       downloader.TorrentStatus `json:"downloadStatus"`
+	DownloadStatusDetail string                   `json:"downloadStatusDetail"`
+	DownloadSpeed        int64                    `json:"downloadSpeed"`
+	Progress             float64                  `json:"progress"`
+}
+
+type ListMagnetTasksReq struct {
+	Page     int `form:"page"`
+	PageSize int `form:"page_size"`
+}
+
+type ListMagnetTasksResp struct {
+	Total int          `json:"total"`
+	Tasks []MagnetTask `json:"tasks"`
+}
+
+type ListDirsResp struct {
+	Dirs          []FileDir `json:"dirs"`
+	FilePathSplit string    `json:"filePathSplit"`
+	FileRoots     []string  `json:"fileRoots"`
+}
+
+type FileDir struct {
+	Path   string `json:"path"`
+	HasDir bool   `json:"hasDir"`
 }
