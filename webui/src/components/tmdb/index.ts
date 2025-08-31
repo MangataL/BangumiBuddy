@@ -1,0 +1,1 @@
+export { TMDBInput } from "./input";

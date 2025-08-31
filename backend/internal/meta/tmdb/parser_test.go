@@ -65,7 +65,7 @@ func TestClient_Search(t *testing.T) {
 				client: c,
 			}
 
-			got, err := p.Search(context.Background(), tc.bangumiName)
+			got, err := p.SearchTV(context.Background(), tc.bangumiName)
 			t.Log(err)
 
 			assert.Equal(t, tc.wantErr, err != nil)
@@ -125,7 +125,7 @@ func TestClient_Parse(t *testing.T) {
 				client: c,
 			}
 
-			got, err := p.Parse(context.Background(), tc.id)
+			got, err := p.ParseTV(context.Background(), tc.id)
 			t.Log(err)
 
 			assert.Equal(t, tc.wantErr, err != nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -113,7 +114,7 @@ func (s *Subscriber) ParseRSS(ctx context.Context, rssLink string) (ParseRSSRsp,
 	if err != nil {
 		return ParseRSSRsp{}, err
 	}
-	meta, err := s.metaParser.Search(ctx, rss.BangumiName)
+	meta, err := s.metaParser.SearchTV(ctx, rss.BangumiName)
 	if err != nil {
 		return ParseRSSRsp{}, err
 	}
@@ -130,10 +131,17 @@ func (s *Subscriber) ParseRSS(ctx context.Context, rssLink string) (ParseRSSRsp,
 }
 
 func (s *Subscriber) Subscribe(ctx context.Context, req SubscribeReq) (Bangumi, error) {
-	meta, err := s.metaParser.Parse(ctx, req.TMDBID)
+	meta, err := s.metaParser.ParseTV(ctx, req.TMDBID)
 	if err != nil {
 		return Bangumi{}, fmt.Errorf("解析元数据失败: %w", err)
 	}
+	if _, err := s.repo.Get(ctx, req.RSSLink); err != ErrSubscriberNotFound {
+		if err == nil {
+			return Bangumi{}, errs.NewBadRequest("订阅已存在，请勿重复订阅")
+		}
+		return Bangumi{}, fmt.Errorf("获取订阅失败: %w", err)
+	}
+
 	bangumi := Bangumi{
 		SubscriptionID:  uuid.New().String(),
 		Name:            meta.ChineseName,
@@ -189,7 +197,7 @@ func (s *Subscriber) UpdateSubscription(ctx context.Context, req UpdateSubscribe
 		genres   = oldBangumi.Genres
 	)
 	log.Debugf(ctx, "当前订阅: %+v", oldBangumi)
-	bm, err := s.metaParser.Parse(ctx, oldBangumi.TMDBID)
+	bm, err := s.metaParser.ParseTV(ctx, oldBangumi.TMDBID)
 	if err == nil {
 		overview = bm.Overview
 		genres = bm.Genres
@@ -322,7 +330,7 @@ func (s *Subscriber) handleBangumiSubscription(ctx context.Context, bangumi *Ban
 			continue
 		}
 
-		hash, err := extractHashFromMagnet(item.TorrentLink)
+		hash, err := extractHashFromTorrentLink(item.TorrentLink)
 		if err != nil {
 			errs = multierror.Append(errs, fmt.Errorf("提取哈希值失败 [%s]: %w", item.GUID, err))
 			continue
@@ -331,10 +339,9 @@ func (s *Subscriber) handleBangumiSubscription(ctx context.Context, bangumi *Ban
 		// 执行下载
 		err = s.downloader.Download(ctx, downloader.DownloadReq{
 			TorrentLink:    item.TorrentLink,
-			SavePath:       fmt.Sprintf("/%s/Season %d/", bangumi.Name, bangumi.Season),
+			SavePath:       filepath.Join(bangumi.Name, fmt.Sprintf("Season %d", bangumi.Season)),
 			DownloadType:   downloader.DownloadTypeTV,
 			SubscriptionID: bangumi.SubscriptionID,
-			TMDBID:         bangumi.TMDBID,
 			Hash:           hash,
 			RSSGUID:        item.GUID,
 		})
@@ -362,6 +369,16 @@ func (s *Subscriber) handleBangumiSubscription(ctx context.Context, bangumi *Ban
 		log.Infof(ctx, "成功添加下载任务 [%s]", item.GUID)
 	}
 	return errs.ErrorOrNil()
+}
+
+func extractHashFromTorrentLink(torrentLink string) (string, error) {
+	// 获取URL的最后一部分
+	base := path.Base(torrentLink)
+
+	// 去除.torrent后缀
+	hash := strings.TrimSuffix(base, ".torrent")
+
+	return hash, nil
 }
 
 // matchesFilters 检查是否符合过滤规则
@@ -392,17 +409,6 @@ func (s *Subscriber) matchesFilters(ctx context.Context, guid string, includeReg
 	}
 
 	return true
-}
-
-// extractHashFromMagnet 从磁力链接中提取哈希值
-func extractHashFromMagnet(magnetLink string) (string, error) {
-	// 获取URL的最后一部分
-	base := path.Base(magnetLink)
-
-	// 去除.torrent后缀
-	hash := strings.TrimSuffix(base, ".torrent")
-
-	return hash, nil
 }
 
 // isAlreadyDownloaded 检查种子是否已经下载过

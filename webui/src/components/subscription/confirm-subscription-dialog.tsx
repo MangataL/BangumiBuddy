@@ -21,9 +21,11 @@ import { subscriptionAPI } from "@/api/subscription";
 import { useToast } from "@/hooks/useToast";
 import { MatchInput } from "../common/match-input";
 import { EpisodePositionInput } from "./episode-position-input";
+import { TMDBInput } from "@/components/tmdb";
 import { getSortedWeekDays } from "@/utils/time";
 import { ParseRSSResponse, SubscribeRequest } from "@/api/subscription";
 import { extractErrorMessage } from "@/utils/error";
+import { Meta } from "@/api/meta";
 interface ConfirmSubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -165,6 +167,29 @@ export function ConfirmSubscriptionDialog({
     }));
   };
 
+  // 处理TMDB ID变化（仅ID）
+  const handleTMDBIDChange = (tmdbID: number) => {
+    updateBangumiInfo("tmdbID", tmdbID);
+  };
+
+  // 处理TMDB元数据变化（完整信息）
+  const handleTMDBMetaChange = (meta: Meta) => {
+    setBangumiInfo((prev) => ({
+      ...prev,
+      tmdbID: meta.tmdbID,
+      name: meta.chineseName,
+      year: meta.year,
+      season: meta.season,
+      episodeTotalNum: meta.episodeTotalNum,
+      airWeekday: meta.airWeekday || 0,
+    }));
+
+    // 验证相关字段
+    validateField("tmdbID", meta.tmdbID);
+    validateField("season", meta.season);
+    validateField("episodeTotalNum", meta.episodeTotalNum);
+  };
+
   return (
     <Dialog
       open={Boolean(open && parseRSSRsp.name)}
@@ -265,25 +290,14 @@ export function ConfirmSubscriptionDialog({
               )}
             </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="tmdbid">TMDBID</Label>
-            <Input
-              id="tmdbid"
-              value={bangumiInfo.tmdbID || ""}
-              onChange={(e) => {
-                const value = e.target.value.trim();
-                updateBangumiInfo("tmdbID", value ? parseInt(value) : 0);
-              }}
-              className={`rounded-xl ${
-                fieldErrors.tmdbID ? "border-destructive" : ""
-              }`}
-            />
-            {fieldErrors.tmdbID && (
-              <span className="text-sm text-destructive">
-                {fieldErrors.tmdbID}
-              </span>
-            )}
-          </div>
+          <TMDBInput
+            type="tv"
+            value={bangumiInfo.tmdbID}
+            onTMDBIDChange={handleTMDBIDChange}
+            onMetaChange={handleTMDBMetaChange}
+            label="TMDB ID"
+            error={fieldErrors.tmdbID}
+          />
           <div className="grid gap-2">
             <Label htmlFor="subgroup">字幕组</Label>
             <Input

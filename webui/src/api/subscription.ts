@@ -104,7 +104,8 @@ export const TorrentStatusSet = {
   DownloadPaused: "downloadPaused",
 } as const;
 
-type TorrentStatus = (typeof TorrentStatusSet)[keyof typeof TorrentStatusSet];
+export type TorrentStatus =
+  (typeof TorrentStatusSet)[keyof typeof TorrentStatusSet];
 
 export interface Torrent {
   name: string;

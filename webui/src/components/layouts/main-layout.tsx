@@ -3,7 +3,7 @@ import type React from "react";
 import { useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import {
-  BookMarked,
+  Rss,
   Settings,
   FileText,
   Menu,
@@ -11,6 +11,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  Magnet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const navigation = [
-    { name: "订阅管理", href: "/", icon: BookMarked },
+    { name: "订阅管理", href: "/", icon: Rss },
+    { name: "磁力下载", href: "/download", icon: Magnet },
     { name: "设置中心", href: "/settings", icon: Settings },
     { name: "日志", href: "/logs", icon: FileText },
   ];

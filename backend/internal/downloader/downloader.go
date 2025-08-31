@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -51,11 +52,12 @@ type Config struct {
 type Downloader interface {
 	GetTorrentFileNames(ctx context.Context, hash string) ([]string, error)
 	GetDownloadStatuses(ctx context.Context, hashes []string) ([]DownloadStatus, error)
-	AddTorrent(ctx context.Context, torrentLink, savePath string) error
+	AddTorrent(ctx context.Context, torrentLink, savePath, stopCondition string) error
 	SetLocation(ctx context.Context, hash, savePath string) error
 	GetTorrentName(ctx context.Context, hash string) (string, error)
 	ListTorrentsStatus(ctx context.Context) ([]DownloadStatus, error)
 	DeleteTorrent(ctx context.Context, hash string) error
+	ContinueDownload(ctx context.Context, hash string) error
 }
 
 func (m *Manager) GetTorrentFileNames(ctx context.Context, hash string) ([]string, error) {
@@ -89,7 +91,7 @@ func (m *Manager) Download(ctx context.Context, req DownloadReq) error {
 		Hash:           req.Hash,
 		Path:           savePath,
 		SubscriptionID: req.SubscriptionID,
-		TMDBID:         req.TMDBID,
+		TaskID:         req.TaskID,
 		Name:           status.Name,
 		RSSGUID:        req.RSSGUID,
 	}
@@ -114,7 +116,11 @@ func (m *Manager) addNewTorrent(ctx context.Context, req DownloadReq) error {
 		return errors.New("未提供种子链接")
 	}
 	savePath := m.getSavePath(req.SavePath, req.DownloadType)
-	if err := m.downloader.AddTorrent(ctx, req.TorrentLink, savePath); err != nil {
+	stopCondition := ""
+	if req.NotStart {
+		stopCondition = "MetadataReceived"
+	}
+	if err := m.downloader.AddTorrent(ctx, req.TorrentLink, savePath, stopCondition); err != nil {
 		return fmt.Errorf("添加种子下载任务失败: %w", err)
 	}
 
@@ -124,13 +130,18 @@ func (m *Manager) addNewTorrent(ctx context.Context, req DownloadReq) error {
 		return fmt.Errorf("获取种子信息失败: %w", err)
 	}
 
+	status := TorrentStatusDownloading
+	if req.NotStart {
+		status = TorrentStatusDownloadPaused
+	}
+
 	// 创建种子信息
 	torrent := Torrent{
 		Hash:           req.Hash,
 		Path:           savePath,
-		Status:         TorrentStatusDownloading,
+		Status:         status,
 		SubscriptionID: req.SubscriptionID,
-		TMDBID:         req.TMDBID,
+		TaskID:         req.TaskID,
 		Name:           name,
 		RSSGUID:        req.RSSGUID,
 	}
@@ -146,9 +157,9 @@ func (m *Manager) addNewTorrent(ctx context.Context, req DownloadReq) error {
 func (m *Manager) getSavePath(savePath string, downloadType DownloadType) string {
 	switch downloadType {
 	case DownloadTypeTV:
-		return m.config.TVSavePath + savePath
+		return filepath.Join(m.config.TVSavePath, savePath)
 	case DownloadTypeMovie:
-		return m.config.MovieSavePath + savePath
+		return filepath.Join(m.config.MovieSavePath, savePath)
 	default:
 		return savePath
 	}
@@ -279,4 +290,8 @@ func (m *Manager) Reload(config interface{}) error {
 	}
 	m.config = *cfg
 	return nil
+}
+
+func (m *Manager) ContinueDownload(ctx context.Context, hash string) error {
+	return m.downloader.ContinueDownload(ctx, hash)
 }

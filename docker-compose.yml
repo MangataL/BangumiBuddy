@@ -12,5 +12,4 @@ services:
     volumes:
       - ./test/config:/config
       - ./test/data:/data
-      - ~/bangumi/download:/download
-      - ~/bangumi/media:/video
+      - ~/bangumi:/bangumi

@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
+	"github.com/MangataL/BangumiBuddy/pkg/log"
 )
 
 // 确保QBittorrent实现了Downloader接口
@@ -139,7 +140,7 @@ func (q *QBittorrent) convertTorrentsToDownloadStatuses(ctx context.Context, tor
 	return statuses
 }
 
-func (q *QBittorrent) AddTorrent(ctx context.Context, torrentLink, savePath string) error {
+func (q *QBittorrent) AddTorrent(ctx context.Context, torrentLink, savePath, stopCondition string) error {
 	if err := q.init(); err != nil {
 		return err
 	}
@@ -147,8 +148,12 @@ func (q *QBittorrent) AddTorrent(ctx context.Context, torrentLink, savePath stri
 		SavePath: savePath,
 		Tags:     tag,
 	}
+	opts := options.Prepare()
 
-	return q.client.AddTorrentFromUrlCtx(ctx, torrentLink, options.Prepare())
+	if stopCondition != "" {
+		opts["stopCondition"] = stopCondition
+	}
+	return q.client.AddTorrentFromUrlCtx(ctx, torrentLink, opts)
 }
 
 func (q *QBittorrent) SetLocation(ctx context.Context, hash, savePath string) error {
@@ -166,13 +171,17 @@ func (q *QBittorrent) GetTorrentName(ctx context.Context, hash string) (string, 
 		return "", err
 	}
 	var name string
-	if err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 5*time.Second, false, func(ctx context.Context) (bool, error) {
+	if err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 		props, err := q.client.GetTorrentPropertiesCtx(ctx, hash)
 		if err != nil {
+			log.Errorf(ctx, "获取种子属性信息失败: %s", err)
 			return false, nil
 		}
-		name = props.Name
-		return true, nil
+		if props.Name != hash {
+			name = props.Name
+			return true, nil
+		}
+		return false, nil
 	}); err != nil {
 		return "", err
 	}
@@ -207,4 +216,11 @@ func (q *QBittorrent) DeleteTorrent(ctx context.Context, hash string) error {
 		return fmt.Errorf("删除种子文件失败: %w", err)
 	}
 	return nil
+}
+
+func (q *QBittorrent) ContinueDownload(ctx context.Context, hash string) error {
+	if err := q.init(); err != nil {
+		return err
+	}
+	return q.client.ResumeCtx(ctx, []string{hash})
 }
