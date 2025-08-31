@@ -6,6 +6,10 @@ import "context"
 
 // Parser 番剧元数据解析器
 type Parser interface {
-	Search(ctx context.Context, name string) (Meta, error)
-	Parse(ctx context.Context, id int) (Meta, error)
+	SearchTV(ctx context.Context, name string) (Meta, error)
+	SearchTVs(ctx context.Context, name string) ([]Meta, error)
+	ParseTV(ctx context.Context, id int) (Meta, error)
+	SearchMovie(ctx context.Context, name string) (Meta, error)
+	SearchMovies(ctx context.Context, name string) ([]Meta, error)
+	ParseMovie(ctx context.Context, id int) (Meta, error)
 }

@@ -5,6 +5,7 @@ import Settings from "@/pages/settings";
 import Logs from "@/pages/logs";
 import Login from "@/pages/login";
 import { ProtectedRoute } from "@/components/protected-route";
+import Magnet from "@/pages/magnet";
 
 export default function AppRoutes() {
   return (
@@ -22,6 +23,7 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/logs" element={<Logs />} />
+        <Route path="/download" element={<Magnet />} />
         {/* 其他路由 */}
       </Route>
       {/* 404页面 */}

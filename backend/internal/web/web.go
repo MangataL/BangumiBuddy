@@ -5,14 +5,19 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 
+	"github.com/samber/lo"
+
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
+	"github.com/MangataL/BangumiBuddy/internal/magnet"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
-	"github.com/MangataL/BangumiBuddy/internal/utils"
+	"github.com/MangataL/BangumiBuddy/internal/types"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
-	"github.com/samber/lo"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 type Web struct {
@@ -20,6 +25,7 @@ type Web struct {
 	downloader      downloader.Interface
 	torrentOperator downloader.TorrentOperator
 	transfer        transfer.Interface
+	magnet          magnet.Interface
 }
 
 type Dependency struct {
@@ -27,6 +33,7 @@ type Dependency struct {
 	Downloader      downloader.Interface
 	TorrentOperator downloader.TorrentOperator
 	Transfer        transfer.Interface
+	Magnet          magnet.Interface
 }
 
 func New(dep Dependency) Interface {
@@ -35,6 +42,7 @@ func New(dep Dependency) Interface {
 		downloader:      dep.Downloader,
 		torrentOperator: dep.TorrentOperator,
 		transfer:        dep.Transfer,
+		magnet:          dep.Magnet,
 	}
 }
 
@@ -60,7 +68,7 @@ func (w *Web) ListBangumis(ctx context.Context, req subscriber.ListBangumiReq) (
 				CreatedAt:     bangumi.CreatedAt,
 			}
 		}
-		if bangumi.CreatedAt.Before(bangumiBase.CreatedAt) {
+		if bangumi.CreatedAt.After(bangumiBase.CreatedAt) {
 			bangumiBase.CreatedAt = bangumi.CreatedAt
 		}
 		bangumiBase.ReleaseGroups = append(bangumiBase.ReleaseGroups, ReleaseGroupSubsription{
@@ -78,7 +86,15 @@ func (w *Web) ListBangumis(ctx context.Context, req subscriber.ListBangumiReq) (
 	for _, bangumi := range bangumiMap {
 		bangumiBases = append(bangumiBases, bangumi)
 	}
-	slices.SortFunc(bangumiBases, func(b1, b2 BangumiBase) int {
+	slices.SortStableFunc(bangumiBases, func(b1, b2 BangumiBase) int {
+		b1Active := getActive(b1.ReleaseGroups)
+		b2Active := getActive(b2.ReleaseGroups)
+		if b1Active && !b2Active {
+			return -1
+		}
+		if !b1Active && b2Active {
+			return 1
+		}
 		return cmp.Compare(b2.CreatedAt.UnixNano(), b1.CreatedAt.UnixNano())
 	})
 	for _, bangumi := range bangumiBases {
@@ -98,10 +114,19 @@ func (w *Web) ListBangumis(ctx context.Context, req subscriber.ListBangumiReq) (
 	return bangumiBases, nil
 }
 
+func getActive(releaseGroups []ReleaseGroupSubsription) bool {
+	for _, rs := range releaseGroups {
+		if rs.Active {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]Torrent, error) {
 	ts, _, err := w.torrentOperator.List(ctx, downloader.TorrentFilter{
 		SubscriptionID: subscriptionID,
-		Order: downloader.Order{
+		Order: types.Order{
 			Field: "name",
 			Way:   "desc",
 		},
@@ -144,7 +169,7 @@ func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
 		return err
 	}
 	for _, name := range torrent.FileNames {
-		filePath := torrent.Path + name
+		filePath := filepath.Join(torrent.Path, name)
 		transferFile, err := w.transfer.GetTransferFile(ctx, filePath)
 		if err != nil {
 			if errors.Is(errors.Unwrap(err), transfer.ErrFileTransferredNotFound) {
@@ -160,7 +185,7 @@ func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
 		if err := w.downloader.DeleteTorrent(ctx, req.Hash); err != nil {
 			log.Warnf(ctx, "通过下载器删除种子失败，尝试手动清理: %v", err)
 			for _, name := range torrent.FileNames {
-				filePath := torrent.Path + name
+				filePath := filepath.Join(torrent.Path, name)
 				if err := os.Remove(filePath); err != nil {
 					return err
 				}
@@ -187,6 +212,10 @@ func (w *Web) DeleteSubscription(ctx context.Context, subscriptionID string, del
 				return err
 			}
 		}
+	} else {
+		if err := w.torrentOperator.DeleteBySubscriptionID(ctx, subscriptionID); err != nil {
+			return err
+		}
 	}
 	if err := w.transfer.DeleteTransferCache(ctx, transfer.DeleteFileTransferredReq{
 		SubscriptionID: subscriptionID,
@@ -206,7 +235,7 @@ func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) 
 	}
 	tfs := make([]File, 0, len(torrent.FileNames))
 	for _, fileName := range torrent.FileNames {
-		filePath := torrent.Path + fileName
+		filePath := filepath.Join(torrent.Path, fileName)
 		if utils.IsMediaFile(filePath) {
 			file := File{FileName: filePath}
 			linkFile, err := w.transfer.GetTransferFile(ctx, filePath)
@@ -226,16 +255,17 @@ func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) 
 
 func (w *Web) ListRecentUpdatedTorrents(ctx context.Context, req ListRecentUpdatedTorrentsReq) (ListRecentUpdatedTorrentsResp, error) {
 	torrents, total, err := w.torrentOperator.List(ctx, downloader.TorrentFilter{
-		Page: downloader.Page{
+		Page: types.Page{
 			Num:  req.Page,
 			Size: req.PageSize,
 		},
-		Order: downloader.Order{
+		Order: types.Order{
 			Field: "created_at",
 			Way:   "desc",
 		},
-		StartTime: req.StartTime,
-		EndTime:   req.EndTime,
+		StartTime:  req.StartTime,
+		EndTime:    req.EndTime,
+		MagnetTask: lo.ToPtr(false),
 	})
 	if err != nil {
 		return ListRecentUpdatedTorrentsResp{}, err
@@ -270,4 +300,191 @@ func (w *Web) ListRecentUpdatedTorrents(ctx context.Context, req ListRecentUpdat
 		Total:    total,
 		Torrents: torrentsResp,
 	}, nil
+}
+
+// ListMagnetTasks implements Interface.
+func (w *Web) ListMagnetTasks(ctx context.Context, req ListMagnetTasksReq) (ListMagnetTasksResp, error) {
+	tasks, total, err := w.magnet.ListTasks(ctx, magnet.ListTasksReq{
+		Page: types.Page{
+			Num:  req.Page,
+			Size: req.PageSize,
+		},
+		Order: types.Order{
+			Field: "id",
+			Way:   "desc",
+		},
+	})
+	if err != nil {
+		return ListMagnetTasksResp{}, err
+	}
+
+	downloadTasks := make([]MagnetTask, 0, len(tasks))
+	for _, task := range tasks {
+		dt, err := w.getMagnetTask(ctx, task)
+		if err != nil {
+			return ListMagnetTasksResp{}, err
+		}
+		downloadTasks = append(downloadTasks, dt)
+	}
+	return ListMagnetTasksResp{
+		Total: total,
+		Tasks: downloadTasks,
+	}, nil
+}
+
+func (w *Web) getMagnetTask(ctx context.Context, task magnet.Task) (MagnetTask, error) {
+	dt := MagnetTask{
+		Task: task,
+	}
+
+	// 如果任务状态不是 init success，说明还在等待解析或确认，不需要查询下载状态
+	if task.Status != magnet.TaskStatusInitSuccess {
+		return dt, nil
+	}
+
+	// 查询种子状态
+	torrent, err := w.torrentOperator.Get(ctx, task.Torrent.Hash)
+	if err != nil {
+		log.Warnf(ctx, "查询种子状态失败: %v, taskID: %s, hash: %s", err, task.TaskID, task.Torrent.Hash)
+		return dt, nil
+	}
+
+	dt.DownloadStatus = torrent.Status
+	dt.DownloadStatusDetail = torrent.StatusDetail
+
+	// 如果种子还在下载中，查询下载进度和大小
+	if torrent.Status != downloader.TorrentStatusTransferred && torrent.Status != downloader.TorrentStatusTransferredError {
+		ds, err := w.downloader.GetDownloadStatuses(ctx, []string{torrent.Hash})
+		if err != nil {
+			return MagnetTask{}, err
+		}
+		if len(ds) == 0 {
+			return dt, nil
+		}
+		dt.DownloadSpeed = ds[0].DownloadSpeed
+		dt.Progress = ds[0].Progress
+		dt.DownloadStatus = ds[0].Status
+		dt.DownloadStatusDetail = ds[0].Error
+	}
+	return dt, nil
+}
+
+func (w *Web) GetMagnetTask(ctx context.Context, taskID string) (MagnetTask, error) {
+	task, err := w.magnet.GetTask(ctx, taskID)
+	if err != nil {
+		return MagnetTask{}, err
+	}
+	mt, err := w.getMagnetTask(ctx, task)
+	if err != nil {
+		return MagnetTask{}, err
+	}
+	return w.fillLinkFile(ctx, mt)
+}
+
+func (w *Web) fillLinkFile(ctx context.Context, mt MagnetTask) (MagnetTask, error) {
+	for i, file := range mt.Torrent.Files {
+		if file.Media && file.Download {
+			linkFile, err := w.transfer.GetTransferFile(ctx, file.LinkFile)
+			if err != nil {
+				if errors.Is(errors.Unwrap(err), transfer.ErrFileTransferredNotFound) {
+					continue
+				}
+				return MagnetTask{}, err
+			}
+			mt.Torrent.Files[i].LinkFile = linkFile
+		}
+	}
+	return mt, nil
+}
+
+func (w *Web) DeleteMagnetTask(ctx context.Context, taskID string, deleteFiles bool) error {
+	if deleteFiles {
+		files, _, err := w.magnet.ListTasks(ctx, magnet.ListTasksReq{
+			TaskIDs: []string{taskID},
+		})
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
+			if err := w.DeleteTorrent(ctx, DeleteTorrentReq{
+				Hash:              file.Torrent.Hash,
+				DeleteOriginFiles: true,
+			}); err != nil {
+				return err
+			}
+		}
+	} else {
+		if err := w.torrentOperator.DeleteByTaskID(ctx, taskID); err != nil {
+			return err
+		}
+	}
+	return w.magnet.DeleteTask(ctx, taskID)
+}
+
+func (w *Web) ListDirs(ctx context.Context, path string) (ListDirsResp, error) {
+	if path == "" {
+		return ListDirsResp{}, errors.New("请传入有效的路径")
+	}
+
+	path = filepath.Clean(path)
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return ListDirsResp{}, err
+	}
+
+	paths := make([]FileDir, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirPath := filepath.Join(path, entry.Name())
+			hasDir, err := w.hasDir(dirPath)
+			if err != nil {
+				// 如果检查子目录失败，默认为false，不影响主流程
+				hasDir = false
+			}
+			paths = append(paths, FileDir{
+				Path:   dirPath,
+				HasDir: hasDir,
+			})
+		}
+	}
+
+	return ListDirsResp{
+		Dirs:          paths,
+		FilePathSplit: string(filepath.Separator),
+		FileRoots:     w.getFileRoots(),
+	}, nil
+}
+
+func (w *Web) getFileRoots() []string {
+	if runtime.GOOS == "windows" {
+		return w.getWindowsDrives()
+	}
+	return []string{"/"}
+}
+
+func (w *Web) getWindowsDrives() []string {
+	drives := make([]string, 0, 26)
+	for i := 'A'; i <= 'Z'; i++ {
+		drive := string(i) + ":\\"
+		if _, err := os.Stat(drive); err == nil {
+			drives = append(drives, drive)
+		}
+	}
+	return drives
+}
+
+// hasDir 检查指定路径下是否包含子目录
+func (w *Web) hasDir(dirPath string) (bool, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

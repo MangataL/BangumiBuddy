@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"sync"
 
 	"github.com/MangataL/BangumiBuddy/internal/notice"
-	"github.com/MangataL/BangumiBuddy/internal/utils"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 const (
@@ -119,13 +120,18 @@ func (n *notifier) NoticeSubscriptionUpdated(ctx context.Context, req notice.Not
 
 // NoticeDownloaded 实现Notifier接口，通知资源下载状态
 func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownloadedReq) error {
-	var title, body string
+	var title, body, titleName string
+	if req.RSSGUID != "" {
+		titleName = "番剧"
+	} else {
+		titleName = "磁力任务"
+	}
 
 	if req.Failed {
-		title = "番剧下载失败"
+		title = fmt.Sprintf("%s下载失败", titleName)
 		body = fmt.Sprintf("文件名: %s\n错误: %s", req.TorrentName, req.FailDetail)
 	} else {
-		title = "番剧下载完成"
+		title = fmt.Sprintf("%s下载完成", titleName)
 		body = fmt.Sprintf("文件名: %s\n大小: %s\n耗时: %s\n平均速度: %s",
 			req.TorrentName,
 			utils.FormatFileSize(req.Size),
@@ -136,8 +142,8 @@ func (n *notifier) NoticeDownloaded(ctx context.Context, req notice.NoticeDownlo
 	return n.sendNotification(title, body)
 }
 
-// NoticeTransferred 实现Notifier接口，通知资源转移状态
-func (n *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTransferredReq) error {
+// NoticeSubscriptionTransferred 实现Notifier接口，通知资源转移状态
+func (n *notifier) NoticeSubscriptionTransferred(ctx context.Context, req notice.NoticeSubscriptionTransferredReq) error {
 	var title, body string
 
 	baseBody := fmt.Sprintf("季度: 第%d季\n字幕组: %s\n文件名: %s\nRSS订阅项: %s",
@@ -157,6 +163,54 @@ func (n *notifier) NoticeTransferred(ctx context.Context, req notice.NoticeTrans
 		title = fmt.Sprintf("番剧转移成功：%s", req.BangumiName)
 		body = fmt.Sprintf("%s\n媒体库信息: %s",
 			baseBody, req.MediaFilePath)
+	}
+
+	return n.sendNotification(title, body)
+}
+
+// NoticeTaskTransferred 实现Notifier接口，通知任务转移状态
+func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeTaskTransferredReq) error {
+	var title, body string
+
+	// 判断转移状态
+	successCount := len(req.MediaFilePaths)
+	hasFailures := req.Error != nil
+
+	var (
+		mediaFilePath string
+		fileBody      string
+	)
+	if successCount > 1 {
+		for _, fp := range req.MediaFilePaths {
+			mediaFilePath = filepath.Dir(fp)
+			break
+		}
+		fileBody = fmt.Sprintf("媒体目录: %s\n", mediaFilePath)
+	} else {
+		for _, fp := range req.MediaFilePaths {
+			mediaFilePath = fp
+		}
+		fileBody = fmt.Sprintf("媒体文件路径: %s\n", mediaFilePath)
+	}
+
+	if successCount == 0 && hasFailures {
+		// 全部转移失败
+		title = fmt.Sprintf("磁力任务转移失败：%s", req.BangumiName)
+		body = fmt.Sprintf("种子名: %s\n转移结果: 全部失败\n错误详情: %s", req.TorrentName, req.Error.Error())
+	} else if successCount > 0 && !hasFailures {
+		// 全部转移成功
+		title = fmt.Sprintf("磁力任务转移成功：%s", req.BangumiName)
+		body = fmt.Sprintf("种子名: %s\n转移结果: 全部成功 (%d个文件)\n", req.TorrentName, successCount)
+		body += fileBody
+	} else {
+		// 部分成功，部分失败
+		title = fmt.Sprintf("磁力任务转移部分成功：%s", req.BangumiName)
+		body = fmt.Sprintf("种子名: %s\n转移结果: %d个成功\n", req.TorrentName, successCount)
+		body += fileBody
+		// 添加失败信息
+		if hasFailures {
+			body += fmt.Sprintf("\n\n失败详情: %s", req.Error.Error())
+		}
 	}
 
 	return n.sendNotification(title, body)

@@ -44,7 +44,66 @@ type Client struct {
 	client *tmdb.Client
 }
 
-func (t *Client) Parse(ctx context.Context, id int) (meta.Meta, error) {
+// SearchMovie implements meta.Parser.
+func (t *Client) SearchMovie(ctx context.Context, name string) (meta.Meta, error) {
+	movies, err := t.SearchMovies(ctx, name)
+	if err != nil {
+		return meta.Meta{}, err
+	}
+	if len(movies) == 0 {
+		return meta.Meta{}, errs.NewNotFoundf("未搜索到剧场版，剧场版名称: %s", name)
+	}
+	return movies[0], nil
+}
+
+func (t *Client) SearchMovies(ctx context.Context, name string) ([]meta.Meta, error) {
+	if t.client == nil {
+		return nil, ErrTMDBTokenNotSet
+	}
+	movies, err := t.client.GetSearchMovies(name, map[string]string{
+		"language": "zh",
+		"page":     "1",
+	})
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf(ctx, "search %s got movies: %+v", name, movies)
+	if len(movies.Results) == 0 {
+		return nil, errs.NewNotFoundf("未搜索到剧场版，剧场版名称: %s", name)
+	}
+	metas := make([]meta.Meta, 0, len(movies.Results))
+	for _, movie := range movies.Results {
+		m, err := t.ParseMovie(ctx, int(movie.ID))
+		if err != nil {
+			return nil, err
+		}
+		metas = append(metas, m)
+	}
+	return metas, nil
+}
+
+func (t *Client) ParseMovie(ctx context.Context, id int) (meta.Meta, error) {
+	if t.client == nil {
+		return meta.Meta{}, ErrTMDBTokenNotSet
+	}
+	movie, err := t.client.GetMovieDetails(id, map[string]string{
+		"language": "zh",
+	})
+	if err != nil {
+		return meta.Meta{}, err
+	}
+	return meta.Meta{
+		ChineseName: movie.Title,
+		Year:        getYear(ctx, movie.ReleaseDate),
+		TMDBID:      int(movie.ID),
+		PosterURL:   getImageURL(movie.PosterPath),
+		BackdropURL: getImageURL(movie.BackdropPath),
+		Overview:    movie.Overview,
+		Genres:      getGeneres(movie.Genres),
+	}, nil
+}
+
+func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
 	if t.client == nil {
 		return meta.Meta{}, ErrTMDBTokenNotSet
 	}
@@ -63,10 +122,10 @@ func (t *Client) Parse(ctx context.Context, id int) (meta.Meta, error) {
 		Season:          season,
 		EpisodeTotalNum: getSeasonEpisodeTotalNum(tv, season),
 		AirWeekday:      getAirWeekday(tv),
-		PosterURL:       getImageURL(tv),
-		BackdropURL:     getBackdropURL(tv),
+		PosterURL:       getImageURL(tv.PosterPath),
+		BackdropURL:     getImageURL(tv.BackdropPath),
 		Overview:        tv.Overview,
-		Genres:          getGenres(tv),
+		Genres:          getGeneres(tv.Genres),
 	}, nil
 }
 
@@ -103,27 +162,23 @@ const (
 	imageBaseURL = "https://image.tmdb.org/t/p/w500"
 )
 
-func getImageURL(tv *tmdb.TVDetails) string {
-	if tv.PosterPath == "" {
+func getImageURL(url string) string {
+	if url == "" {
 		return ""
 	}
-	return imageBaseURL + tv.PosterPath
-}
-
-func getBackdropURL(tv *tmdb.TVDetails) string {
-	if tv.BackdropPath == "" {
-		return ""
-	}
-	return imageBaseURL + tv.BackdropPath
+	return imageBaseURL + url
 }
 
 const (
 	animeGenreID = 16
 )
 
-func getGenres(tv *tmdb.TVDetails) string {
-	genres := make([]string, 0, len(tv.Genres))
-	for _, genre := range tv.Genres {
+func getGeneres(generes []struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}) string {
+	genres := make([]string, 0, len(generes))
+	for _, genre := range generes {
 		if genre.ID == animeGenreID {
 			continue
 		}
@@ -132,32 +187,46 @@ func getGenres(tv *tmdb.TVDetails) string {
 	return strings.Join(genres, ", ")
 }
 
-// TODO: 后期有必要可以改为多次分页去查找满足条件的，当前从简只查一页
-func (t *Client) Search(ctx context.Context, name string) (meta.Meta, error) {
+func (t *Client) SearchTVs(ctx context.Context, name string) ([]meta.Meta, error) {
 	if t.client == nil {
-		return meta.Meta{}, ErrTMDBTokenNotSet
+		return nil, ErrTMDBTokenNotSet
 	}
 	tvs, err := t.client.GetSearchTVShow(name, map[string]string{
 		"language": "zh",
 		"page":     "1",
 	})
 	if err != nil {
-		return meta.Meta{}, err
+		return nil, err
 	}
 	log.Debugf(ctx, "search %s got tvs: %+v", name, tvs)
 	if len(tvs.Results) == 0 {
-		return meta.Meta{}, errs.NewNotFoundf("未搜索到番剧，解析出的番剧名称: %s", name)
+		return nil, errs.NewNotFoundf("未搜索到番剧，番剧名称: %s", name)
 	}
-	id := tvs.Results[0].ID
+	metas := make([]meta.Meta, 0, len(tvs.Results))
 	for _, tv := range tvs.Results {
 		for _, genre := range tv.GenreIDs {
 			if genre == animeGenreID {
-				id = tv.ID
-				break
+				m, err := t.ParseTV(ctx, int(tv.ID))
+				if err != nil {
+					return nil, err
+				}
+				metas = append(metas, m)
 			}
 		}
 	}
-	return t.Parse(ctx, int(id))
+	return metas, nil
+}
+
+// TODO: 后期有必要可以改为多次分页去查找满足条件的，当前从简只查一页
+func (t *Client) SearchTV(ctx context.Context, name string) (meta.Meta, error) {
+	tvs, err := t.SearchTVs(ctx, name)
+	if err != nil {
+		return meta.Meta{}, err
+	}
+	if len(tvs) == 0 {
+		return meta.Meta{}, errs.NewNotFoundf("未搜索到番剧，番剧名称: %s", name)
+	}
+	return tvs[0], nil
 }
 
 func getYear(ctx context.Context, date string) string {

@@ -112,9 +112,9 @@ export default function LogsView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold anime-gradient-text flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-primary animate-pulse" />
-          系统日志
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Sparkles className="h-6 w-6 text-primary animate-pulse anime-gradient-text" />
+          <span className="anime-gradient-text">系统日志</span>
         </h1>
         <p className="text-muted-foreground">查看系统运行日志和错误信息</p>
       </div>

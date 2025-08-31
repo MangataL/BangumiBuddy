@@ -19,6 +19,9 @@ type Interface interface {
 
 	// DeleteTorrent 删除种子文件
 	DeleteTorrent(ctx context.Context, hash string) error
+
+	// ContinueDownload 继续下载种子文件
+	ContinueDownload(ctx context.Context, hash string) error
 }
 
 type Closer interface {
@@ -42,6 +45,12 @@ type TorrentOperator interface {
 
 	// Delete 删除种子文件
 	Delete(ctx context.Context, hash string) error
+
+	// DeleteBySubscriptionID 删除种子文件
+	DeleteBySubscriptionID(ctx context.Context, subscriptionID string) error
+
+	// DeleteByTaskID 删除种子文件
+	DeleteByTaskID(ctx context.Context, taskID string) error
 }
 
 // SetTorrentStatusOptions 设置种子文件状态选项

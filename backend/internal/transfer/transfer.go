@@ -3,20 +3,24 @@ package transfer
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mholt/archives"
+	"github.com/pkg/errors"
+	"github.com/samber/lo"
+
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
+	"github.com/MangataL/BangumiBuddy/internal/magnet"
 	"github.com/MangataL/BangumiBuddy/internal/notice"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
-	"github.com/MangataL/BangumiBuddy/internal/utils"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
-	"github.com/Tnze/go.num/v2/zh"
-	"github.com/pkg/errors"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 var _ Interface = (*Transfer)(nil)
@@ -33,6 +37,8 @@ func NewTransfer(dep Dependency) *Transfer {
 		episodeParser:   dep.EpisodeParser,
 		transferFiles:   dep.TransferFiles,
 		notifier:        dep.Notifier,
+		magnetManager:   dep.MagnetManager,
+		fontSubsetter:   dep.FontOperator,
 	}
 
 	go transfer.run(ctx)
@@ -47,6 +53,8 @@ type Dependency struct {
 	Subscriber    subscriber.Interface
 	TransferFiles TransferFilesRepo
 	Notifier      notice.Notifier
+	MagnetManager magnet.Interface
+	FontOperator  subtitle.Subsetter
 }
 
 type EpisodeParser interface {
@@ -67,10 +75,22 @@ type TransferFilesRepo interface {
 var ErrFileTransferredNotFound = errors.New("文件转移记录未找到")
 
 type Config struct {
-	Interval     int    `mapstructure:"interval" json:"interval" default:"1"`
-	TVPath       string `mapstructure:"tv_path" json:"tvPath"`
-	TVFormat     string `mapstructure:"tv_format" json:"tvFormat" default:"{name}/Season {season}/{name} {season_episode}"`
-	TransferType string `mapstructure:"transfer_type" json:"transferType"`
+	Interval             int                  `mapstructure:"interval" json:"interval" default:"1"`
+	TVPath               string               `mapstructure:"tv_path" json:"tvPath"`
+	TVFormat             string               `mapstructure:"tv_format" json:"tvFormat" default:"{name}/Season {season}/{name} {season_episode}"`
+	MoviePath            string               `mapstructure:"movie_path" json:"moviePath"`
+	MovieFormat          string               `mapstructure:"movie_format" json:"movieFormat" default:"{name} ({year})"`
+	TransferType         string               `mapstructure:"transfer_type" json:"transferType"`
+	SubtitleRename       SubtitleRenameConfig `mapstructure:"subtitle_rename" json:"subtitleRename"`
+	EnableSubtitleSubset bool                 `mapstructure:"enable_subtitle_subset" json:"enableSubtitleSubset"`
+}
+
+type SubtitleRenameConfig struct {
+	Enabled                     bool     `mapstructure:"enabled" json:"enabled"`
+	SimpleChineseRenameExt      string   `mapstructure:"simple_chinese_rename_ext" json:"simpleChineseRenameExt" default:".zh"`
+	SimpleChineseExts           []string `mapstructure:"simple_chinese_exts" json:"simpleChineseExts" default:"[\".zh-cn\",\".zh-hans\",\".sc\"]"`
+	TraditionalChineseExts      []string `mapstructure:"traditional_chinese_exts" json:"traditionalChineseExts" default:"[\".zh-tw\",\".zh-hk\",\".zh-hant\",\".tc\"]"`
+	TraditionalChineseRenameExt string   `mapstructure:"traditional_chinese_rename_ext" json:"traditionalChineseRenameExt" default:".zh-hant"`
 }
 
 type Transfer struct {
@@ -79,10 +99,12 @@ type Transfer struct {
 	config          Config
 	torrentOperator downloader.TorrentOperator
 	downloader      downloader.Interface
+	magnetManager   magnet.Interface
 	subscriber      subscriber.Interface
 	episodeParser   EpisodeParser
 	transferFiles   TransferFilesRepo
 	notifier        notice.Notifier
+	fontSubsetter   subtitle.Subsetter
 }
 
 func (t *Transfer) run(ctx context.Context) {
@@ -139,25 +161,14 @@ func (t *transferError) ErrorOrNil() error {
 }
 
 func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torrent) (err error) {
-	fileNames := torrent.FileNames
-	transferErr := &transferError{fileNum: len(fileNames)}
-	for _, fileName := range fileNames {
-		path := torrent.Path + fileName
-		if !utils.IsMediaFile(path) {
-			continue
-		}
-		var err error
-		if torrent.SubscriptionID != "" {
-			err = t.transferForSubscribe(ctx, torrent, path, fileName)
-		}
-		if err != nil {
-			log.Errorf(ctx, "文件 %s 转移失败： %v", fileName, err)
-			transferErr.Append(err, fileName)
-		}
+	if torrent.SubscriptionID != "" {
+		err = t.transferTorrentForSubscribe(ctx, torrent)
+	} else {
+		err = t.transferTorrentForTask(ctx, torrent)
 	}
 	transferState := downloader.TorrentStatusTransferred
 	var transferDetail string
-	if err := transferErr.ErrorOrNil(); err != nil {
+	if err != nil {
 		transferState = downloader.TorrentStatusTransferredError
 		transferDetail = err.Error()
 	}
@@ -166,10 +177,26 @@ func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torre
 	}); err != nil {
 		return errors.WithMessagef(err, "设置种子(%s)转移状态失败", torrent.Hash)
 	}
+	return err
+}
+
+func (t *Transfer) transferTorrentForSubscribe(ctx context.Context, torrent downloader.Torrent) error {
+	fileNames := torrent.FileNames
+	transferErr := &transferError{fileNum: len(fileNames)}
+	for _, fileName := range fileNames {
+		path := filepath.Join(torrent.Path, fileName)
+		if !utils.IsMediaFile(path) {
+			continue
+		}
+		if err := t.transferFileForSubscribe(ctx, torrent, path, fileName); err != nil {
+			log.Errorf(ctx, "文件 %s 转移失败： %v", fileName, err)
+			transferErr.Append(err, fileName)
+		}
+	}
 	return transferErr.ErrorOrNil()
 }
 
-func (t *Transfer) transferForSubscribe(ctx context.Context, torrent downloader.Torrent, path, fileName string) error {
+func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloader.Torrent, path, fileName string) error {
 	bangumi, err := t.subscriber.Get(ctx, torrent.SubscriptionID)
 	if err != nil {
 		return errors.WithMessage(err, "文件转移时获取番剧信息失败")
@@ -193,16 +220,16 @@ func (t *Transfer) transferForSubscribe(ctx context.Context, torrent downloader.
 		})
 	}
 
-	episode, newFilePath, transferd, err := t.transfer(ctx, meta, checkPriority)
+	episode, newFilePath, transferd, err := t.transferFileWithCheckers(ctx, meta, checkPriority)
 	if (torrent.Status != downloader.TorrentStatusTransferredError && err != nil) || transferd {
-		if err := t.notifier.NoticeTransferred(ctx, notice.NoticeTransferredReq{
+		if err := t.notifier.NoticeSubscriptionTransferred(ctx, notice.NoticeSubscriptionTransferredReq{
 			RSSGUID:       torrent.RSSGUID,
 			FileName:      fileName,
 			BangumiName:   bangumi.Name,
 			Season:        bangumi.Season,
 			ReleaseGroup:  bangumi.ReleaseGroup,
 			Poster:        bangumi.PosterURL,
-			MediaFilePath: strings.TrimPrefix(newFilePath, t.config.TVPath),
+			MediaFilePath: newFilePath,
 			Error:         err,
 		}); err != nil {
 			log.Warnf(ctx, "通知转移失败: %v", err)
@@ -301,7 +328,7 @@ func (t *Transfer) checkPriority(ctx context.Context, newFilePriority newFilePri
 
 type transferChecker func(ctx context.Context, newFileID string) (bool, error)
 
-func (t *Transfer) transfer(ctx context.Context, meta Meta, checkers ...transferChecker) (int, string, bool, error) {
+func (t *Transfer) transferFileWithCheckers(ctx context.Context, meta Meta, checkers ...transferChecker) (int, string, bool, error) {
 	log.Infof(ctx, "开始转移文件 %s", meta.FileName)
 	var episode int
 	if meta.EpisodeLocation == "" {
@@ -312,16 +339,13 @@ func (t *Transfer) transfer(ctx context.Context, meta Meta, checkers ...transfer
 		}
 	} else {
 		var err error
-		episode, err = t.parseEpisodeWithLocation(meta.FileName, meta.EpisodeLocation)
+		episode, err = utils.ParseEpisodeWithLocation(meta.FileName, meta.EpisodeLocation)
 		if err != nil {
 			return 0, "", false, errors.WithMessage(err, "通过集数定位解析文件集数失败")
 		}
 	}
 	episode += meta.EpisodeOffset
 
-	// 生成新文件路径
-	newFilePathWithoutExt := t.generateNewFilePath(t.config.TVFormat, meta, episode)
-	newFilePath := newFilePathWithoutExt + filepath.Ext(meta.FileName)
 	newFileID := fmt.Sprintf("%s/%s/%s", meta.ChineseName, strconv.Itoa(meta.Season), strconv.Itoa(episode))
 
 	for _, checker := range checkers {
@@ -334,16 +358,30 @@ func (t *Transfer) transfer(ctx context.Context, meta Meta, checkers ...transfer
 		}
 	}
 
-	// 转移主媒体文件
-	originFile, err := GetFileTransfer(t.config.TransferType).Transfer(ctx, meta.FilePath, newFilePath)
+	_, newFilePath, err := t.transferFileForTV(ctx, meta, episode, newFileID)
 	if err != nil {
-		return 0, "", false, errors.WithMessage(err, "文件转移失败")
+		return 0, "", false, errors.WithMessage(err, "转移文件失败")
+	}
+	return episode, newFilePath, true, nil
+}
+
+func (t *Transfer) transferFileForTV(ctx context.Context, meta Meta, episode int, newFileID string) (originFile string, newFilePath string, err error) {
+	// 生成新文件路径
+	newFilePathWithoutExt := t.generateNewFilePath(t.config.TVFormat, meta, episode)
+	originFile, newFilePath, err = t.transferFile(ctx, newFilePathWithoutExt, meta, newFileID)
+	return
+}
+
+func (t *Transfer) transferFile(ctx context.Context, newFilePathWithoutExt string, meta Meta, newFileID string) (originFile, newFilePath string, err error) {
+	newFilePath = newFilePathWithoutExt + filepath.Ext(meta.FileName)
+	originFile, err = GetFileTransfer(t.config.TransferType).Transfer(ctx, meta.FilePath, newFilePath)
+	if err != nil {
+		return "", "", errors.WithMessage(err, "文件转移失败")
 	}
 	// 查找并转移相关的字幕和音频文件
 	if err := t.transferRelatedFiles(ctx, meta, newFilePathWithoutExt); err != nil {
-		return 0, "", false, errors.WithMessage(err, "转移相关文件失败")
+		return "", "", errors.WithMessage(err, "转移相关文件失败")
 	}
-
 	// 设置转移记录
 	if err := t.transferFiles.Set(ctx, FileTransferred{
 		OriginFile:     originFile,
@@ -355,40 +393,12 @@ func (t *Transfer) transfer(ctx context.Context, meta Meta, checkers ...transfer
 	}); err != nil {
 		log.Warnf(ctx, "更新转移记录失败: %v", err)
 	}
-	log.Infof(ctx, "转移文件 %s 成功", meta.FileName)
-	return episode, newFilePath, true, nil
-}
-
-func (t *Transfer) parseEpisodeWithLocation(name string, location string) (int, error) {
-	pattern := regexp.QuoteMeta(location)
-	pattern = strings.ReplaceAll(pattern, `\{ep\}`, `(\d+|[一二三四五六七八九十百千]+)`)
-
-	reg := regexp.MustCompile(pattern)
-	matches := reg.FindStringSubmatch(name)
-	if len(matches) < 2 {
-		return 0, errors.New("无法从文件名中解析出集数信息")
-	}
-
-	epStr := matches[1]
-
-	// 如果是数字直接转换
-	if num, err := strconv.Atoi(epStr); err == nil {
-		return num, nil
-	}
-
-	var ep zh.Uint64
-	if _, err := fmt.Sscan(epStr, &ep); err != nil {
-		return 0, errors.WithMessage(err, "转换中文集数失败")
-	}
-
-	return int(ep), nil
+	return originFile, newFilePath, nil
 }
 
 // 生成新文件的路径，不包含扩展名
 func (t *Transfer) generateNewFilePath(format string, meta Meta, episode int) string {
-	result := strings.ReplaceAll(format, "{name}", meta.ChineseName)
-	result = strings.ReplaceAll(result, "{year}", meta.Year)
-	result = strings.ReplaceAll(result, "{release_group}", meta.ReleaseGroup)
+	result := t.replaceCommonVar(format, meta)
 
 	episodeStr := strconv.Itoa(episode)
 	result = strings.ReplaceAll(result, "{episode}", episodeStr)
@@ -399,19 +409,16 @@ func (t *Transfer) generateNewFilePath(format string, meta Meta, episode int) st
 	seasonEpisode := fmt.Sprintf("S%sE%s", utils.FormatNumber(meta.Season), utils.FormatNumber(episode))
 	result = strings.ReplaceAll(result, "{season_episode}", seasonEpisode)
 
-	originName := utils.GetFileBaseName(meta.FileName)
-	result = strings.ReplaceAll(result, "{origin_name}", originName)
-
 	return filepath.Join(t.config.TVPath, result)
 }
 
-var subtitleExtensions = map[string]struct{}{
-	".srt": {},
-	".ass": {},
-	".ssa": {},
-	".sub": {},
-	".idx": {},
-	".vtt": {},
+func (t *Transfer) replaceCommonVar(format string, meta Meta) string {
+	result := strings.ReplaceAll(format, "{name}", meta.ChineseName)
+	result = strings.ReplaceAll(result, "{year}", meta.Year)
+	result = strings.ReplaceAll(result, "{release_group}", meta.ReleaseGroup)
+	originName := utils.GetFileBaseName(meta.FileName)
+	result = strings.ReplaceAll(result, "{origin_name}", originName)
+	return result
 }
 
 var audioExtensions = map[string]struct{}{
@@ -431,14 +438,31 @@ func (t *Transfer) transferRelatedFiles(ctx context.Context, meta Meta, newFileP
 	if err != nil {
 		return errors.WithMessage(err, "获取相关文件列表失败")
 	}
-	log.Infof(ctx, "获取相关文件列表 %v, file: %s", files, meta.FilePath)
 
+	fontSubsetter := t.fontSubsetter
+	newFiles := make([]string, 0, len(files))
 	for _, file := range files {
-		fileName := filepath.Base(file)
-		fileExt := filepath.Ext(fileName)
+		if utils.IsSubtitleFile(file) && t.config.EnableSubtitleSubset && notSubsetFile(file) {
+			if meta.FontSubsetter != nil {
+				fontSubsetter = meta.FontSubsetter
+			}
+			newFile, err := fontSubsetter.SubsetFont(ctx, file)
+			if err != nil {
+				return errors.WithMessagef(err, "子集化字幕文件 %s 失败", file)
+			}
+			newFiles = append(newFiles, newFile)
+		}
+		newFiles = append(newFiles, file)
+	}
+
+	for _, file := range newFiles {
+		if file == meta.FilePath {
+			continue
+		}
+		fileExt := strings.TrimPrefix(file, utils.GetFileBaseName(meta.FilePath))
 
 		// 检查是否是字幕或音频文件
-		_, isSubtitle := subtitleExtensions[fileExt]
+		isSubtitle := utils.IsSubtitleFile(fileExt)
 		_, isAudio := audioExtensions[fileExt]
 
 		if !isSubtitle && !isAudio {
@@ -446,15 +470,368 @@ func (t *Transfer) transferRelatedFiles(ctx context.Context, meta Meta, newFileP
 		}
 
 		// 创建新的文件路径
+		fileExt = t.makeFileExt(fileExt, isSubtitle)
 		newRelatedFilePath := newFilePathWithoudExt + fileExt
-		log.Infof(ctx, "转移相关文件 %s", newRelatedFilePath)
+		log.Infof(ctx, "转移相关文件 %s 到 %s", file, newRelatedFilePath)
 		// 转移相关文件
 		if _, err := GetFileTransfer(t.config.TransferType).Transfer(ctx, file, newRelatedFilePath); err != nil {
-			return errors.WithMessagef(err, "转移 %s 文件失败", fileExt)
+			return errors.WithMessagef(err, "转移 %s 文件失败", file)
 		}
 	}
 
 	return nil
+}
+
+func notSubsetFile(file string) bool {
+	return !strings.Contains(file, subtitle.SubtitleSubsetExt)
+}
+
+func (t *Transfer) makeFileExt(fileExt string, isSubtitle bool) string {
+	if !isSubtitle || !t.config.SubtitleRename.Enabled {
+		return fileExt
+	}
+	fileExt = strings.ToLower(fileExt)
+	for _, ext := range t.config.SubtitleRename.SimpleChineseExts {
+		if strings.Contains(fileExt, ext) {
+			return strings.ReplaceAll(fileExt, ext, t.config.SubtitleRename.SimpleChineseRenameExt)
+		}
+	}
+	for _, ext := range t.config.SubtitleRename.TraditionalChineseExts {
+		if strings.Contains(fileExt, ext) {
+			return strings.ReplaceAll(fileExt, ext, t.config.SubtitleRename.TraditionalChineseRenameExt)
+		}
+	}
+	return fileExt
+}
+
+func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloader.Torrent) error {
+	task, err := t.magnetManager.GetTask(ctx, torrent.TaskID)
+	if err != nil {
+		return errors.WithMessage(err, "获取任务失败")
+	}
+	taskTorrents := lo.SliceToMap(task.Torrent.Files, func(file magnet.TorrentFile) (string, magnet.TorrentFile) {
+		return file.FileName, file
+	})
+	transferErr := &transferError{fileNum: len(torrent.FileNames)}
+	successFilePaths := make(map[string]string)
+	fontPath, closeFunc, err := t.getFontPath(ctx, task, torrent.Path)
+	defer closeFunc() // 确保临时目录被清理
+	if err != nil {
+		log.Warnf(ctx, "尝试获取字体库失败，使用默认字体库: %v", err)
+	}
+	var fontSubsetter subtitle.Subsetter
+	if fontPath != "" {
+		fontSubsetter, err = t.fontSubsetter.UsingTempFontDir(ctx, fontPath)
+		if err != nil {
+			log.Warnf(ctx, "使用临时字体目录创建字体库失败: %v", err)
+		}
+	}
+
+	for _, fileName := range torrent.FileNames {
+		file, ok := taskTorrents[fileName]
+		if !ok {
+			log.Warnf(ctx, "任务中没有找到文件 %s", fileName)
+			continue
+		}
+		if !file.Download {
+			log.Infof(ctx, "文件 %s 未下载，跳过转移", fileName)
+			continue
+		}
+		if !file.Media {
+			log.Infof(ctx, "文件 %s 不是待入库文件，跳过转移", fileName)
+			continue
+		}
+		meta := Meta{
+			ChineseName:   task.Meta.ChineseName,
+			Year:          task.Meta.Year,
+			FileName:      fileName,
+			FilePath:      filepath.Join(torrent.Path, fileName),
+			ReleaseGroup:  task.Meta.ReleaseGroup,
+			FontSubsetter: fontSubsetter,
+		}
+		newFileID := fmt.Sprintf("%s-%s", torrent.Hash, fileName)
+		var originFile, newFilePath string
+		switch task.DownloadType {
+		case downloader.DownloadTypeTV:
+			originFile, newFilePath, err = t.transferForTaskTV(ctx, meta, file, newFileID)
+		case downloader.DownloadTypeMovie:
+			originFile, newFilePath, err = t.transferForTaskMovie(ctx, meta, newFileID)
+		}
+
+		if err != nil {
+			log.Errorf(ctx, "文件 %s 转移失败： %v", fileName, err)
+			transferErr.Append(err, fileName)
+		}
+		successFilePaths[originFile] = newFilePath
+	}
+	err = transferErr.ErrorOrNil()
+	if torrent.Status == downloader.TorrentStatusTransferredError && err != nil {
+		return err
+	}
+
+	if nerr := t.notifier.NoticeTaskTransferred(ctx, notice.NoticeTaskTransferredReq{
+		BangumiName:    task.Meta.ChineseName,
+		TorrentName:    torrent.Name,
+		Error:          err,
+		MediaFilePaths: successFilePaths,
+	}); nerr != nil {
+		log.Warnf(ctx, "通知任务转移结果失败: %v", nerr)
+	}
+
+	return err
+}
+
+// isFontArchive 判断文件名是否为包含 "fonts" 的压缩包
+func isFontArchive(filename string) bool {
+	// 确保只处理文件名，不包含路径
+	baseName := filepath.Base(filename)
+
+	// 检查文件名是否包含 "fonts"（不区分大小写）
+	if !strings.Contains(strings.ToLower(baseName), "fonts") {
+		return false
+	}
+
+	// 检查文件扩展名是否为压缩包格式
+	ext := strings.ToLower(filepath.Ext(baseName))
+	archiveExtensions := map[string]struct{}{
+		".zip":     {},
+		".rar":     {},
+		".7z":      {},
+		".tar":     {},
+		".gz":      {},
+		".tar.gz":  {},
+		".bz2":     {},
+		".tar.bz2": {},
+		".xz":      {},
+		".tar.xz":  {},
+	}
+
+	// 检查 .tar.gz 等复合扩展名
+	if strings.HasSuffix(strings.ToLower(baseName), ".tar.gz") {
+		return true
+	}
+	if strings.HasSuffix(strings.ToLower(baseName), ".tar.bz2") {
+		return true
+	}
+	if strings.HasSuffix(strings.ToLower(baseName), ".tar.xz") {
+		return true
+	}
+
+	_, isArchive := archiveExtensions[ext]
+	return isArchive
+}
+
+// extractArchive 解压压缩包到指定目录（支持多种格式）
+func extractArchive(ctx context.Context, archivePath, extractDir string) error {
+	// 打开压缩文件
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return errors.WithMessagef(err, "打开压缩文件 %s 失败", archivePath)
+	}
+	defer file.Close()
+
+	// 识别压缩格式
+	format, stream, err := archives.Identify(ctx, archivePath, file)
+	if err != nil {
+		return errors.WithMessagef(err, "识别压缩格式失败: %s", archivePath)
+	}
+
+	// 检查是否为支持的解压缩器
+	extractor, ok := format.(archives.Extractor)
+	if !ok {
+		return errors.Errorf("不支持的压缩格式: %s", archivePath)
+	}
+
+	// 解压缩文件
+	err = extractor.Extract(ctx, stream, func(ctx context.Context, f archives.FileInfo) error {
+		targetPath := filepath.Join(extractDir, f.NameInArchive)
+		if f.IsDir() {
+			return os.MkdirAll(targetPath, os.ModePerm)
+		}
+		// 创建目标文件所在的目录
+		if err := os.MkdirAll(filepath.Dir(targetPath), os.ModePerm); err != nil {
+			return err
+		}
+		// 创建并写入文件
+		outFile, err := os.Create(targetPath)
+		if err != nil {
+			return err
+		}
+		defer outFile.Close()
+		srcFile, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+		_, err = io.Copy(outFile, srcFile)
+		return err
+	})
+	if err != nil {
+		return errors.WithMessagef(err, "解压文件 %s 失败", archivePath)
+	}
+
+	return nil
+}
+
+// getCommonParent 计算多个目录的公共父目录
+func getCommonParent(dirs []string, basePath string) string {
+	dirs = lo.Uniq(dirs)
+	if len(dirs) == 0 {
+		return ""
+	}
+	if len(dirs) == 1 {
+		return dirs[0]
+	}
+
+	// 清理basePath
+	basePath = filepath.Clean(basePath)
+
+	// 计算每个目录相对于basePath的路径
+	var relPaths []string
+	for _, dir := range dirs {
+		dir = filepath.Clean(dir)
+
+		// 检查目录是否在basePath下
+		relPath, err := filepath.Rel(basePath, dir)
+		if err != nil || strings.HasPrefix(relPath, "..") {
+			// 如果目录不在basePath下，跳过
+			continue
+		}
+
+		relPaths = append(relPaths, relPath)
+	}
+
+	if len(relPaths) == 0 {
+		return basePath
+	}
+
+	// 找到相对路径的最长公共前缀
+	commonPrefix := findLongestCommonPrefix(relPaths)
+
+	// 将公共前缀与basePath组合
+	if commonPrefix == "" {
+		return basePath
+	}
+
+	return filepath.Join(basePath, commonPrefix)
+}
+
+// findLongestCommonPrefix 找到字符串数组的最长公共前缀
+func findLongestCommonPrefix(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	if len(paths) == 1 {
+		return filepath.Dir(paths[0])
+	}
+
+	// 分割所有路径
+	parts := make([][]string, len(paths))
+	for i, path := range paths {
+		if path == "." {
+			parts[i] = []string{}
+		} else {
+			parts[i] = strings.Split(path, string(filepath.Separator))
+		}
+	}
+
+	// 找最短路径长度
+	minLen := len(parts[0])
+	for _, p := range parts[1:] {
+		if len(p) < minLen {
+			minLen = len(p)
+		}
+	}
+
+	// 逐段比较，找到最长公共前缀
+	var common []string
+	for i := 0; i < minLen; i++ {
+		segment := parts[0][i]
+		allMatch := true
+		for j := 1; j < len(parts); j++ {
+			if parts[j][i] != segment {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			common = append(common, segment)
+		} else {
+			break
+		}
+	}
+
+	return filepath.Join(common...)
+}
+
+func (t *Transfer) getFontPath(ctx context.Context, task magnet.Task, basePath string) (string, func(), error) {
+	var fontDirs []string
+	var tempDirs []string
+	closeFunc := func() {} // 默认空实现
+
+	// 遍历 task.Torrent.Files
+	for _, file := range task.Torrent.Files {
+		// 构建完整文件路径
+		filePath := filepath.Join(basePath, file.FileName)
+
+		// 检查是否为字体文件
+		if utils.IsFontFile(file.FileName) {
+			fontDir := filepath.Dir(filePath)
+			fontDirs = append(fontDirs, fontDir)
+			continue
+		}
+
+		// 检查是否为包含 "fonts" 的压缩包
+		if isFontArchive(file.FileName) {
+			// 在压缩包所在目录创建临时目录
+			tempDir, err := os.MkdirTemp(filepath.Dir(filePath), ".fonts_extract_")
+			if err != nil {
+				log.Warnf(ctx, "创建临时目录失败: %v", err)
+				continue
+			}
+			tempDirs = append(tempDirs, tempDir)
+
+			// 解压到临时目录
+			if err := extractArchive(ctx, filePath, tempDir); err != nil {
+				log.Warnf(ctx, "解压文件 %s 失败: %v", file.FileName, err)
+				// 清理失败的临时目录
+				os.RemoveAll(tempDir)
+				tempDirs = tempDirs[:len(tempDirs)-1]
+				continue
+			}
+
+			// 将临时目录本身作为字体目录记录
+			fontDirs = append(fontDirs, tempDir)
+		}
+	}
+
+	// 计算公共父目录
+	commonParent := getCommonParent(fontDirs, basePath)
+
+	// 如果有临时目录需要清理，更新 closeFunc
+	if len(tempDirs) > 0 {
+		closeFunc = func() {
+			for _, dir := range tempDirs {
+				if err := os.RemoveAll(dir); err != nil {
+					log.Warnf(ctx, "清理临时目录 %s 失败: %v", dir, err)
+				}
+			}
+		}
+	}
+
+	return commonParent, closeFunc, nil
+}
+
+func (t *Transfer) transferForTaskTV(ctx context.Context, meta Meta, file magnet.TorrentFile, newFileID string) (string, string, error) {
+	meta.Season = file.Season
+	originFile, newFilePath, err := t.transferFileForTV(ctx, meta, file.Episode, newFileID)
+	return originFile, newFilePath, err
+}
+
+func (t *Transfer) transferForTaskMovie(ctx context.Context, meta Meta, newFileID string) (string, string, error) {
+	newPath := filepath.Join(t.config.MoviePath, t.replaceCommonVar(t.config.MovieFormat, meta))
+	originFile, newFilePath, err := t.transferFile(ctx, newPath, meta, newFileID)
+	return originFile, newFilePath, err
 }
 
 func (t *Transfer) Close() {

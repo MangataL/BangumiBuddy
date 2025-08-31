@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -18,6 +17,9 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/auth/token/jwt"
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	downloadadapter "github.com/MangataL/BangumiBuddy/internal/downloader/adapter"
+	"github.com/MangataL/BangumiBuddy/internal/magnet"
+	"github.com/MangataL/BangumiBuddy/internal/magnet/parser"
+	magnetrepo "github.com/MangataL/BangumiBuddy/internal/magnet/repository"
 	"github.com/MangataL/BangumiBuddy/internal/meta/tmdb"
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/repository/viper"
@@ -32,6 +34,8 @@ import (
 	_ "github.com/MangataL/BangumiBuddy/internal/transfer/softlink"
 	"github.com/MangataL/BangumiBuddy/internal/web"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass"
+	assrepo "github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/repository"
 )
 
 //go:embed web
@@ -138,6 +142,21 @@ func main() {
 	subscriber := subscriber.NewSubscriber(subscriberDep)
 	conf.RegisterReloadable(viper.ComponentNameSubscriber, subscriber)
 
+	magnetService := magnet.New(magnet.Dependency{
+		Downloader: downloadManager,
+		TorrentOp:  torrentOperator,
+		MetaParser: parser.NewParser(metaParser),
+		Repository: magnetrepo.New(db),
+	})
+
+	subtitleOperatorConfig, err := conf.GetSubtitleOperatorConfig()
+	if err != nil {
+		log.Fatalf(ctx, "get subtitle operator config failed %s", err)
+	}
+	fontMetaSet := ass.NewFontMetaSet(getFontDir(), assrepo.New(db))
+	subtitleOperator := ass.NewSubsetter(fontMetaSet, subtitleOperatorConfig)
+	conf.RegisterReloadable(viper.ComponentNameSubtitleOperator, subtitleOperator)
+
 	transferConfig, err := conf.GetTransferConfig()
 	if err != nil {
 		log.Fatalf(ctx, "get transfer config failed %s", err)
@@ -150,6 +169,8 @@ func main() {
 		Subscriber:      subscriber,
 		TransferFiles:   transferrepo.NewTransferFilesRepo(db),
 		Notifier:        noticeAdapter,
+		MagnetManager:   magnetService,
+		FontOperator:    subtitleOperator,
 	})
 	conf.RegisterReloadable(viper.ComponentNameTransfer, transfer)
 
@@ -158,18 +179,22 @@ func main() {
 		Downloader:      downloadManager,
 		TorrentOperator: torrentOperator,
 		Transfer:        transfer,
+		Magnet:          magnetService,
 	})
 
 	// 注册路由
 
 	// 注册认证相关路由
 	router := ginrouter.New(ginrouter.Dependency{
-		Authenticator:   authenticator,
-		TorrentOperator: torrentOperator,
-		ConfigRepo:      conf,
-		Subscriber:      subscriber,
-		Web:             webService,
-		Transfer:        transfer,
+		Authenticator:    authenticator,
+		TorrentOperator:  torrentOperator,
+		ConfigRepo:       conf,
+		Subscriber:       subscriber,
+		Web:              webService,
+		Transfer:         transfer,
+		Magnet:           magnetService,
+		Parser:           metaParser,
+		SubtitleOperator: subtitleOperator,
 	})
 	r.POST("/apis/v1/token", router.Token)
 	apisRouter := r.Group("/apis/v1", router.CheckToken)
@@ -188,6 +213,8 @@ func main() {
 	apisRouter.PUT("/config/transfer", router.SetTransferConfig)
 	apisRouter.GET("/config/notice", router.GetNoticeConfig)
 	apisRouter.PUT("/config/notice", router.SetNoticeConfig)
+	apisRouter.GET("/config/subtitle", router.GetSubtitleOperatorConfig)
+	apisRouter.PUT("/config/subtitle", router.SetSubtitleOperatorConfig)
 
 	// 注册番剧相关路由
 	apisRouter.GET("/bangumis/rss", router.ParseRSS)
@@ -214,6 +241,28 @@ func main() {
 
 	// 注册日志相关路由
 	apisRouter.GET("/logs", ginrouter.GetLogContent)
+
+	// 注册磁力任务相关路由
+	apisRouter.POST("/magnets", router.AddMagnetTask)
+	apisRouter.GET("/magnets", router.ListMagnetTasks)
+	apisRouter.GET("/magnets/:id", router.GetMagnetTask)
+	apisRouter.PUT("/magnet/init/:id", router.InitMagnetTask)
+	apisRouter.PUT("/magnets/:id", router.UpdateMagnetTask)
+	apisRouter.DELETE("/magnets/:id", router.DeleteMagnetTask)
+	apisRouter.POST("/magnets/:id/subtitles", router.AddSubtitles)
+
+	// 注册元数据相关路由
+	apisRouter.GET("/meta/tvs", router.SearchTVs)
+	apisRouter.GET("/meta/movies", router.SearchMovies)
+	apisRouter.GET("/meta/tv/:id", router.GetTVMeta)
+	apisRouter.GET("/meta/movie/:id", router.GetMovieMeta)
+
+	// 注册工具相关路由
+	apisRouter.GET("/utils/dirs", router.ListDirs)
+
+	// 注册字幕相关路由
+	apisRouter.POST("/subtitle/meta-sets", router.InitSubtitleMetaSet)
+	apisRouter.GET("/subtitle/meta-sets/stats", router.GetSubtitleMetaSetStats)
 
 	r.NoRoute(func(c *gin.Context) {
 		http.ServeFileFS(c.Writer, c.Request, html, "/web/index.html")
@@ -248,7 +297,6 @@ const (
 
 func getDBPath() string {
 	if dbPath := os.Getenv("DB_PATH"); dbPath != "" {
-		fmt.Println("dbPath", dbPath)
 		return dbPath
 	}
 	return defaultDBPath
@@ -263,6 +311,17 @@ func getConfigPath() string {
 		return configPath
 	}
 	return defaultConfigPath
+}
+
+const (
+	defaultFontDir = "/data/fonts"
+)
+
+func getFontDir() string {
+	if fontDir := os.Getenv("FONT_DIR"); fontDir != "" {
+		return fontDir
+	}
+	return defaultFontDir
 }
 
 func initConfig(ctx context.Context, path string) {

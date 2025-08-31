@@ -1,6 +1,10 @@
 package downloader
 
-import "time"
+import (
+	"time"
+
+	"github.com/MangataL/BangumiBuddy/internal/types"
+)
 
 // DownloadReq 下载请求参数
 type DownloadReq struct {
@@ -8,9 +12,10 @@ type DownloadReq struct {
 	Hash           string       // 种子哈希值
 	SavePath       string       // 保存路径
 	SubscriptionID string       // 订阅ID，通过订阅下载的会设置这个字段
-	TMDBID         int          // TMDBID，直接下载的会设置这个字段
+	TaskID         string       // 任务ID，直接下载的会设置这个字段
 	DownloadType   DownloadType // 下载类型
 	RSSGUID        string       // 标记是哪个RSS项
+	NotStart       bool         // 是否不启动下载
 }
 
 // DownloadType 下载类型
@@ -37,29 +42,12 @@ type DownloadStatus struct {
 type TorrentFilter struct {
 	Statuses       []TorrentStatus // 状态过滤
 	SubscriptionID string          // 按订阅ID过滤
-	TMDBID         int             // 按TMDBID过滤
-	Page           Page            // 分页
+	TaskID         string          // 按任务ID过滤
+	Page           types.Page      // 分页
 	StartTime      time.Time       // 按创建时间过滤
 	EndTime        time.Time       // 按更新时间过滤
-	Order          Order           // 排序
-}
-
-type Page struct {
-	Num  int
-	Size int
-}
-
-func (p *Page) Empty() bool {
-	return p.Num == 0 && p.Size == 0
-}
-
-type Order struct {
-	Field string
-	Way   string
-}
-
-func (o *Order) Empty() bool {
-	return o.Field == "" && o.Way == ""
+	Order          types.Order     // 排序
+	MagnetTask     *bool            // 是否是磁力任务
 }
 
 // Torrent 种子文件
@@ -70,7 +58,7 @@ type Torrent struct {
 	Status         TorrentStatus // 种子状态
 	StatusDetail   string        // 种子状态详情，一般用于存储错误信息
 	SubscriptionID string        // 订阅ID，通过订阅下载的会设置这个字段
-	TMDBID         int           // TMDBID，直接下载的，会设置这个字段，用于获取种子的元数据信息
+	TaskID         string        // 任务ID，直接下载的会设置这个字段
 	TransferType   string        // 转移类型，用于获取转移文件
 	RSSGUID        string        // 标记是哪个RSS项
 	CreatedAt      time.Time     // 创建时间
@@ -95,3 +83,10 @@ const (
 	// TorrentStatusTransferredError 转移错误
 	TorrentStatusTransferredError TorrentStatus = "transferredError"
 )
+
+// ParseTorrentRsp 解析种子响应
+type ParseTorrentRsp struct {
+	Hash      string
+	Name      string
+	FileNames []string
+}

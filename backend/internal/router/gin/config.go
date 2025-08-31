@@ -11,6 +11,7 @@ import (
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass"
 )
 
 // GetDownloaderConfig 获取下载器配置
@@ -169,4 +170,28 @@ func (r *Router) SetNoticeConfig(ctx *gin.Context) {
 	ctx.Status(http.StatusOK)
 }
 
+// GetSubtitleOperatorConfig 获取字幕操作器配置
+// GET /apis/v1/config/subtitle
+func (r *Router) GetSubtitleOperatorConfig(ctx *gin.Context) {
+	config, err := r.repo.GetSubtitleOperatorConfig()
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, config)
+}
 
+// SetSubtitleOperatorConfig 设置字幕操作器配置
+// PUT /apis/v1/config/subtitle
+func (r *Router) SetSubtitleOperatorConfig(ctx *gin.Context) {
+	var config ass.FontSubsetterConfig
+	if err := ctx.ShouldBindJSON(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	if err := r.repo.SetSubtitleOperatorConfig(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.Status(http.StatusOK)
+}

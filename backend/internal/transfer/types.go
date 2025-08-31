@@ -1,5 +1,7 @@
 package transfer
 
+import "github.com/MangataL/BangumiBuddy/pkg/subtitle"
+
 type TransferReq struct {
 }
 
@@ -13,6 +15,7 @@ type Meta struct {
 	FilePath        string
 	SubscriptionID  string
 	ReleaseGroup    string
+	FontSubsetter   subtitle.Subsetter
 }
 
 type DeletePriorityReq struct {

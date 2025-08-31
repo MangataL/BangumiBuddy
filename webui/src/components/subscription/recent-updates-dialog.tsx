@@ -34,6 +34,7 @@ import { toZonedTime, format } from "date-fns-tz";
 import { TruncatedText } from "@/components/common/truncate-rss-item";
 import { formatDate } from "@/utils/time";
 import { extractErrorMessage } from "@/utils/error";
+import { renderDownloadStatus } from "@/utils/status";
 
 interface RecentUpdatesDialogProps {
   open: boolean;
@@ -216,35 +217,7 @@ export function RecentUpdatesDialog({
   };
 
   const renderStatus = (status: string) => {
-    let color = "";
-    let text = status;
-
-    switch (status) {
-      case TorrentStatusSet.Downloading:
-        color = "bg-blue-500";
-        text = "下载中";
-        break;
-      case TorrentStatusSet.Downloaded:
-        color = "bg-green-500";
-        text = "已下载";
-        break;
-      case TorrentStatusSet.Transferred:
-        color = "bg-purple-500";
-        text = "转移完成";
-        break;
-      case TorrentStatusSet.TransferredError:
-        color = "bg-amber-500";
-        text = "转移错误";
-        break;
-      case TorrentStatusSet.DownloadError:
-        color = "bg-red-500";
-        text = "下载错误";
-        break;
-      case TorrentStatusSet.DownloadPaused:
-        color = "bg-gray-500";
-        text = "下载暂停";
-        break;
-    }
+    const { color, text } = renderDownloadStatus(status);
 
     return (
       <Badge className={`${color} text-white whitespace-nowrap`}>{text}</Badge>

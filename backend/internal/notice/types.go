@@ -27,7 +27,7 @@ type NoticeDownloadedReq struct {
 	Size        int64
 }
 
-type NoticeTransferredReq struct {
+type NoticeSubscriptionTransferredReq struct {
 	RSSGUID       string
 	FileName      string
 	BangumiName   string
@@ -36,4 +36,11 @@ type NoticeTransferredReq struct {
 	Poster        string
 	MediaFilePath string
 	Error         error
+}
+
+type NoticeTaskTransferredReq struct {
+	BangumiName    string
+	TorrentName    string
+	Error          error
+	MediaFilePaths map[string]string
 }
