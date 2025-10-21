@@ -382,9 +382,13 @@ func (w *Web) GetMagnetTask(ctx context.Context, taskID string) (MagnetTask, err
 }
 
 func (w *Web) fillLinkFile(ctx context.Context, mt MagnetTask) (MagnetTask, error) {
+	torrent, err := w.torrentOperator.Get(ctx, mt.Torrent.Hash)
+	if err != nil {
+		return MagnetTask{}, err
+	}
 	for i, file := range mt.Torrent.Files {
 		if file.Media && file.Download {
-			linkFile, err := w.transfer.GetTransferFile(ctx, file.LinkFile)
+			linkFile, err := w.transfer.GetTransferFile(ctx, filepath.Join(torrent.Path, file.FileName))
 			if err != nil {
 				if errors.Is(errors.Unwrap(err), transfer.ErrFileTransferredNotFound) {
 					continue

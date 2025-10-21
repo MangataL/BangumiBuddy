@@ -83,6 +83,7 @@ type Config struct {
 	TransferType         string               `mapstructure:"transfer_type" json:"transferType"`
 	SubtitleRename       SubtitleRenameConfig `mapstructure:"subtitle_rename" json:"subtitleRename"`
 	EnableSubtitleSubset bool                 `mapstructure:"enable_subtitle_subset" json:"enableSubtitleSubset"`
+	IgnoreSubsetError    bool                 `mapstructure:"ignore_subset_error" json:"ignoreSubsetError"`
 }
 
 type SubtitleRenameConfig struct {
@@ -448,9 +449,13 @@ func (t *Transfer) transferRelatedFiles(ctx context.Context, meta Meta, newFileP
 			}
 			newFile, err := fontSubsetter.SubsetFont(ctx, file)
 			if err != nil {
-				return errors.WithMessagef(err, "子集化字幕文件 %s 失败", file)
+				if !t.config.IgnoreSubsetError {
+					return errors.WithMessagef(err, "子集化字幕文件 %s 失败", file)
+				}
+				log.Warnf(ctx, "子集化字幕文件 %s 失败: %v，跳过", file, err)
+			} else {
+				newFiles = append(newFiles, newFile)
 			}
-			newFiles = append(newFiles, newFile)
 		}
 		newFiles = append(newFiles, file)
 	}

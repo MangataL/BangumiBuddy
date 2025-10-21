@@ -20,9 +20,9 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/internal/types"
-	"github.com/MangataL/BangumiBuddy/pkg/utils"
 	"github.com/MangataL/BangumiBuddy/pkg/errs"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 var (
@@ -383,7 +383,6 @@ func (m *Manager) AddSubtitles(ctx context.Context, req AddSubtitlesReq) error {
 	dstDirs := append([]string{torrent.Path}, strings.Split(req.DstDir, "/")...)
 	path := filepath.Join(dstDirs...)
 
-
 	// 2. 根据DstDir找到对应的媒体文件
 	mediaFiles, err := m.findMediaFilesByDir(task, req.DstDir)
 	if err != nil {
@@ -467,6 +466,9 @@ func (m *Manager) findMediaFilesByDir(task Task, dstDir string) ([]TorrentFile, 
 	}
 
 	if len(mediaFiles) == 0 {
+		if dstDir == "" {
+			return nil, fmt.Errorf("在根目录中未找到媒体文件")
+		}
 		return nil, fmt.Errorf("在目录 %s 中未找到媒体文件", dstDir)
 	}
 

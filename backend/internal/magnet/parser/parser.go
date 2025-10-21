@@ -3,6 +3,7 @@ package parser
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 
 	"github.com/nssteinbrenner/anitogo"
@@ -71,7 +72,7 @@ func (p *Parser) ParseMetaByTorrent(ctx context.Context, torrentName string, dow
 }
 
 func (p *Parser) ParseFile(ctx context.Context, fileName string) (season, episode int, err error) {
-	anitogoMeta := anitogo.Parse(fileName, anitogo.DefaultOptions)
+	anitogoMeta := anitogo.Parse(filepath.Base(fileName), anitogo.DefaultOptions)
 
 	// 解析季数
 	season = 1 // 默认第一季

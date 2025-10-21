@@ -5,7 +5,7 @@ import { Folder, FolderOpen, ChevronRight, Home, Loader2 } from "lucide-react";
 import magnetAPI, { type FileDir } from "@/api/magnet";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
-
+import { extractErrorMessage } from "@/utils/error";
 interface SourceDirectorySelectorProps {
   /** 初始路径 */
   initialPath?: string;
@@ -40,9 +40,10 @@ export function SourceDirectorySelector({
       setFilePathSplit(resp.filePathSplit);
       setFileRoots(resp.fileRoots);
     } catch (error) {
+      const description = extractErrorMessage(error);
       toast({
         title: "加载目录失败",
-        description: error instanceof Error ? error.message : "未知错误",
+        description: description,
         variant: "destructive",
       });
       setDirectories([]);

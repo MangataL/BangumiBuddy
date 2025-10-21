@@ -49,6 +49,7 @@ export interface TransferConfig {
   moviePath: string;
   movieFormat: string;
   enableSubtitleSubset: boolean; // 是否开启字幕子集化
+  ignoreSubsetError: boolean; // 是否忽略子集化错误
 }
 
 // 字幕操作器配置类型

@@ -24,6 +24,7 @@ import { useMobile } from "@/hooks/useMobile";
 import { TorrentDirectoryTree } from "./torrent-directory-tree";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SourceDirectorySelector } from "./source-directory-selector";
+import { extractErrorMessage } from "@/utils/error";
 
 interface SubtitleTransferDialogProps {
   open: boolean;
@@ -47,7 +48,9 @@ export function SubtitleTransferDialog({
   const [initialPath, setInitialPath] = useState<string>("/");
   const [transferring, setTransferring] = useState(false);
   const [selectedSourceDir, setSelectedSourceDir] = useState<string>("");
-  const [selectedTargetDir, setSelectedTargetDir] = useState<string>("");
+  const [selectedTargetDir, setSelectedTargetDir] = useState<string | null>(
+    null
+  );
   const [initialPathLoaded, setInitialPathLoaded] = useState(false);
 
   // 加载默认路径
@@ -74,7 +77,7 @@ export function SubtitleTransferDialog({
 
       loadDefaultPath();
       setSelectedSourceDir("");
-      setSelectedTargetDir("");
+      setSelectedTargetDir(null);
     } else if (!open) {
       // 对话框关闭时重置状态
       setInitialPathLoaded(false);
@@ -92,7 +95,14 @@ export function SubtitleTransferDialog({
       return;
     }
 
-    // selectedTargetDir 可以是空字符串（表示根目录），所以不验证
+    if (selectedTargetDir === null) {
+      toast({
+        title: "请选择目标目录",
+        description: "请先选择要转移到的目标目录",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setTransferring(true);
     try {
@@ -107,9 +117,10 @@ export function SubtitleTransferDialog({
       onSuccess?.();
       onOpenChange(false);
     } catch (error) {
+      const description = extractErrorMessage(error);
       toast({
         title: "转移失败",
-        description: error instanceof Error ? error.message : "未知错误",
+        description: description,
         variant: "destructive",
       });
     } finally {
@@ -185,7 +196,7 @@ export function SubtitleTransferDialog({
                   </Label>
 
                   {/* 已选择的目标目录 */}
-                  {selectedTargetDir !== undefined && (
+                  {selectedTargetDir !== null && (
                     <div className="p-2 rounded-lg bg-green-500/5 border border-green-500/20">
                       <div className="flex items-center gap-2">
                         <Folder className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
@@ -198,7 +209,7 @@ export function SubtitleTransferDialog({
 
                   <TorrentDirectoryTree
                     files={torrentFiles}
-                    selectedPath={selectedTargetDir}
+                    selectedPath={selectedTargetDir || ""}
                     onSelect={setSelectedTargetDir}
                   />
                 </div>
@@ -230,7 +241,7 @@ export function SubtitleTransferDialog({
                 </Label>
 
                 {/* 已选择的目标目录 */}
-                {selectedTargetDir !== undefined && (
+                {selectedTargetDir !== null && (
                   <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
                     <div className="flex items-center gap-2">
                       <Folder className="w-4 h-4 text-green-600 flex-shrink-0" />
@@ -243,7 +254,7 @@ export function SubtitleTransferDialog({
 
                 <TorrentDirectoryTree
                   files={torrentFiles}
-                  selectedPath={selectedTargetDir}
+                  selectedPath={selectedTargetDir || ""}
                   onSelect={setSelectedTargetDir}
                 />
 
@@ -265,11 +276,33 @@ export function SubtitleTransferDialog({
           >
             取消
           </Button>
+
+          {/* 验证提示 */}
+          {(!selectedSourceDir || selectedTargetDir === null) && (
+            <div
+              className={cn(
+                "flex items-center gap-2 text-sm text-muted-foreground",
+                isMobile ? "w-full justify-center" : ""
+              )}
+            >
+              <div className="flex-shrink-0">⚠️</div>
+              <span>
+                {!selectedSourceDir && selectedTargetDir === null
+                  ? "请选择源目录和目标目录"
+                  : !selectedSourceDir
+                  ? "请选择源目录"
+                  : "请选择目标目录"}
+              </span>
+            </div>
+          )}
+
           <Button
             onClick={handleTransfer}
-            disabled={!selectedSourceDir || transferring}
+            disabled={
+              !selectedSourceDir || selectedTargetDir === null || transferring
+            }
             className={cn(
-              "bg-blue-600 hover:bg-blue-700",
+              "bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed",
               isMobile && "w-full"
             )}
           >

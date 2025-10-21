@@ -226,8 +226,6 @@ export function MagnetDetailDialog({
         title: "转移成功",
         description: "文件转移已完成",
       });
-      onUpdated?.();
-      fetchTaskDetail(); // 刷新详情
     } catch (error) {
       const description = extractErrorMessage(error);
       toast({
@@ -236,6 +234,8 @@ export function MagnetDetailDialog({
         variant: "destructive",
       });
     } finally {
+      onUpdated?.();
+      fetchTaskDetail(); // 刷新详情
       setTransferring(false);
     }
   };

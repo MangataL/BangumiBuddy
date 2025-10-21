@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"path/filepath"
 	"strconv"
 
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
@@ -16,7 +17,7 @@ func NewEpisodeParser() transfer.EpisodeParser {
 }
 
 func (e *episode) Parse(ctx context.Context, fileName string) (int, error) {
-	meta := anitogo.Parse(fileName, anitogo.DefaultOptions)
+	meta := anitogo.Parse(filepath.Base(fileName), anitogo.DefaultOptions)
 	if len(meta.EpisodeNumber) == 0 {
 		return 0, errs.NewBadRequest("无法识别集数信息")
 	}

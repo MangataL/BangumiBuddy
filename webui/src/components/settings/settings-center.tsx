@@ -129,6 +129,7 @@ export default function SettingsCenter() {
     moviePath: "",
     movieFormat: "",
     enableSubtitleSubset: false,
+    ignoreSubsetError: false,
   });
 
   // 文件转移设置表单验证
@@ -1434,6 +1435,44 @@ export default function SettingsCenter() {
                       disabled={!fontStats.initDone}
                     />
                   </div>
+
+                  {/* 忽略子集化错误开关 - 只在字幕子集化开启时显示 */}
+                  {transferConfig.enableSubtitleSubset && (
+                    <div className="flex items-center gap-2 pl-4">
+                      <Label htmlFor="ignore-subset-error">
+                        忽略子集化错误
+                      </Label>
+                      <TooltipProvider>
+                        <HybridTooltip>
+                          <HybridTooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 rounded-full"
+                            >
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </HybridTooltipTrigger>
+                          <HybridTooltipContent>
+                            <p>
+                              启用后，当字幕子集化过程中出现错误时，继续转移原字幕到媒体库
+                            </p>
+                            <p>一般来说都是缺少字体导致的</p>
+                          </HybridTooltipContent>
+                        </HybridTooltip>
+                      </TooltipProvider>
+                      <Switch
+                        id="ignore-subset-error"
+                        checked={transferConfig.ignoreSubsetError || false}
+                        onCheckedChange={(checked) =>
+                          setTransferConfig((prev) => ({
+                            ...prev,
+                            ignoreSubsetError: checked,
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
