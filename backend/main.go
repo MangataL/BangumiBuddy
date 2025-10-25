@@ -24,8 +24,10 @@ import (
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/repository/viper"
 	ginrouter "github.com/MangataL/BangumiBuddy/internal/router/gin"
+	"github.com/MangataL/BangumiBuddy/internal/scrape"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	subscriberrepo "github.com/MangataL/BangumiBuddy/internal/subscriber/repository"
+	scraperepo "github.com/MangataL/BangumiBuddy/internal/scrape/repository"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber/rss/mikan"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	_ "github.com/MangataL/BangumiBuddy/internal/transfer/hadrlink"
@@ -157,6 +159,17 @@ func main() {
 	subtitleOperator := ass.NewSubsetter(fontMetaSet, subtitleOperatorConfig)
 	conf.RegisterReloadable(viper.ComponentNameSubtitleOperator, subtitleOperator)
 
+	scraperConfig, err := conf.GetScraperConfig()
+	if err != nil {
+		log.Fatalf(ctx, "get scraper config failed %s", err)
+	}
+	scraper := scrape.NewScraper(scrape.Dependency{
+		Config:        scraperConfig,
+		Repository:    scraperepo.New(db),
+		MetaParser:    metaParser,
+	})
+	conf.RegisterReloadable(viper.ComponentNameScraper, scraper)
+
 	transferConfig, err := conf.GetTransferConfig()
 	if err != nil {
 		log.Fatalf(ctx, "get transfer config failed %s", err)
@@ -171,6 +184,7 @@ func main() {
 		Notifier:        noticeAdapter,
 		MagnetManager:   magnetService,
 		FontOperator:    subtitleOperator,
+		Scraper:         scraper,
 	})
 	conf.RegisterReloadable(viper.ComponentNameTransfer, transfer)
 
@@ -215,6 +229,8 @@ func main() {
 	apisRouter.PUT("/config/notice", router.SetNoticeConfig)
 	apisRouter.GET("/config/subtitle", router.GetSubtitleOperatorConfig)
 	apisRouter.PUT("/config/subtitle", router.SetSubtitleOperatorConfig)
+	apisRouter.GET("/config/scraper", router.GetScraperConfig)
+	apisRouter.PUT("/config/scraper", router.SetScraperConfig)
 
 	// 注册番剧相关路由
 	apisRouter.GET("/bangumis/rss", router.ParseRSS)

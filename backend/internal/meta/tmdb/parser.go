@@ -245,3 +245,22 @@ func (c *Client) Reload(config interface{}) error {
 	c.client = newTMDBClient(*cfg)
 	return nil
 }
+
+func (t *Client) GetEpisodeDetails(ctx context.Context, tmdbID, season, episode int) (meta.EpisodeDetails, error) {
+	if t.client == nil {
+		return meta.EpisodeDetails{}, ErrTMDBTokenNotSet
+	}
+	episodeDetails, err := t.client.GetTVEpisodeDetails(tmdbID, season, episode, map[string]string{
+		"language": "zh",
+	})
+	if err != nil {
+		return meta.EpisodeDetails{}, err
+	}
+	log.Debugf(ctx, "获取单集元数据: %+v", episodeDetails)
+	return meta.EpisodeDetails{
+		Name:      episodeDetails.Name,
+		Overview:  episodeDetails.Overview,
+		StillPath: getImageURL(episodeDetails.StillPath),
+		AirDate:   episodeDetails.AirDate,
+	}, nil
+}

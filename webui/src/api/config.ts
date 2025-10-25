@@ -62,6 +62,12 @@ export interface SubtitleOperatorConfig {
   checkGlyphs: boolean; // 检查字形
 }
 
+// 媒体库刮削配置类型
+export interface ScraperConfig {
+  enable: boolean; // 是否启用缺失元数据填充
+  checkInterval: number; // 检查时间间隔（小时）
+}
+
 // 字体库状态类型
 export interface FontMetaSetStats {
   total: number; // 字体总数
@@ -159,4 +165,10 @@ export const configAPI = {
   // 检查qBittorrent连通性
   checkQBittorrentConnection: (config: QBittorrentConfig): Promise<void> =>
     http.post("/downloader/qbittorrent/check", config) as Promise<void>,
+
+  // 媒体库刮削配置
+  getScraperConfig: (): Promise<ScraperConfig> =>
+    http.get("/config/scraper") as Promise<ScraperConfig>,
+  setScraperConfig: (config: ScraperConfig): Promise<void> =>
+    http.put("/config/scraper", config) as Promise<void>,
 };

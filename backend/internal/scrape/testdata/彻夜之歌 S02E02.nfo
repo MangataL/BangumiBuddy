@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<episodedetails>
+  <plot>真昼遇见了神秘的女性菊并与她逐渐打好关系，然而更却看穿了她的真面目。菊虽然很犹豫，还是跟真昼说明了真实情况……后来，更听荠说了菊的过去，便有了更多疑虑。</plot>
+  <lockdata>false</lockdata>
+  <dateadded>2025-07-19 10:44:18</dateadded>
+  <title>好想见到你</title>
+  <director>武藤信弘</director>
+  <writer>横手美智子</writer>
+  <credits>横手美智子</credits>
+  <rating>8.3</rating>
+  <year>2025</year>
+  <imdbid>tt37546197</imdbid>
+  <tvdbid>11219403</tvdbid>
+  <runtime>23</runtime>
+  <art>
+    <poster>/video/bangumi/彻夜之歌/Season 2/彻夜之歌 S02E02-thumb.jpg</poster>
+  </art>
+  <actor>
+    <name>佐藤元</name>
+    <role>Ko Yamori (voice)</role>
+    <type>Actor</type>
+    <sortorder>0</sortorder>
+    <thumb>/config/metadata/People/佐/佐藤元/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>雨宫天</name>
+    <role>Nazuna Nanakusa (voice)</role>
+    <type>Actor</type>
+    <sortorder>1</sortorder>
+    <thumb>/config/metadata/People/雨/雨宫天/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>花守由美里</name>
+    <role>Akira Asai (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>500</sortorder>
+    <thumb>/config/metadata/People/花/花守由美里/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>子安光树</name>
+    <role>Kai (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>505</sortorder>
+  </actor>
+  <actor>
+    <name>子安武人</name>
+    <role>Tonio (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>506</sortorder>
+    <thumb>/config/metadata/People/子/子安武人/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>佐藤芳留</name>
+    <role>Matsuda (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>507</sortorder>
+  </actor>
+  <actor>
+    <name>和气杏未</name>
+    <role>Hatsuka Suzushiro (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>542</sortorder>
+    <thumb>/config/metadata/People/和/和气杏未/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>小野贤章</name>
+    <role>Mahiru Seki (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>543</sortorder>
+    <thumb>/config/metadata/People/小/小野贤章/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>吉野裕行</name>
+    <role>Akihito Akiyama (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>544</sortorder>
+    <thumb>/config/metadata/People/吉/吉野裕行/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>泽城美雪</name>
+    <role>Anko Uguisu (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>546</sortorder>
+    <thumb>/config/metadata/People/泽/泽城美雪/folder.jpg</thumb>
+  </actor>
+  <actor>
+    <name>佐藤利奈</name>
+    <role>Kiku Hoshimi (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>547</sortorder>
+  </actor>
+  <actor>
+    <name>井藤智哉</name>
+    <role>Yamagishi (voice)</role>
+    <type>GuestStar</type>
+    <sortorder>548</sortorder>
+  </actor>
+  <showtitle>彻夜之歌</showtitle>
+  <episode>2</episode>
+  <season>2</season>
+  <aired>2025-07-11</aired>
+  <fileinfo>
+    <streamdetails>
+      <video>
+        <codec>hevc</codec>
+        <micodec>hevc</micodec>
+        <bitrate>2720747</bitrate>
+        <width>1920</width>
+        <height>1080</height>
+        <aspect>16:9</aspect>
+        <aspectratio>16:9</aspectratio>
+        <framerate>23.976025</framerate>
+        <scantype>progressive</scantype>
+        <default>True</default>
+        <forced>False</forced>
+        <duration>22</duration>
+        <durationinseconds>1377</durationinseconds>
+      </video>
+      <audio>
+        <codec>aac</codec>
+        <micodec>aac</micodec>
+        <bitrate>268148</bitrate>
+        <language>jpn</language>
+        <scantype>progressive</scantype>
+        <channels>2</channels>
+        <samplingrate>48000</samplingrate>
+        <default>True</default>
+        <forced>False</forced>
+      </audio>
+      <subtitle>
+        <codec>subrip</codec>
+        <micodec>subrip</micodec>
+        <width>0</width>
+        <height>0</height>
+        <language>chi</language>
+        <scantype>progressive</scantype>
+        <default>True</default>
+        <forced>False</forced>
+      </subtitle>
+      <subtitle>
+        <codec>subrip</codec>
+        <micodec>subrip</micodec>
+        <width>0</width>
+        <height>0</height>
+        <language>chi</language>
+        <scantype>progressive</scantype>
+        <default>False</default>
+        <forced>False</forced>
+      </subtitle>
+    </streamdetails>
+  </fileinfo>
+</episodedetails>

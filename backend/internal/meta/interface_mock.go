@@ -34,19 +34,79 @@ func (m *MockParser) EXPECT() *MockParserMockRecorder {
 	return m.recorder
 }
 
-// Parse mocks base method.
-func (m *MockParser) Parse(ctx context.Context, id int) (Meta, error) {
+// GetEpisodeDetails mocks base method.
+func (m *MockParser) GetEpisodeDetails(ctx context.Context, tmdbID, season, episode int) (EpisodeDetails, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Parse", ctx, id)
+	ret := m.ctrl.Call(m, "GetEpisodeDetails", ctx, tmdbID, season, episode)
+	ret0, _ := ret[0].(EpisodeDetails)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEpisodeDetails indicates an expected call of GetEpisodeDetails.
+func (mr *MockParserMockRecorder) GetEpisodeDetails(ctx, tmdbID, season, episode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpisodeDetails", reflect.TypeOf((*MockParser)(nil).GetEpisodeDetails), ctx, tmdbID, season, episode)
+}
+
+// ParseMovie mocks base method.
+func (m *MockParser) ParseMovie(ctx context.Context, id int) (Meta, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ParseMovie", ctx, id)
 	ret0, _ := ret[0].(Meta)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Parse indicates an expected call of Parse.
-func (mr *MockParserMockRecorder) Parse(ctx, id interface{}) *gomock.Call {
+// ParseMovie indicates an expected call of ParseMovie.
+func (mr *MockParserMockRecorder) ParseMovie(ctx, id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockParser)(nil).Parse), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseMovie", reflect.TypeOf((*MockParser)(nil).ParseMovie), ctx, id)
+}
+
+// ParseTV mocks base method.
+func (m *MockParser) ParseTV(ctx context.Context, id int) (Meta, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ParseTV", ctx, id)
+	ret0, _ := ret[0].(Meta)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ParseTV indicates an expected call of ParseTV.
+func (mr *MockParserMockRecorder) ParseTV(ctx, id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseTV", reflect.TypeOf((*MockParser)(nil).ParseTV), ctx, id)
+}
+
+// SearchMovie mocks base method.
+func (m *MockParser) SearchMovie(ctx context.Context, name string) (Meta, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchMovie", ctx, name)
+	ret0, _ := ret[0].(Meta)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchMovie indicates an expected call of SearchMovie.
+func (mr *MockParserMockRecorder) SearchMovie(ctx, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchMovie", reflect.TypeOf((*MockParser)(nil).SearchMovie), ctx, name)
+}
+
+// SearchMovies mocks base method.
+func (m *MockParser) SearchMovies(ctx context.Context, name string) ([]Meta, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchMovies", ctx, name)
+	ret0, _ := ret[0].([]Meta)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchMovies indicates an expected call of SearchMovies.
+func (mr *MockParserMockRecorder) SearchMovies(ctx, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchMovies", reflect.TypeOf((*MockParser)(nil).SearchMovies), ctx, name)
 }
 
 // SearchTV mocks base method.
@@ -62,4 +122,19 @@ func (m *MockParser) SearchTV(ctx context.Context, name string) (Meta, error) {
 func (mr *MockParserMockRecorder) SearchTV(ctx, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTV", reflect.TypeOf((*MockParser)(nil).SearchTV), ctx, name)
+}
+
+// SearchTVs mocks base method.
+func (m *MockParser) SearchTVs(ctx context.Context, name string) ([]Meta, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchTVs", ctx, name)
+	ret0, _ := ret[0].([]Meta)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchTVs indicates an expected call of SearchTVs.
+func (mr *MockParserMockRecorder) SearchTVs(ctx, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTVs", reflect.TypeOf((*MockParser)(nil).SearchTVs), ctx, name)
 }

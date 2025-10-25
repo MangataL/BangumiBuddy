@@ -17,6 +17,7 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	"github.com/MangataL/BangumiBuddy/internal/magnet"
 	"github.com/MangataL/BangumiBuddy/internal/notice"
+	"github.com/MangataL/BangumiBuddy/internal/scrape"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
@@ -39,6 +40,7 @@ func NewTransfer(dep Dependency) *Transfer {
 		notifier:        dep.Notifier,
 		magnetManager:   dep.MagnetManager,
 		fontSubsetter:   dep.FontOperator,
+		scraper:         dep.Scraper,
 	}
 
 	go transfer.run(ctx)
@@ -55,6 +57,7 @@ type Dependency struct {
 	Notifier      notice.Notifier
 	MagnetManager magnet.Interface
 	FontOperator  subtitle.Subsetter
+	Scraper       scrape.Interface
 }
 
 type EpisodeParser interface {
@@ -106,6 +109,7 @@ type Transfer struct {
 	transferFiles   TransferFilesRepo
 	notifier        notice.Notifier
 	fontSubsetter   subtitle.Subsetter
+	scraper         scrape.Interface
 }
 
 func (t *Transfer) run(ctx context.Context) {
@@ -256,6 +260,16 @@ func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloa
 			log.Warnf(ctx, "停止订阅(%s)失败: %v", torrent.SubscriptionID, err)
 		}
 	}
+
+	if t.scraper.Enable() {
+		if err := t.scraper.AddMetadataFillTask(ctx, scrape.AddMetadataFillTaskReq{
+			FilePath:     newFilePath,
+			TMDBID:       bangumi.TMDBID,
+			DownloadType: downloader.DownloadTypeTV,
+		}); err != nil {
+			log.Warnf(ctx, "添加元数据填充任务失败: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -315,6 +329,10 @@ func (t *Transfer) checkPriority(ctx context.Context, newFilePriority newFilePri
 		log.Infof(ctx, "由于将转移更高优先级的文件 %s，执行删除低优先级文件 %v", newFilePriority.fileName, matches)
 		deleteFiles := make([]string, 0, len(matches))
 		for _, file := range matches {
+			if filepath.Ext(file) == ".nfo" {
+				// 元数据信息没必要删除
+				continue
+			}
 			if err := os.Remove(file); err != nil {
 				log.Warnf(ctx, "删除低优先级文件 %s 失败: %v", file, err)
 				continue

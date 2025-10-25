@@ -14,3 +14,10 @@ type Meta struct {
 	Overview        string        `json:"overview"`
 	Genres          string        `json:"genres"`
 }
+
+type EpisodeDetails struct {
+	Name      string `json:"name"`
+	Overview  string `json:"overview"`
+	StillPath string `json:"stillPath"` // 单集图片路径
+	AirDate   string `json:"airDate"`
+}

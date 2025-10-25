@@ -12,4 +12,5 @@ type Parser interface {
 	SearchMovie(ctx context.Context, name string) (Meta, error)
 	SearchMovies(ctx context.Context, name string) ([]Meta, error)
 	ParseMovie(ctx context.Context, id int) (Meta, error)
+	GetEpisodeDetails(ctx context.Context, tmdbID, season, episode int) (EpisodeDetails, error)
 }

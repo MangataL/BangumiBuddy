@@ -9,6 +9,7 @@ import (
 	downloadadapter "github.com/MangataL/BangumiBuddy/internal/downloader/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/meta/tmdb"
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
+	"github.com/MangataL/BangumiBuddy/internal/scrape"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass"
@@ -190,6 +191,32 @@ func (r *Router) SetSubtitleOperatorConfig(ctx *gin.Context) {
 		return
 	}
 	if err := r.repo.SetSubtitleOperatorConfig(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.Status(http.StatusOK)
+}
+
+// GetScraperConfig 获取元数据填充配置
+// GET /apis/v1/config/scraper
+func (r *Router) GetScraperConfig(ctx *gin.Context) {
+	config, err := r.repo.GetScraperConfig()
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, config)
+}
+
+// SetScraperConfig 设置元数据填充配置
+// PUT /apis/v1/config/scraper
+func (r *Router) SetScraperConfig(ctx *gin.Context) {
+	var config scrape.Config
+	if err := ctx.ShouldBindJSON(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	if err := r.repo.SetScraperConfig(&config); err != nil {
 		writeError(ctx, err)
 		return
 	}
