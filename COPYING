@@ -1,0 +1,33 @@
+BangumiBuddy - 基于 Mikan 计划的智能追番管理系统
+Copyright (C) 2024 BangumiBuddy Contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+GNU 通用公共许可证 v3.0 简要说明：
+
+✅ 你可以：
+- 自由使用本软件
+- 修改源代码
+- 分发本软件
+- 用于商业用途
+
+⚠️ 你必须：
+- 保持许可证文件完整
+- 分发时提供源代码
+- 衍生作品使用相同许可证
+- 保留版权声明
+
+📖 完整许可证条款请查看 LICENSE 文件

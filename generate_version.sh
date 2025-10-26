@@ -10,12 +10,6 @@ fi
 TAG=$1
 echo "🚀 开始构建版本: $TAG"
 
-# 为Git仓库添加标签
-echo "📌 为Git仓库添加标签..."
-git tag $TAG
-git push origin $TAG
-echo "✅ Git标签已创建并推送"
-
 # 设置镜像名称
 IMAGE_NAME="mangatal/bangumi-buddy"
 LATEST_TAG="latest"
@@ -31,3 +25,9 @@ echo "✅ 构建完成并已推送至Docker Hub!"
 echo "镜像标签:"
 echo "  - $IMAGE_NAME:$LATEST_TAG"
 echo "  - $IMAGE_NAME:$TAG" 
+
+# 为Git仓库添加标签
+echo "📌 为Git仓库添加标签..."
+git tag $TAG
+git push origin $TAG
+echo "✅ Git标签已创建并推送"

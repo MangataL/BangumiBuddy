@@ -1,3 +1,19 @@
+// BangumiBuddy - 基于 Mikan 计划的智能追番管理系统
+// Copyright (C) 2024 BangumiBuddy Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -25,9 +41,9 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/repository/viper"
 	ginrouter "github.com/MangataL/BangumiBuddy/internal/router/gin"
 	"github.com/MangataL/BangumiBuddy/internal/scrape"
+	scraperepo "github.com/MangataL/BangumiBuddy/internal/scrape/repository"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	subscriberrepo "github.com/MangataL/BangumiBuddy/internal/subscriber/repository"
-	scraperepo "github.com/MangataL/BangumiBuddy/internal/scrape/repository"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber/rss/mikan"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	_ "github.com/MangataL/BangumiBuddy/internal/transfer/hadrlink"
@@ -164,9 +180,9 @@ func main() {
 		log.Fatalf(ctx, "get scraper config failed %s", err)
 	}
 	scraper := scrape.NewScraper(scrape.Dependency{
-		Config:        scraperConfig,
-		Repository:    scraperepo.New(db),
-		MetaParser:    metaParser,
+		Config:     scraperConfig,
+		Repository: scraperepo.New(db),
+		MetaParser: metaParser,
 	})
 	conf.RegisterReloadable(viper.ComponentNameScraper, scraper)
 
