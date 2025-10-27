@@ -65,7 +65,7 @@ func NewScraper(dep Dependency) *Scraper {
 }
 
 func (s *Scraper) run(ctx context.Context) {
-	s.ticker = time.NewTicker(time.Duration(s.config.CheckInterval) * time.Hour)
+	s.ticker = time.NewTicker(time.Duration(s.config.CheckInterval) * time.Minute)
 
 	for {
 		select {
@@ -129,6 +129,11 @@ func (s *Scraper) checkMetadata(ctx context.Context) {
 }
 
 func (s *Scraper) processTask(ctx context.Context, task MetadataCheckTask) error {
+	if !fileExists(task.FilePath) {
+		log.Infof(ctx, "文件 %s 已不存在，不再处理元数据", task.FilePath)
+		_ = s.repo.Delete(ctx, task.FilePath)
+		return nil
+	}
 	// 1. 推导 NFO 文件路径
 	nfoPath := strings.TrimSuffix(task.FilePath, filepath.Ext(task.FilePath)) + ".nfo"
 
