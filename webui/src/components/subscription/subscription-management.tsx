@@ -141,7 +141,7 @@ export default function SubscriptionManagement() {
                   showActiveOnly && "text-white"
                 )}
               />
-              <span className="hidden xs:inline ml-1 text-xs whitespace-nowrap">
+              <span className="hidden sm:inline ml-1 text-xs whitespace-nowrap">
                 只看启用
               </span>
             </Button>
