@@ -7,11 +7,11 @@ import (
 	"os"
 	"sync"
 
-	"golang.org/x/image/font/sfnt"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/freetype"
 )
 
 func NewSubsetter(fontMetaSet *FontMetaSet, config FontSubsetterConfig) *Subsetter {
@@ -158,25 +158,28 @@ func (s *Subsetter) checkGlyphs(subsetFonts []SubsetFont) error {
 	return nil
 }
 
-// checkGlyphsWithSfnt 使用 sfnt 包检查字体是否包含指定的码点
+// checkGlyphsWithSfnt 使用 FreeType 检查字体是否包含指定的码点
 func (s *Subsetter) checkGlyphsWithSfnt(fontData []byte, fontIndex int, codePoints CodePoints) ([]rune, error) {
-	// 解析字体
-	font, err := sfnt.Parse(fontData)
+	// 初始化 FreeType 库
+	lib, err := freetype.NewLibrary()
 	if err != nil {
-		return nil, fmt.Errorf("解析字体失败: %w", err)
+		return nil, fmt.Errorf("初始化FreeType库失败: %w", err)
 	}
+	defer lib.Done()
 
-	// 获取字体缓冲区
-	buf := &sfnt.Buffer{}
+	// 从内存加载字体
+	face, err := lib.NewFaceFromMemory(fontData, fontIndex)
+	if err != nil {
+		return nil, fmt.Errorf("加载字体失败: %w", err)
+	}
+	defer face.Done()
+
 	var missingGlyphs []rune
 
 	// 检查每个码点
 	for cp := range codePoints {
-		// 尝试获取该码点的字形索引
-		glyphIndex, err := font.GlyphIndex(buf, cp)
-		if err != nil {
-			return nil, fmt.Errorf("获取字形索引失败: %w", err)
-		}
+		// 获取该码点的字形索引
+		glyphIndex := face.GetCharIndex(cp)
 
 		// glyphIndex 为 0 表示该字符没有对应的字形（.notdef）
 		if glyphIndex == 0 {

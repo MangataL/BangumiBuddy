@@ -132,10 +132,10 @@ export function SubtitleTransferDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "flex flex-col rounded-xl",
+          "flex flex-col rounded-xl min-h-0",
           isMobile
             ? "w-[92vw] max-w-[92vw] h-[82vh] max-h-[82vh] p-4"
-            : "max-w-5xl max-h-[85vh] p-6"
+            : "w-[72vw] max-w-5xl h-[78vh] max-h-[85vh] p-6"
         )}
       >
         <DialogHeader>
@@ -158,11 +158,17 @@ export function SubtitleTransferDialog({
         </DialogHeader>
 
         <div
-          className={cn("flex-1 overflow-hidden", isMobile ? "py-3" : "py-4")}
+          className={cn(
+            "flex-1 min-h-0 overflow-hidden",
+            isMobile ? "py-3" : "py-4"
+          )}
         >
           {isMobile ? (
             // 移动端：使用 Tabs 切换
-            <Tabs defaultValue="source" className="h-full flex flex-col">
+            <Tabs
+              defaultValue="source"
+              className="h-full flex flex-col min-h-0"
+            >
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="source">
                   <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
@@ -176,21 +182,22 @@ export function SubtitleTransferDialog({
 
               <TabsContent
                 value="source"
-                className="flex-1 overflow-hidden mt-3"
+                className="flex-1 min-h-0 overflow-hidden mt-3"
               >
                 <SourceDirectorySelector
                   initialPath={initialPath}
                   selectedDir={selectedSourceDir}
                   onSelectDir={setSelectedSourceDir}
                   isMobile={true}
+                  className="flex-1 min-h-0"
                 />
               </TabsContent>
 
               <TabsContent
                 value="target"
-                className="flex-1 overflow-hidden mt-3"
+                className="flex-1 min-h-0 overflow-hidden mt-3"
               >
-                <div className="space-y-3 h-full flex flex-col">
+                <div className="space-y-3 h-full flex flex-col min-h-0">
                   <Label className="text-sm font-medium">
                     选择目标目录（从当前任务文件树中选择）
                   </Label>
@@ -211,15 +218,16 @@ export function SubtitleTransferDialog({
                     files={torrentFiles}
                     selectedPath={selectedTargetDir || ""}
                     onSelect={setSelectedTargetDir}
+                    className="flex-1 min-h-0"
                   />
                 </div>
               </TabsContent>
             </Tabs>
           ) : (
             // 桌面端：左右分栏
-            <div className="grid grid-cols-2 gap-4 h-full">
+            <div className="grid grid-cols-2 gap-4 h-full min-h-0">
               {/* 左侧：源目录 */}
-              <div className="space-y-3 flex flex-col h-full overflow-hidden">
+              <div className="space-y-3 flex flex-col h-full min-h-0 overflow-hidden">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <FolderOpen className="w-4 h-4 text-blue-600" />
                   源目录（字幕所在位置）
@@ -230,11 +238,12 @@ export function SubtitleTransferDialog({
                   selectedDir={selectedSourceDir}
                   onSelectDir={setSelectedSourceDir}
                   isMobile={false}
+                  className="flex-1 min-h-0"
                 />
               </div>
 
               {/* 右侧：目标目录 */}
-              <div className="space-y-3 flex flex-col h-full overflow-hidden">
+              <div className="space-y-3 flex flex-col h-full min-h-0 overflow-hidden">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <Folder className="w-4 h-4 text-green-600" />
                   目标目录（转移到）
@@ -256,6 +265,7 @@ export function SubtitleTransferDialog({
                   files={torrentFiles}
                   selectedPath={selectedTargetDir || ""}
                   onSelect={setSelectedTargetDir}
+                  className="flex-1 min-h-0"
                 />
 
                 {/* 操作提示 */}

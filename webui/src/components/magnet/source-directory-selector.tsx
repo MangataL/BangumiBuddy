@@ -15,6 +15,7 @@ interface SourceDirectorySelectorProps {
   onSelectDir: (path: string) => void;
   /** 是否为移动端 */
   isMobile?: boolean;
+  className?: string;
 }
 
 export function SourceDirectorySelector({
@@ -22,6 +23,7 @@ export function SourceDirectorySelector({
   selectedDir,
   onSelectDir,
   isMobile = false,
+  className,
 }: SourceDirectorySelectorProps) {
   const { toast } = useToast();
   const [currentPath, setCurrentPath] = useState<string>(initialPath);
@@ -132,7 +134,7 @@ export function SourceDirectorySelector({
   };
 
   return (
-    <div className="space-y-3 h-full flex flex-col">
+    <div className={cn("space-y-3 h-full flex flex-col min-h-0", className)}>
       {/* 当前路径导航 */}
       <div className="flex items-center gap-2">
         <Button
@@ -209,7 +211,7 @@ export function SourceDirectorySelector({
       )}
 
       {/* 目录列表 */}
-      <ScrollArea className="flex-1 rounded-lg border bg-muted/20">
+      <ScrollArea className="flex-1 min-h-0 rounded-lg border bg-muted/20">
         <div className="p-2 space-y-1">
           {loading ? (
             <div className="flex items-center justify-center py-8">
