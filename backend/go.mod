@@ -6,10 +6,11 @@ toolchain go1.24.8
 
 // CGO 依赖说明：
 // 字体子集化功能需要 HarfBuzz 库支持
+// 字体解析功能需要 FreeType 库支持
 // 开发环境安装：
-//   macOS: brew install harfbuzz
-//   Ubuntu/Debian: apt-get install libharfbuzz-dev
-//   CentOS/RHEL: yum install harfbuzz-devel
+//   macOS: brew install harfbuzz freetype
+//   Ubuntu/Debian: apt-get install libharfbuzz-dev libfreetype6-dev
+//   CentOS/RHEL: yum install harfbuzz-devel freetype-devel
 
 require (
 	github.com/Tnze/go.num/v2 v2.0.0-20191006170829-cb483d4c9152

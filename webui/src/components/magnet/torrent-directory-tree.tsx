@@ -16,6 +16,7 @@ interface TorrentDirectoryTreeProps {
   files: TorrentFile[];
   selectedPath: string;
   onSelect: (path: string) => void;
+  className?: string;
 }
 
 // 构建目录树（只包含目录）
@@ -148,11 +149,14 @@ export function TorrentDirectoryTree({
   files,
   selectedPath,
   onSelect,
+  className,
 }: TorrentDirectoryTreeProps) {
   const tree = buildDirectoryTree(files);
 
   return (
-    <ScrollArea className="h-64 rounded-lg border bg-muted/20">
+    <ScrollArea
+      className={cn("rounded-lg border bg-muted/20", className ?? "h-64")}
+    >
       <div className="p-2">
         <DirectoryNodeComponent
           node={tree}

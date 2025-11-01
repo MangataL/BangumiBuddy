@@ -53,13 +53,16 @@ const (
 )
 
 type FontMeta struct {
-	FamilyName     string
-	FullName       string
-	PostScriptName string
-	Location       FontLocation
-	BoldWeight     int  // 字重
-	Italic         bool // 是否斜体
-	Type           FontType
+	FamilyName            string
+	FullName              string
+	PostScriptName        string
+	ChineseFamilyName     string // 中文字体家族名（优先简体中文，其次繁体中文）
+	ChineseFullName       string // 中文完整字体名
+	ChinesePostScriptName string // 中文PostScript名称
+	Location              FontLocation
+	BoldWeight            int  // 字重
+	Italic                bool // 是否斜体
+	Type                  FontType
 }
 
 type FindFontReq struct {

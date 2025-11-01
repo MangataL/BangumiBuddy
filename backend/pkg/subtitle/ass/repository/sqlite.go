@@ -72,13 +72,13 @@ func (f *fontMetaRepository) Find(ctx context.Context, req ass.FindFontMetaReq) 
 
 	// 构建查询条件
 	if req.FullName != "" {
-		query = query.Where("full_name = ?", req.FullName)
+		query = query.Where("full_name = ? OR chinese_full_name = ?", req.FullName, req.FullName)
 	}
 	if req.PostScriptName != "" {
-		query = query.Where("post_script_name = ?", req.PostScriptName)
+		query = query.Where("post_script_name = ? OR chinese_post_script_name = ?", req.PostScriptName, req.PostScriptName)
 	}
 	if req.FamilyName != "" {
-		query = query.Where("family_name = ?", req.FamilyName)
+		query = query.Where("family_name = ? OR chinese_family_name = ?", req.FamilyName, req.FamilyName)
 	}
 	if req.Type != "" {
 		query = query.Where("type = ?", string(req.Type))

@@ -4,17 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"golang.org/x/image/font/sfnt"
-
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/freetype"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
@@ -36,10 +34,13 @@ type FontMetaRepository interface {
 }
 
 type FindFontMetaReq struct {
-	FullName       string
-	PostScriptName string
-	FamilyName     string
-	Type           FontType
+	FullName              string
+	PostScriptName        string
+	FamilyName            string
+	ChineseFullName       string
+	ChinesePostScriptName string
+	ChineseFamilyName     string
+	Type                  FontType
 }
 
 func NewFontMetaSet(fontDir string, repo FontMetaRepository) *FontMetaSet {
@@ -127,51 +128,54 @@ func isDir(path string) bool {
 }
 
 func (r *FontMetaSet) parseFontMeta(fontPath string) ([]FontMeta, error) {
-	file, err := os.Open(fontPath)
+	// 初始化 FreeType 库
+	lib, err := freetype.NewLibrary()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("初始化FreeType库失败: %w", err)
 	}
-	defer file.Close()
-
-	// 读取文件内容到内存
-	fontData, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
+	defer lib.Done()
 
 	// 获取字体类型
 	fontType := getFontType(fontPath)
 
-	// 尝试解析为字体集合 (TTC/OTC)
-	collection, err := sfnt.ParseCollection(fontData)
-	if err == nil {
-		// 是字体集合文件，遍历每个字体
-		numFonts := collection.NumFonts()
-		fontMetas := make([]FontMeta, 0, numFonts)
+	// 先尝试加载索引0的字体，检查是否是字体集合
+	face0, err := lib.NewFaceFromFile(fontPath, 0)
+	if err != nil {
+		return nil, fmt.Errorf("加载字体失败: %w", err)
+	}
 
-		for i := 0; i < numFonts; i++ {
-			font, err := collection.Font(i)
+	numFaces := face0.NumFaces()
+	face0.Done()
+
+	// 如果是字体集合，遍历所有字体
+	if numFaces > 1 {
+		fontMetas := make([]FontMeta, 0, numFaces)
+		for i := 0; i < numFaces; i++ {
+			face, err := lib.NewFaceFromFile(fontPath, i)
 			if err != nil {
+				log.Warnf(context.Background(), "加载字体集合 %s 第 %d 个字体失败: %s", fontPath, i, err)
 				continue
 			}
 
-			meta, err := r.extractFontMeta(font, fontPath, i, fontType, fontData)
+			meta, err := r.extractFontMeta(face, fontPath, i, fontType)
+			face.Done()
 			if err != nil {
+				log.Warnf(context.Background(), "提取字体集合 %s 第 %d 个字体元数据失败: %s", fontPath, i, err)
 				continue
 			}
 			fontMetas = append(fontMetas, meta)
 		}
-
 		return fontMetas, nil
 	}
 
-	// 不是字体集合，尝试解析为单个字体
-	font, err := sfnt.Parse(fontData)
+	// 单个字体
+	face, err := lib.NewFaceFromFile(fontPath, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("加载字体失败: %w", err)
 	}
+	defer face.Done()
 
-	meta, err := r.extractFontMeta(font, fontPath, 0, fontType, fontData)
+	meta, err := r.extractFontMeta(face, fontPath, 0, fontType)
 	if err != nil {
 		return nil, err
 	}
@@ -188,8 +192,8 @@ func getFontType(fontPath string) FontType {
 	return FontTypeTTF
 }
 
-// extractFontMeta 从 sfnt.Font 提取字体元数据
-func (r *FontMetaSet) extractFontMeta(font *sfnt.Font, fontPath string, index int, fontType FontType, fontData []byte) (FontMeta, error) {
+// extractFontMeta 从 FreeType Face 提取字体元数据
+func (r *FontMetaSet) extractFontMeta(face *freetype.Face, fontPath string, index int, fontType FontType) (FontMeta, error) {
 	var meta FontMeta
 
 	// 设置位置信息
@@ -199,132 +203,32 @@ func (r *FontMetaSet) extractFontMeta(font *sfnt.Font, fontPath string, index in
 	}
 	meta.Type = fontType
 
-	// 提取字体名称信息
-	// NameID 定义: https://docs.microsoft.com/en-us/typography/opentype/spec/name
-	// 1 = Font Family name
-	// 4 = Full font name
-	// 6 = PostScript name
-
-	// 获取 Family Name (NameID 1)
-	familyName, err := font.Name(nil, sfnt.NameIDFamily)
-	if err == nil {
-		meta.FamilyName = familyName
-	}
-
-	// 获取 Full Name (NameID 4)
-	fullName, err := font.Name(nil, sfnt.NameIDFull)
-	if err == nil {
-		meta.FullName = fullName
-	}
-
-	// 获取 PostScript Name (NameID 6)
-	postScriptName, err := font.Name(nil, sfnt.NameIDPostScript)
-	if err == nil {
-		meta.PostScriptName = postScriptName
-	}
+	// 提取字体名称（包括英文和中文）
+	names := freetype.ExtractFontNames(face)
+	meta.FamilyName = names.FamilyName
+	meta.FullName = names.FullName
+	meta.PostScriptName = names.PostScriptName
+	meta.ChineseFamilyName = names.ChineseFamilyName
+	meta.ChineseFullName = names.ChineseFullName
+	meta.ChinesePostScriptName = names.ChinesePostScriptName
 
 	// 提取字重和倾斜度
-	// 检查是否是字体集合文件（TTC/OTC）
-	if len(fontData) >= 4 && string(fontData[0:4]) == "ttcf" {
-		// 是 TTC/OTC 文件，需要特殊处理
-		// TTC 文件中的表偏移量是相对于整个文件的，不能简单截取
-		weight, slant := extractWeightAndSlantFromTTC(fontData, index)
-		meta.BoldWeight = int(weight)
-		meta.Italic = slant
+	weight, italic, err := face.GetOS2Table()
+	if err != nil {
+		// 如果无法获取OS/2表，使用默认值
+		log.Warnf(context.Background(), "无法获取字体 %s 的OS/2表: %s，使用默认值", fontPath, err)
+		styleFlags := face.StyleFlags()
+		meta.BoldWeight = WeightNormal
+		if styleFlags&freetype.StyleFlagBold != 0 {
+			meta.BoldWeight = WeightBold
+		}
+		meta.Italic = styleFlags&freetype.StyleFlagItalic != 0
 	} else {
-		// 单字体文件，直接解析
-		weight, slant := extractWeightAndSlant(fontData, 0)
-		meta.BoldWeight = int(weight)
-		meta.Italic = slant
+		meta.BoldWeight = weight
+		meta.Italic = italic
 	}
 
 	return meta, nil
-}
-
-// extractWeightAndSlantFromTTC 从 TTC 文件中提取指定字体的字重和倾斜度
-func extractWeightAndSlantFromTTC(fontData []byte, fontIndex int) (weight uint, slant bool) {
-	// 获取字体在 TTC 中的偏移量
-	if len(fontData) < 16+fontIndex*4 {
-		return WeightNormal, false
-	}
-
-	offsetPos := 12 + fontIndex*4
-	fontOffset := int(fontData[offsetPos])<<24 | int(fontData[offsetPos+1])<<16 |
-		int(fontData[offsetPos+2])<<8 | int(fontData[offsetPos+3])
-
-	if fontOffset >= len(fontData) {
-		return WeightNormal, false
-	}
-
-	return extractWeightAndSlant(fontData, fontOffset)
-}
-
-// extractWeightAndSlant 从字体数据中提取字重和倾斜度
-func extractWeightAndSlant(fontData []byte, fontOffset int) (weight uint, slant bool) {
-	// 默认值
-	weight = WeightNormal
-	slant = false
-
-	// 查找 OS/2 表
-	os2Table := findTableAtOffset(fontData, "OS/2", fontOffset)
-	if len(os2Table) < 78 {
-		return
-	}
-
-	// usWeightClass 位于 OS/2 表偏移量 4-5 (uint16, big-endian)
-	weight = uint(os2Table[4])<<8 | uint(os2Table[5])
-
-	// fsSelection 位于 OS/2 表偏移量 62-63 (uint16, big-endian)
-	fsSelection := uint(os2Table[62])<<8 | uint(os2Table[63])
-
-	// fsSelection bit 0: ITALIC
-	// fsSelection bit 9: OBLIQUE
-	// 只要其中一个标志位被设置，就认为是倾斜字体
-	slant = (fsSelection&0x01 != 0) || (fsSelection&0x200 != 0)
-
-	return
-}
-
-// findTableAtOffset 从指定偏移量开始查找表
-// fontOffset: 字体在文件中的起始偏移量（对于单字体文件是 0，对于 TTC 文件是字体的偏移量）
-// 返回的表数据中的偏移量是相对于整个文件的
-func findTableAtOffset(fontData []byte, tag string, fontOffset int) []byte {
-	if fontOffset+12 > len(fontData) {
-		return nil
-	}
-
-	// 读取表数量 (相对于 fontOffset 的偏移量 4, uint16)
-	numTablesOffset := fontOffset + 4
-	numTables := int(fontData[numTablesOffset])<<8 | int(fontData[numTablesOffset+1])
-
-	// 表目录从 fontOffset+12 开始
-	tableDirectoryOffset := fontOffset + 12
-	for i := 0; i < numTables; i++ {
-		entryOffset := tableDirectoryOffset + i*16
-		if entryOffset+16 > len(fontData) {
-			break
-		}
-
-		// 表标签 (4 字节)
-		tableTag := string(fontData[entryOffset : entryOffset+4])
-
-		// 表偏移量 (uint32, big-endian) - 相对于整个文件
-		tableOffset := int(fontData[entryOffset+8])<<24 | int(fontData[entryOffset+9])<<16 |
-			int(fontData[entryOffset+10])<<8 | int(fontData[entryOffset+11])
-
-		// 表长度 (uint32, big-endian)
-		tableLength := int(fontData[entryOffset+12])<<24 | int(fontData[entryOffset+13])<<16 |
-			int(fontData[entryOffset+14])<<8 | int(fontData[entryOffset+15])
-
-		if tableTag == tag {
-			if tableOffset+tableLength > len(fontData) {
-				return nil
-			}
-			return fontData[tableOffset : tableOffset+tableLength]
-		}
-	}
-
-	return nil
 }
 
 func (r *FontMetaSet) FindFontMeta(ctx context.Context, req FindFontReq) (FontMeta, error) {
@@ -428,4 +332,9 @@ func (r *FontMetaSet) UsingTempFontDir(ctx context.Context, fontDir string) (*Fo
 		return nil, err
 	}
 	return fms, nil
+}
+
+// ParseFontMetaTest 测试用方法，直接解析字体元数据（不使用repository）
+func (r *FontMetaSet) ParseFontMetaTest(fontPath string) ([]FontMeta, error) {
+	return r.parseFontMeta(fontPath)
 }

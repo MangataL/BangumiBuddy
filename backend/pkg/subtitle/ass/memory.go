@@ -28,13 +28,19 @@ func (r *MemoryRepository) Save(ctx context.Context, fontMetas []FontMeta) error
 func (r *MemoryRepository) Find(ctx context.Context, req FindFontMetaReq) ([]FontMeta, error) {
 	fontMetas := make([]FontMeta, 0)
 	for _, fontMeta := range r.fonts {
-		if req.FullName != "" && fontMeta.FullName != req.FullName {
+		if req.FullName != "" &&
+			fontMeta.FullName != req.FullName &&
+			fontMeta.ChineseFullName != req.FullName {
 			continue
 		}
-		if req.PostScriptName != "" && fontMeta.PostScriptName != req.PostScriptName {
+		if req.PostScriptName != "" &&
+			fontMeta.PostScriptName != req.PostScriptName &&
+			fontMeta.ChinesePostScriptName != req.PostScriptName {
 			continue
 		}
-		if req.FamilyName != "" && fontMeta.FamilyName != req.FamilyName {
+		if req.FamilyName != "" &&
+			fontMeta.FamilyName != req.FamilyName &&
+			fontMeta.ChineseFamilyName != req.FamilyName {
 			continue
 		}
 		if req.Type != "" && fontMeta.Type != req.Type {

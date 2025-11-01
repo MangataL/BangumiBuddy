@@ -11,9 +11,10 @@ RUN npm install -g pnpm && \
 # 后端构建
 FROM golang:1.24 AS backend-builder
 
-# 安装 HarfBuzz 开发库和构建工具
+# 安装 HarfBuzz / FreeType 开发库和构建工具
 RUN apt-get update && apt-get install -y \
     libharfbuzz-dev \
+    libfreetype6-dev \
     pkg-config \
     gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -39,6 +40,7 @@ RUN apt-get update && apt-get install -y \
     tzdata \
     libharfbuzz0b \
     libharfbuzz-subset0 \
+    libfreetype6 \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && echo "Asia/Shanghai" > /etc/timezone
