@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 var _ Interface = (*Scraper)(nil)
@@ -65,7 +65,7 @@ func NewScraper(dep Dependency) *Scraper {
 }
 
 func (s *Scraper) run(ctx context.Context) {
-	s.ticker = time.NewTicker(time.Duration(s.config.CheckInterval) * time.Minute)
+	s.ticker = time.NewTicker(time.Duration(s.config.CheckInterval) * time.Hour)
 
 	for {
 		select {
@@ -239,7 +239,7 @@ func (s *Scraper) parseNFO(path string) (*nfoData, error) {
 // nfoNeedUpdate 检查元数据是否需要更新
 func (s *Scraper) nfoNeedUpdate(nfo *nfoData, details meta.EpisodeDetails, task MetadataCheckTask) bool {
 	needUpdate := false
-	if episodeNameInvalid(nfo.title) {
+	if utils.EpisodeNameInvalid(nfo.title) {
 		needUpdate = true
 	}
 	if nfo.plot == "" {
@@ -252,16 +252,6 @@ func (s *Scraper) nfoNeedUpdate(nfo *nfoData, details meta.EpisodeDetails, task 
 	return needUpdate
 }
 
-func episodeNameInvalid(name string) bool {
-	return name == "" || isInvalidTitle(name)
-}
-
-// isInvalidTitle 判断标题是否无效（包含"第 x 集"格式）
-func isInvalidTitle(title string) bool {
-	// 匹配 "第 x 集" 格式，空格可选（\s* 表示零个或多个空格）
-	re := regexp.MustCompile(`第\s*\d+\s*集`)
-	return re.MatchString(title)
-}
 
 // updateNFO 更新 NFO 文件
 func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, details meta.EpisodeDetails, task MetadataCheckTask) (allUpdated bool, err error) {
@@ -278,7 +268,7 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 	}
 
 	// 更新 title
-	if !episodeNameInvalid(details.Name) {
+	if !utils.EpisodeNameInvalid(details.Name) {
 		if el := root.SelectElement("title"); el != nil {
 			el.SetText(details.Name)
 			nfoUpdated = true

@@ -691,8 +691,9 @@ export function MagnetTaskList({
             <AlertDialogTitle className="text-lg md:text-xl">
               确认删除任务
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm mt-2">
-              你确定要删除磁力任务 <strong>{deleteTaskInfo?.taskName}</strong>{" "}
+            <AlertDialogDescription className="text-sm mt-2 break-words">
+              你确定要删除磁力任务{" "}
+              <strong className="break-all">{deleteTaskInfo?.taskName}</strong>{" "}
               吗？此操作无法撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>

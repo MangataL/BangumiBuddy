@@ -163,3 +163,19 @@ func ParseEpisodeWithLocation(name string, location string) (int, error) {
 
 	return int(ep), nil
 }
+
+func EpisodeNameInvalid(name string) bool {
+	return name == "" || isInvalidTitle(name) 
+}
+
+var (
+	invalidTitleRegex         = regexp.MustCompile(`第\s*\d+\s*集`)
+	invalidSeasonEpisodeRegex = regexp.MustCompile(`S\d+E\d+`)
+)
+
+// isInvalidTitle 判断标题是否无效（包含"第 x 集"格式）
+func isInvalidTitle(title string) bool {
+	// 匹配 "第 x 集" 格式，空格可选（\s* 表示零个或多个空格）
+	// 匹配 "SxEx" 格式
+	return invalidTitleRegex.MatchString(title) || invalidSeasonEpisodeRegex.MatchString(title)
+}

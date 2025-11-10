@@ -647,8 +647,8 @@ export function SubscriptionDetailDialog({
             <AlertDialogTitle className="text-lg md:text-xl">
               确认删除订阅
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm mt-2">
-              你确定要删除 <strong>{selectedSubGroup}</strong>{" "}
+            <AlertDialogDescription className="text-sm mt-2 break-words">
+              你确定要删除 <strong className="break-all">{selectedSubGroup}</strong>{" "}
               订阅吗？此操作无法撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>

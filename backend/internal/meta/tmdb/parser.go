@@ -3,14 +3,17 @@ package tmdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	tmdb "github.com/cyruzin/golang-tmdb"
+	"github.com/liuzl/gocc"
 
 	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/pkg/errs"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 var _ meta.Parser = (*Client)(nil)
@@ -71,15 +74,27 @@ func (t *Client) SearchMovies(ctx context.Context, name string) ([]meta.Meta, er
 	if len(movies.Results) == 0 {
 		return nil, errs.NewNotFoundf("未搜索到剧场版，剧场版名称: %s", name)
 	}
-	metas := make([]meta.Meta, 0, len(movies.Results))
+	animeMetas := make([]meta.Meta, 0)
+	otherMetas := make([]meta.Meta, 0)
 	for _, movie := range movies.Results {
+		hasAnimeGenre := false
+		for _, genreID := range movie.GenreIDs {
+			if genreID == animeGenreID {
+				hasAnimeGenre = true
+				break
+			}
+		}
 		m, err := t.ParseMovie(ctx, int(movie.ID))
 		if err != nil {
 			return nil, err
 		}
-		metas = append(metas, m)
+		if hasAnimeGenre {
+			animeMetas = append(animeMetas, m)
+		} else {
+			otherMetas = append(otherMetas, m)
+		}
 	}
-	return metas, nil
+	return append(animeMetas, otherMetas...), nil
 }
 
 func (t *Client) ParseMovie(ctx context.Context, id int) (meta.Meta, error) {
@@ -202,19 +217,27 @@ func (t *Client) SearchTVs(ctx context.Context, name string) ([]meta.Meta, error
 	if len(tvs.Results) == 0 {
 		return nil, errs.NewNotFoundf("未搜索到番剧，番剧名称: %s", name)
 	}
-	metas := make([]meta.Meta, 0, len(tvs.Results))
+	animeMetas := make([]meta.Meta, 0)
+	otherMetas := make([]meta.Meta, 0)
 	for _, tv := range tvs.Results {
-		for _, genre := range tv.GenreIDs {
-			if genre == animeGenreID {
-				m, err := t.ParseTV(ctx, int(tv.ID))
-				if err != nil {
-					return nil, err
-				}
-				metas = append(metas, m)
+		hasAnimeGenre := false
+		for _, genreID := range tv.GenreIDs {
+			if genreID == animeGenreID {
+				hasAnimeGenre = true
+				break
 			}
 		}
+		m, err := t.ParseTV(ctx, int(tv.ID))
+		if err != nil {
+			return nil, err
+		}
+		if hasAnimeGenre {
+			animeMetas = append(animeMetas, m)
+		} else {
+			otherMetas = append(otherMetas, m)
+		}
 	}
-	return metas, nil
+	return append(animeMetas, otherMetas...), nil
 }
 
 // TODO: 后期有必要可以改为多次分页去查找满足条件的，当前从简只查一页
@@ -247,20 +270,106 @@ func (c *Client) Reload(config interface{}) error {
 }
 
 func (t *Client) GetEpisodeDetails(ctx context.Context, tmdbID, season, episode int) (meta.EpisodeDetails, error) {
+	var result meta.EpisodeDetails
+	var err error
+
+	// 尝试按语言优先级获取数据
+	for _, lang := range languagePriorities {
+		log.Debugf(ctx, "尝试获取单集元数据 (language=%s)", lang.Language)
+		details, err := t.getEpisodeDetailsWithLanguage(ctx, tmdbID, season, episode, lang)
+		if err != nil {
+			continue
+		}
+
+		// 如果是第一个语言，直接赋值
+		if result.Empty() {
+			result = details
+		} else {
+			// 合并无效字段
+			result.Merge(details)
+		}
+
+		// 如果所有字段都有效，提前返回
+		if result.AllValid() {
+			break
+		}
+	}
+
+	// 如果没有获取到任何数据，返回最后一个错误
+	if result.Empty() {
+		return meta.EpisodeDetails{}, err
+	}
+
+	return result, nil
+}
+
+// languagePriority 语言优先级结构
+type languagePriority struct {
+	Language      string
+	IsTraditional bool
+}
+
+// languagePriorities 语言优先级列表
+var languagePriorities = []languagePriority{
+	{Language: "zh", IsTraditional: false},
+	{Language: "zh-SG", IsTraditional: false},
+	{Language: "zh-HK", IsTraditional: true},
+	{Language: "zh-TW", IsTraditional: true},
+}
+
+// getEpisodeDetailsWithLanguage 根据指定语言获取单集元数据
+func (t *Client) getEpisodeDetailsWithLanguage(ctx context.Context, tmdbID, season, episode int, language languagePriority) (meta.EpisodeDetails, error) {
 	if t.client == nil {
 		return meta.EpisodeDetails{}, ErrTMDBTokenNotSet
 	}
 	episodeDetails, err := t.client.GetTVEpisodeDetails(tmdbID, season, episode, map[string]string{
-		"language": "zh",
+		"language": language.Language,
 	})
 	if err != nil {
 		return meta.EpisodeDetails{}, err
 	}
-	log.Debugf(ctx, "获取单集元数据: %+v", episodeDetails)
+	log.Debugf(ctx, "获取单集元数据 (language=%s): %+v", language.Language, episodeDetails)
+
+	// 获取原始数据
+	name := episodeDetails.Name
+	overview := episodeDetails.Overview
+
+	// 如果是繁体语言，先进行繁转简
+	if language.IsTraditional {
+		simplifiedName, err := traditionalToSimplified(name)
+		if err != nil {
+			return meta.EpisodeDetails{}, fmt.Errorf("繁体转简体失败 (language=%s): %w", language.Language, err)
+		}
+		name = simplifiedName
+		simplifiedOverview, err := traditionalToSimplified(overview)
+		if err != nil {
+			return meta.EpisodeDetails{}, fmt.Errorf("繁体转简体失败 (language=%s): %w", language.Language, err)
+		}
+		overview = simplifiedOverview
+	}
+
+	// 如果名称无效（"第 x 集"格式），返回空字符串
+	if utils.EpisodeNameInvalid(name) {
+		name = ""
+	}
+
 	return meta.EpisodeDetails{
-		Name:      episodeDetails.Name,
-		Overview:  episodeDetails.Overview,
+		Name:      name,
+		Overview:  overview,
 		StillPath: getImageURL(episodeDetails.StillPath),
 		AirDate:   episodeDetails.AirDate,
 	}, nil
+}
+
+// traditionalToSimplified 繁体转简体
+var t2sConverter, _ = gocc.New("t2s")
+
+func traditionalToSimplified(text string) (string, error) {
+	if text == "" {
+		return "", nil
+	}
+	if t2sConverter == nil {
+		return text, errors.New("繁体转简体转换器初始化失败")
+	}
+	return t2sConverter.Convert(text)
 }
