@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -17,17 +17,18 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw,
   Search,
   AlertCircle,
   Info,
-  CheckCircle,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { LogService, LogEntry } from "@/api/log";
 import { format } from "date-fns";
+
+const LOG_FETCH_LIMIT = 50;
 
 // 将Unix时间戳转换为可读时间格式
 const formatTimestamp = (ts: number): string => {
@@ -45,35 +46,65 @@ export default function LogsView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const requestIdRef = useRef(0);
 
-  // 加载日志数据
-  const loadLogs = async () => {
-    try {
+  const fetchLogs = useCallback(
+    async (nextOffset: number, reset = false) => {
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
       setLoading(true);
-      const logData = await LogService.getLogs(
-        logLevel !== "all" ? logLevel : undefined,
-        searchQuery || undefined
-      );
-      setLogs(logData);
-    } catch (error) {
-      console.error("加载日志失败:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const logData = await LogService.getLogs({
+          level: logLevel !== "all" ? logLevel : undefined,
+          keyword: searchQuery || undefined,
+          limit: LOG_FETCH_LIMIT,
+          offset: nextOffset,
+        });
+        if (requestId === requestIdRef.current) {
+          setLogs((prev) => (reset ? logData : [...prev, ...logData]));
+          setOffset(nextOffset + logData.length);
+          setHasMore(logData.length === LOG_FETCH_LIMIT);
+        }
+      } catch (error) {
+        if (requestId === requestIdRef.current) {
+          console.error("加载日志失败:", error);
+        }
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [logLevel, searchQuery]
+  );
 
   // 首次加载和日志级别或搜索查询变化时获取日志
   useEffect(() => {
-    loadLogs();
-  }, [logLevel, searchQuery]);
+    setLogs([]);
+    setOffset(0);
+    setHasMore(true);
+    fetchLogs(0, true);
+  }, [logLevel, searchQuery, fetchLogs]);
 
   // 处理刷新按钮点击
   const handleRefresh = () => {
-    loadLogs();
+    setLogs([]);
+    setOffset(0);
+    setHasMore(true);
+    fetchLogs(0, true);
   };
 
-  // 不再需要前端过滤，直接使用后台返回的日志
-  const filteredLogs = logs;
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    if (loading || !hasMore) {
+      return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 80) {
+      fetchLogs(offset);
+    }
+  };
 
   const getLogIcon = (level: string) => {
     switch (level.toLowerCase()) {
@@ -125,8 +156,8 @@ export default function LogsView() {
             日志记录
           </CardTitle>
           <CardDescription>查看和筛选系统日志</CardDescription>
-          <div className="flex items-center gap-4 pt-4">
-            <div className="flex-1">
+          <div className="flex items-center gap-2 sm:gap-4 pt-4">
+            <div className="flex-1 min-w-0">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -139,7 +170,7 @@ export default function LogsView() {
               </div>
             </div>
             <Select value={logLevel} onValueChange={setLogLevel}>
-              <SelectTrigger className="w-[180px] rounded-xl">
+              <SelectTrigger className="w-[100px] sm:w-[180px] rounded-xl flex-shrink-0">
                 <SelectValue placeholder="选择日志级别" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -153,7 +184,7 @@ export default function LogsView() {
             <Button
               variant="outline"
               size="icon"
-              className="rounded-xl anime-button"
+              className="rounded-xl anime-button flex-shrink-0"
               onClick={handleRefresh}
               disabled={loading}
             >
@@ -162,15 +193,23 @@ export default function LogsView() {
           </div>
         </CardHeader>
         <CardContent className="p-4">
-          <ScrollArea className="h-[500px] pr-4">
-            {filteredLogs.length === 0 ? (
+          <div
+            className="h-[500px] overflow-y-auto pr-4"
+            onScroll={handleScroll}
+          >
+            {logs.length === 0 && loading ? (
+              <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                <p>日志加载中...</p>
+              </div>
+            ) : logs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <AlertCircle className="h-8 w-8 mb-2" />
                 <p>暂无日志数据</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredLogs.map((log, index) => (
+                {logs.map((log, index) => (
                   <div
                     key={index}
                     className={cn(
@@ -179,7 +218,7 @@ export default function LogsView() {
                     )}
                   >
                     <div className="mt-0.5">{getLogIcon(log.level)}</div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="font-medium">
                           {formatTimestamp(log.ts)}
@@ -188,13 +227,27 @@ export default function LogsView() {
                           {log.level.toUpperCase()}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm">{log.message}</p>
+                      <p className="mt-1 text-sm break-all whitespace-pre-wrap">
+                        {log.message}
+                      </p>
                     </div>
                   </div>
                 ))}
+                <div className="flex items-center justify-center py-3 text-sm text-muted-foreground">
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>加载更多日志...</span>
+                    </div>
+                  ) : hasMore ? (
+                    <span>向下滚动以加载更多日志</span>
+                  ) : (
+                    <span>没有更多日志了</span>
+                  )}
+                </div>
               </div>
             )}
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div>

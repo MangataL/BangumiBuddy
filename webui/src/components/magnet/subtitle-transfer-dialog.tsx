@@ -9,12 +9,16 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Folder,
   FolderOpen,
   FileText,
   ArrowRight,
   Loader2,
+  MapPin,
+  Info,
+  ChevronDown,
 } from "lucide-react";
 import magnetAPI, { type TorrentFile, type DownloadType } from "@/api/magnet";
 import { configAPI } from "@/api/config";
@@ -25,6 +29,13 @@ import { TorrentDirectoryTree } from "./torrent-directory-tree";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SourceDirectorySelector } from "./source-directory-selector";
 import { extractErrorMessage } from "@/utils/error";
+import { EpisodePositionInput } from "@/components/subscription/episode-position-input";
+import {
+  HybridTooltip,
+  HybridTooltipContent,
+  HybridTooltipTrigger,
+} from "@/components/common/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface SubtitleTransferDialogProps {
   open: boolean;
@@ -52,6 +63,9 @@ export function SubtitleTransferDialog({
     null
   );
   const [initialPathLoaded, setInitialPathLoaded] = useState(false);
+  const [episodeLocation, setEpisodeLocation] = useState<string>("");
+  const [episodeOffset, setEpisodeOffset] = useState<string>("");
+  const [episodeToolsExpanded, setEpisodeToolsExpanded] = useState(!isMobile);
 
   // 加载默认路径
   useEffect(() => {
@@ -78,6 +92,9 @@ export function SubtitleTransferDialog({
       loadDefaultPath();
       setSelectedSourceDir("");
       setSelectedTargetDir(null);
+      setEpisodeLocation("");
+      setEpisodeOffset("");
+      setEpisodeToolsExpanded(!isMobile);
     } else if (!open) {
       // 对话框关闭时重置状态
       setInitialPathLoaded(false);
@@ -104,15 +121,27 @@ export function SubtitleTransferDialog({
       return;
     }
 
+    const offsetValue =
+      episodeOffset.trim() === "" ? undefined : Number(episodeOffset);
+    const normalizedOffset =
+      offsetValue !== undefined && !Number.isNaN(offsetValue)
+        ? offsetValue
+        : undefined;
+
     setTransferring(true);
     try {
-      await magnetAPI.addSubtitles(taskID, {
+      const resp = await magnetAPI.addSubtitles(taskID, {
         subtitleDir: selectedSourceDir,
         dstDir: selectedTargetDir, // 空字符串代表根目录
+        episodeLocation: episodeLocation || undefined,
+        episodeOffset: normalizedOffset,
       });
       toast({
-        title: "转移成功",
-        description: "字幕文件已成功转移到目标目录",
+        title: "转移完成",
+        description:
+          resp.successCount > 0
+            ? `成功转移 ${resp.successCount} 个字幕文件`
+            : "未找到可转移的字幕文件",
       });
       onSuccess?.();
       onOpenChange(false);
@@ -137,6 +166,7 @@ export function SubtitleTransferDialog({
             ? "w-[92vw] max-w-[92vw] h-[82vh] max-h-[82vh] p-4"
             : "w-[72vw] max-w-5xl h-[78vh] max-h-[85vh] p-6"
         )}
+        onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle
@@ -277,6 +307,119 @@ export function SubtitleTransferDialog({
             </div>
           )}
         </div>
+
+        {/* 集数定位参数（仅TV类型显示） */}
+        {downloadType === "tv" && (
+          <div className={cn("border-t", isMobile ? "pt-2 px-0" : "pt-3 px-0")}>
+            <div
+              className={cn(
+                "rounded-2xl border border-blue-200/60 bg-blue-50/60 dark:border-blue-500/30 dark:bg-blue-500/10",
+                isMobile && !episodeToolsExpanded
+                  ? "p-3 space-y-2"
+                  : "p-4 space-y-4"
+              )}
+            >
+              <div className="space-y-2">
+                {/* 第一行：图标 + 标题 + 展开按钮 */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "rounded-full bg-blue-500/15 text-blue-600",
+                        isMobile && !episodeToolsExpanded ? "p-1.5" : "p-2"
+                      )}
+                    >
+                      <MapPin
+                        className={cn(
+                          "text-blue-600",
+                          isMobile && !episodeToolsExpanded
+                            ? "w-3.5 h-3.5"
+                            : "w-4 h-4"
+                        )}
+                      />
+                    </div>
+                    <p className="font-medium text-sm">字幕集数修正</p>
+                  </div>
+                  {isMobile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "text-blue-600 hover:text-blue-600",
+                        !episodeToolsExpanded &&
+                          "px-3 py-1 rounded-full bg-pink-500/20"
+                      )}
+                      onClick={() =>
+                        setEpisodeToolsExpanded((expanded) => !expanded)
+                      }
+                    >
+                      <ChevronDown
+                        className={cn(
+                          "w-4 h-4 transition-transform",
+                          episodeToolsExpanded && "rotate-180"
+                        )}
+                      />
+                    </Button>
+                  )}
+                </div>
+
+                {/* 第二行：说明文字（仅在展开时显示） */}
+                {(!isMobile || episodeToolsExpanded) && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    当字幕命名不规范或集数无法对应时，可通过下方选项进行修正
+                  </p>
+                )}
+              </div>
+
+              {(!isMobile || episodeToolsExpanded) && (
+                <div
+                  className={cn(
+                    "gap-4 items-start",
+                    isMobile ? "flex flex-col" : "grid grid-cols-2"
+                  )}
+                >
+                  <div className="space-y-2">
+                    <EpisodePositionInput
+                      value={episodeLocation}
+                      onChange={setEpisodeLocation}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="episodeOffset" className="font-medium">
+                        集数偏移
+                      </Label>
+                      <TooltipProvider delayDuration={100}>
+                        <HybridTooltip>
+                          <HybridTooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 rounded-full"
+                            >
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </HybridTooltipTrigger>
+                          <HybridTooltipContent className="max-w-xs text-xs leading-relaxed">
+                            用于整体提前或推迟字幕对应的集数。正数表示向后移动，负数表示向前移动。
+                          </HybridTooltipContent>
+                        </HybridTooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Input
+                      id="episodeOffset"
+                      type="number"
+                      value={episodeOffset}
+                      onChange={(e) => setEpisodeOffset(e.target.value)}
+                      placeholder="0"
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <DialogFooter className={cn("gap-2", isMobile && "flex-col-reverse")}>
           <Button

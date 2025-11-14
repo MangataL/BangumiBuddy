@@ -14,8 +14,8 @@ func (r *Router) DeleteTorrent(c *gin.Context) {
 	hash := c.Param("hash")
 	deleteOriginFiles := c.Query("delete_origin_files") == boolTrue
 	err := r.web.DeleteTorrent(c.Request.Context(), web.DeleteTorrentReq{
-		Hash:               hash,
-		DeleteOriginFiles:  deleteOriginFiles,
+		Hash:              hash,
+		DeleteOriginFiles: deleteOriginFiles,
 	})
 	if err != nil {
 		writeError(c, err)
@@ -40,7 +40,7 @@ func (r *Router) Transfer(c *gin.Context) {
 // GET /api/v1/torrents/:hash/files
 func (r *Router) GetTorrentFiles(c *gin.Context) {
 	hash := c.Param("hash")
-	files, err := r.web.GetTorrentFiles(c.Request.Context(), hash)
+	files, err := r.web.GetBangumiTorrentFiles(c.Request.Context(), hash)
 	if err != nil {
 		writeError(c, err)
 		return

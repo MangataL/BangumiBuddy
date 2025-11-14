@@ -50,8 +50,14 @@ type UpdateTaskReq struct {
 type AddSubtitlesReq struct {
 	SubtitleDir     string `json:"subtitleDir"`
 	EpisodeLocation string `json:"episodeLocation"`
+	EpisodeOffset   *int   `json:"episodeOffset,omitempty"`
 	TaskID          string `json:"-"`
 	DstDir          string `json:"dstDir"`
+}
+
+// AddSubtitlesResp 添加字幕响应
+type AddSubtitlesResp struct {
+	SuccessCount int `json:"successCount"`
 }
 
 // Task 下载任务概览

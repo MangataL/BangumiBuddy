@@ -122,10 +122,12 @@ func (r *Router) AddSubtitles(c *gin.Context) {
 		return
 	}
 	req.TaskID = taskID
-	err := r.magnet.AddSubtitles(c.Request.Context(), req)
+	count, err := r.magnet.AddSubtitles(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	c.Status(http.StatusOK)
+	c.JSON(http.StatusOK, magnet.AddSubtitlesResp{
+		SuccessCount: count,
+	})
 }

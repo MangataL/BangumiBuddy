@@ -116,6 +116,11 @@ export default function SubscriptionManagement() {
     fetchBangumis();
   };
 
+  const addBreakOpportunities = (str: string) => {
+    // 使用零宽空格字符，允许在 & 符号处换行
+    return str.replace(/&/g, "\u200B&");
+  };
+
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)] hide-scrollbar">
       <div className="flex-none space-y-6 pb-6">
@@ -273,7 +278,7 @@ export default function SubscriptionManagement() {
                               handleReleaseGroupClick(bangumi, group, e)
                             }
                             className={cn(
-                              "rounded-lg px-2 py-0.5 text-xs transition-all duration-200 w-full",
+                              "rounded-lg px-2 py-0.5 text-xs transition-all duration-200 w-full break-words whitespace-normal",
                               selectedBangumi?.bangumiName ===
                                 bangumi.bangumiName &&
                                 selectedBangumi?.season === bangumi.season &&
@@ -286,8 +291,8 @@ export default function SubscriptionManagement() {
                                 : "bg-white text-muted-foreground border border-muted"
                             )}
                           >
-                            {group.releaseGroup} ({group.lastAirEpisode}/
-                            {group.episodeTotalNum})
+                            {addBreakOpportunities(group.releaseGroup)} (
+                            {group.lastAirEpisode}/{group.episodeTotalNum})
                           </button>
                         ))}
                       </div>

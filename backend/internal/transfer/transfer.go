@@ -349,19 +349,9 @@ type transferChecker func(ctx context.Context, newFileID string) (bool, error)
 
 func (t *Transfer) transferFileWithCheckers(ctx context.Context, meta Meta, checkers ...transferChecker) (int, string, bool, error) {
 	log.Infof(ctx, "开始转移文件 %s", meta.FileName)
-	var episode int
-	if meta.EpisodeLocation == "" {
-		var err error
-		episode, err = t.episodeParser.Parse(ctx, meta.FileName)
-		if err != nil {
-			return 0, "", false, errors.WithMessage(err, "解析文件集数失败")
-		}
-	} else {
-		var err error
-		episode, err = utils.ParseEpisodeWithLocation(meta.FileName, meta.EpisodeLocation)
-		if err != nil {
-			return 0, "", false, errors.WithMessage(err, "通过集数定位解析文件集数失败")
-		}
+	episode, err := t.ParseEpisode(ctx, meta.FileName, meta.EpisodeLocation)
+	if err != nil {
+		return 0, "", false, err
 	}
 	episode += meta.EpisodeOffset
 
@@ -382,6 +372,21 @@ func (t *Transfer) transferFileWithCheckers(ctx context.Context, meta Meta, chec
 		return 0, "", false, errors.WithMessage(err, "转移文件失败")
 	}
 	return episode, newFilePath, true, nil
+}
+
+func (t *Transfer) ParseEpisode(ctx context.Context, fileName string, epLocation string) (int, error) {
+	if epLocation == "" {
+		episode, err := t.episodeParser.Parse(ctx, fileName)
+		if err != nil {
+			return 0, errors.WithMessage(err, "解析文件集数失败")
+		}
+		return episode, nil
+	}
+	episode, err := utils.ParseEpisodeWithLocation(fileName, epLocation)
+	if err != nil {
+		return 0, errors.WithMessage(err, "通过集数定位解析文件集数失败")
+	}
+	return episode, nil
 }
 
 func (t *Transfer) transferFileForTV(ctx context.Context, meta Meta, episode int, newFileID string) (originFile string, newFilePath string, err error) {

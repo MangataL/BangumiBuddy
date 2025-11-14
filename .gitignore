@@ -7,3 +7,5 @@ node_modules
 .DS_Store
 test
 docker-compose.yml
+CLAUDE.md
+.claude

@@ -37,11 +37,16 @@ type Torrent struct {
 	Progress      float64                  `json:"progress"`
 	RSSGUID       string                   `json:"rssGUID"`
 	CreatedAt     time.Time                `json:"createdAt"`
+	Collection    bool                     `json:"collection"`
+	Season        int                      `json:"season"`
+	Episode       int                      `json:"episode"`
 }
 
 type File struct {
 	FileName string `json:"fileName"`
 	LinkName string `json:"linkName"`
+	Episode  int    `json:"episode"`
+	Season   int    `json:"season"`
 }
 
 type DeleteTorrentReq struct {
@@ -96,6 +101,7 @@ type ListDirsResp struct {
 }
 
 type FileDir struct {
-	Path   string `json:"path"`
-	HasDir bool   `json:"hasDir"`
+	Path          string `json:"path"`
+	HasDir        bool   `json:"hasDir"`
+	SubtitleCount int    `json:"subtitleCount"`
 }

@@ -14,15 +14,21 @@ export interface LogEntry {
   message: string;
 }
 
+export interface GetLogsParams {
+  level?: string;
+  keyword?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export const LogService = {
   /**
    * 获取系统日志
-   * @param level 日志级别，不传则获取全部
-   * @param keyword 关键字，不传则不进行关键字过滤
+   * @param params 查询参数，包括日志级别、关键字和分页参数
    */
-  getLogs: async (level?: string, keyword?: string): Promise<LogEntry[]> => {
+  getLogs: async (params: GetLogsParams = {}): Promise<LogEntry[]> => {
     const response: BackendLogEntry[] = await http.get("/logs", {
-      params: { level: level && level !== "all" ? level : undefined, keyword },
+      params,
     });
     // 把后端返回的 msg 字段转换成前端使用的 message 字段
     return response.map((entry) => ({

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 
@@ -134,6 +135,10 @@ func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]
 	if err != nil {
 		return nil, err
 	}
+	bangumi, err := w.getBangumi(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	torrents := make([]Torrent, 0, len(ts))
 	for _, t := range ts {
@@ -158,9 +163,26 @@ func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]
 			torrent.Status = ds[0].Status
 			torrent.StatusDetail = ds[0].Error
 		}
+
+		torrent.Collection = w.isCollection(ctx, t.Name)
+		if !torrent.Collection {
+			episode, _ := w.transfer.ParseEpisode(ctx, t.Name, bangumi.EpisodeLocation)
+			torrent.Episode = episode
+			torrent.Season = bangumi.Season
+		}
+
 		torrents = append(torrents, torrent)
 	}
 	return torrents, nil
+}
+
+var collectionRegex = regexp.MustCompile(`\d+-\d+`)
+
+func (w *Web) isCollection(ctx context.Context, torrentName string) bool {
+	if utils.IsMediaFile(torrentName) {
+		return false
+	}
+	return collectionRegex.MatchString(torrentName)
 }
 
 func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
@@ -228,8 +250,12 @@ func (w *Web) DeleteSubscription(ctx context.Context, subscriptionID string, del
 	return nil
 }
 
-func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) {
+func (w *Web) GetBangumiTorrentFiles(ctx context.Context, hash string) ([]File, error) {
 	torrent, err := w.torrentOperator.Get(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	bangumi, err := w.getBangumi(ctx, torrent.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +265,9 @@ func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) 
 		if utils.IsMediaFile(filePath) {
 			file := File{FileName: filePath}
 			linkFile, err := w.transfer.GetTransferFile(ctx, filePath)
+			episode, _ := w.transfer.ParseEpisode(ctx, fileName, bangumi.EpisodeLocation)
+			file.Episode = episode
+			file.Season = bangumi.Season
 			if err != nil {
 				if errors.Is(errors.Unwrap(err), transfer.ErrFileTransferredNotFound) {
 					tfs = append(tfs, file)
@@ -251,6 +280,17 @@ func (w *Web) GetTorrentFiles(ctx context.Context, hash string) ([]File, error) 
 		}
 	}
 	return tfs, nil
+}
+
+func (w *Web) getBangumi(ctx context.Context, subscriptionID string) (subscriber.Bangumi, error) {
+	if subscriptionID != "" {
+		subscription, err := w.subscriber.Get(ctx, subscriptionID)
+		if err != nil {
+			return subscriber.Bangumi{}, err
+		}
+		return subscription, nil
+	}
+	return subscriber.Bangumi{}, subscriber.ErrSubscriberNotFound
 }
 
 func (w *Web) ListRecentUpdatedTorrents(ctx context.Context, req ListRecentUpdatedTorrentsReq) (ListRecentUpdatedTorrentsResp, error) {
@@ -440,14 +480,11 @@ func (w *Web) ListDirs(ctx context.Context, path string) (ListDirsResp, error) {
 	for _, entry := range entries {
 		if entry.IsDir() {
 			dirPath := filepath.Join(path, entry.Name())
-			hasDir, err := w.hasDir(dirPath)
-			if err != nil {
-				// 如果检查子目录失败，默认为false，不影响主流程
-				hasDir = false
-			}
+			hasDir, subtitleCount := w.dirStats(dirPath)
 			paths = append(paths, FileDir{
-				Path:   dirPath,
-				HasDir: hasDir,
+				Path:          dirPath,
+				HasDir:        hasDir,
+				SubtitleCount: subtitleCount,
 			})
 		}
 	}
@@ -477,18 +514,23 @@ func (w *Web) getWindowsDrives() []string {
 	return drives
 }
 
-// hasDir 检查指定路径下是否包含子目录
-func (w *Web) hasDir(dirPath string) (bool, error) {
+// dirStats 返回目录下是否包含子目录以及字幕文件数量
+func (w *Web) dirStats(dirPath string) (bool, int) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return false, err
+		return false, 0
 	}
 
+	hasDir := false
+	subtitleCount := 0
 	for _, entry := range entries {
 		if entry.IsDir() {
-			return true, nil
+			hasDir = true
+		}
+		if utils.IsSubtitleFile(entry.Name()) {
+			subtitleCount++
 		}
 	}
 
-	return false, nil
+	return hasDir, subtitleCount
 }

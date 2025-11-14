@@ -88,6 +88,11 @@ export interface AddSubtitlesRequest {
   subtitleDir: string;
   dstDir: string;
   episodeLocation?: string;
+  episodeOffset?: number;
+}
+
+export interface AddSubtitlesResponse {
+  successCount: number;
 }
 
 export interface ListDirsResp {
@@ -99,6 +104,7 @@ export interface ListDirsResp {
 export interface FileDir {
   path: string;
   hasDir: boolean;
+  subtitleCount: number;
 }
 
 
@@ -149,8 +155,13 @@ const magnetAPI = {
   },
 
   // 添加字幕
-  addSubtitles: (taskID: string, data: AddSubtitlesRequest) => {
-    return http.post<void>(`/magnets/${taskID}/subtitles`, data);
+  addSubtitles: (
+    taskID: string,
+    data: AddSubtitlesRequest
+  ): Promise<AddSubtitlesResponse> => {
+    return http
+      .post<AddSubtitlesResponse>(`/magnets/${taskID}/subtitles`, data)
+      .then((res) => res.data);
   },
 
   // 列出目录（返回目录路径数组）

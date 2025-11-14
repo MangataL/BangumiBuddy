@@ -51,3 +51,30 @@ func TestEpisodeNameInvalid(t *testing.T) {
 		})
 	}
 }
+
+func TestParseEpisodeWithLocation(t *testing.T) {
+	testCases := []struct {
+		name string
+		location string
+		expected int
+	}{
+		{
+			name: "Ranma.1-2.2024.S02E05.Its.Fast.or.Its.Free.1080p.NF.WEB-DL.DUAL.AAC2.0.H.264-VARYG.mkv",
+			location: "S02E{ep}",
+			expected: 5,
+		},
+		{
+			name: "Fujimoto Tatsuki 17-26 - 08 [WebRip 1080p HEVC-10bit AAC EAC3 ASSx2].mkv",
+			location: "Fujimoto Tatsuki 17-26 - {ep}",
+			expected: 8,
+		},
+	}
+
+	for _, testCase := range testCases {
+		episode, err := ParseEpisodeWithLocation(testCase.name, testCase.location)
+		if err != nil {
+			t.Fatalf("ParseEpisodeWithLocation failed: %v", err)
+		}
+		assert.Equal(t, testCase.expected, episode)
+	}
+}

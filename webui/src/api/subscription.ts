@@ -81,6 +81,8 @@ export interface RSSMatch {
 export interface TorrentFile {
   fileName: string;
   linkName?: string;
+  episode: number;
+  season: number;
 }
 
 // 订阅日历项类型
@@ -116,6 +118,9 @@ export interface Torrent {
   progress: number;
   rssGUID: string;
   createdAt: string;
+  collection?: boolean;
+  season?: number;
+  episode?: number;
 }
 
 export interface RecentUpdatedTorrent {

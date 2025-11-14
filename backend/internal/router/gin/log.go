@@ -1,16 +1,18 @@
 package gin
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io"
 	"net/http"
-	"os/exec"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/gin-gonic/gin"
+	"github.com/icza/backscanner"
 )
 
 // GetLogContent 获取日志文件内容
@@ -21,10 +23,29 @@ func GetLogContent(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"error": "日志文件名不存在"})
 		return
 	}
+	const (
+		defaultLimit = 50
+		maxLimit     = 200
+	)
 	level := c.Query("level")
 	keyword := c.Query("keyword")
+	limit := defaultLimit
+	if limitParam := c.Query("limit"); limitParam != "" {
+		if parsedLimit, err := strconv.Atoi(limitParam); err == nil && parsedLimit > 0 {
+			if parsedLimit > maxLimit {
+				parsedLimit = maxLimit
+			}
+			limit = parsedLimit
+		}
+	}
+	offset := 0
+	if offsetParam := c.Query("offset"); offsetParam != "" {
+		if parsedOffset, err := strconv.Atoi(offsetParam); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
 	// level和keyword参数可选
-	logs, err := grepLogs(level, keyword)
+	logs, err := grepLogs(level, keyword, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -44,60 +65,76 @@ type LogEntry struct {
 	Message string  `json:"msg"`
 }
 
-// grepLogs 使用 grep 过滤日志文件
-func grepLogs(level, keyword string) ([]LogEntry, error) {
-	var cmd *exec.Cmd
-
-	// 根据过滤条件构建命令
-	if level == "" && keyword == "" {
-		// 无过滤条件，直接返回最新50条
-		cmdStr := fmt.Sprintf("tail -n 50 %s", log.GetFileName())
-		cmd = exec.Command("sh", "-c", cmdStr)
-	} else if level != "" && keyword == "" {
-		// 先按级别过滤，再获取最新50条
-		cmdStr := fmt.Sprintf("grep -i '\"level\":\"%s\"' %s | tail -n 50", level, log.GetFileName())
-		cmd = exec.Command("sh", "-c", cmdStr)
-	} else if level == "" && keyword != "" {
-		// 先按关键字过滤，再获取最新50条
-		cmdStr := fmt.Sprintf("grep -i \"%s\" %s | tail -n 50", keyword, log.GetFileName())
-		cmd = exec.Command("sh", "-c", cmdStr)
-	} else {
-		// 同时按级别和关键字过滤，再获取最新50条
-		cmdStr := fmt.Sprintf("grep -i '\"level\":\"%s\"' %s | grep -i \"%s\" | tail -n 50", level, log.GetFileName(), keyword)
-		cmd = exec.Command("sh", "-c", cmdStr)
+// grepLogs 借助 backscanner 倒序遍历，只保留 limit 大小的结果集
+func grepLogs(level, keyword string, limit, offset int) ([]LogEntry, error) {
+	if limit <= 0 {
+		return []LogEntry{}, nil
 	}
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-
-	err := cmd.Run()
+	fileName := log.GetFileName()
+	f, err := os.Open(fileName)
 	if err != nil {
-		// grep 退出码 1 表示未找到匹配行，视为正常情况
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return []LogEntry{}, nil
-		}
-		// 如果文件不存在，返回空结果
-		if strings.Contains(err.Error(), "No such file or directory") {
+		if errors.Is(err, os.ErrNotExist) {
 			return []LogEntry{}, nil
 		}
 		return nil, err
 	}
+	defer f.Close()
 
-	var logs []LogEntry
-	// 按行处理 grep 输出
-	lines := strings.Split(out.String(), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		var entry LogEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue // 跳过无效 JSON
-		}
-		logs = append(logs, entry)
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
 	}
-	if len(logs) == 0 {
+	if info.Size() == 0 {
 		return []LogEntry{}, nil
 	}
-	return logs, nil
+
+	scanner := backscanner.New(f, int(info.Size()))
+	results := make([]LogEntry, 0, limit)
+	keywordLower := strings.ToLower(keyword)
+	levelPattern := `"level":"` + strings.ToLower(level) + `"`
+
+	needCaseInsensitive := level != "" || keyword != ""
+	skipped := 0
+
+	for len(results) < limit {
+		line, _, err := scanner.Line()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if errors.Is(err, backscanner.ErrLongLine) {
+				// 行内容过长，跳过这一条
+				continue
+			}
+			return nil, err
+		}
+		compareLine := line
+		if needCaseInsensitive {
+			compareLine = strings.ToLower(line)
+			if keyword != "" {
+				if !strings.Contains(compareLine, keywordLower) {
+					continue
+				}
+			}
+			if level != "" {
+				if !strings.Contains(compareLine, levelPattern) {
+					continue
+				}
+			}
+		}
+
+		if skipped < offset {
+			skipped++
+			continue
+		}
+
+		var entry LogEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+
+		results = append(results, entry)
+	}
+
+	return results, nil
 }

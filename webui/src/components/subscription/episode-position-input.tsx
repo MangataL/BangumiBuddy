@@ -2,9 +2,7 @@ import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  TooltipProvider,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   HybridTooltip,
   HybridTooltipContent,
@@ -14,16 +12,18 @@ import {
 interface EpisodePositionInputProps {
   value: string;
   onChange: (value: string) => void;
+  label?: string;
 }
 
 export function EpisodePositionInput({
   value,
   onChange,
+  label = "集数定位",
 }: EpisodePositionInputProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Label htmlFor="episodePosition">集数定位</Label>
+        <Label htmlFor="episodePosition">{label}</Label>
         <TooltipProvider>
           <HybridTooltip>
             <HybridTooltipTrigger asChild>
@@ -37,7 +37,7 @@ export function EpisodePositionInput({
             </HybridTooltipTrigger>
             <HybridTooltipContent className="max-w-xs space-y-2">
               <p>
-                集数定位用来确定文件名中集数的位置，用于部分文件命名不标准的订阅源，一般不需要设置。
+                集数定位用来确定文件名中集数的位置，用于部分命名不规范解析集数出错的文件，一般不需要设置。
               </p>
               <p>
                 集数定位使用

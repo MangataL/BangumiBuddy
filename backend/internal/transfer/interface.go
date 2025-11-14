@@ -12,4 +12,6 @@ type Interface interface {
 	GetTransferFile(ctx context.Context, filePath string) (string, error)
 	// DeleteTransferCache 删除转移缓存
 	DeleteTransferCache(ctx context.Context, req DeleteFileTransferredReq) error
+	// ParseEpisode 解析集数
+	ParseEpisode(ctx context.Context, fileName string, epLocation string) (int, error)
 }

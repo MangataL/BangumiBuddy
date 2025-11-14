@@ -112,9 +112,13 @@ export function SourceDirectorySelector({
         fileRoots.map(async (rootPath) => {
           try {
             const resp = await magnetAPI.listDirs(rootPath);
-            return { path: rootPath, hasDir: resp.dirs.length > 0 };
+            return {
+              path: rootPath,
+              hasDir: resp.dirs.length > 0,
+              subtitleCount: 0,
+            };
           } catch {
-            return { path: rootPath, hasDir: false };
+            return { path: rootPath, hasDir: false, subtitleCount: 0 };
           }
         })
       );
@@ -131,6 +135,12 @@ export function SourceDirectorySelector({
     if (fileRoots.includes(path)) return path;
     const parts = path.split(sep).filter(Boolean);
     return parts[parts.length - 1] || sep;
+  };
+
+  // 截断文件夹名称，过长时省略
+  const truncateDirName = (name: string, maxLength: number = 30): string => {
+    if (name.length <= maxLength) return name;
+    return name.slice(0, maxLength) + "...";
   };
 
   return (
@@ -280,11 +290,20 @@ export function SourceDirectorySelector({
                   </div>
                   <span
                     className={cn(
-                      "flex-1 min-w-0 truncate text-foreground",
+                      "flex-1 min-w-0 text-foreground",
                       isMobile ? "text-sm" : "text-sm"
                     )}
+                    title={getDirName(dir.path)}
                   >
-                    {getDirName(dir.path)}
+                    {truncateDirName(getDirName(dir.path), isMobile ? 20 : 30)}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0",
+                      isMobile ? "ml-1" : "ml-2"
+                    )}
+                  >
+                    {dir.subtitleCount ?? 0}
                   </span>
                 </div>
               );
@@ -294,21 +313,23 @@ export function SourceDirectorySelector({
       </ScrollArea>
 
       {/* 操作提示 */}
-      <div
-        className={cn(
-          "flex items-start gap-2 p-2 rounded-lg bg-muted/50 text-muted-foreground",
-          isMobile ? "text-xs" : "text-xs"
-        )}
-      >
-        <div className="flex-shrink-0 mt-0.5">💡</div>
-        <div className="space-y-1">
-          <p>
-            • 点击选择目录，点击左侧箭头进入
-            {fileRoots.length > 1 ? "（根目录直接展示盘符）" : ""}
-          </p>
-          {!isMobile && <p>• 选择包含字幕文件的目录</p>}
+      {!isMobile && (
+        <div
+          className={cn(
+            "flex items-start gap-2 p-2 rounded-lg bg-muted/50 text-muted-foreground",
+            "text-xs"
+          )}
+        >
+          <div className="flex-shrink-0 mt-0.5">💡</div>
+          <div className="space-y-1">
+            <p>
+              • 点击选择目录，点击左侧箭头进入，数字是该目录下的字幕文件数量
+              {fileRoots.length > 1 ? "（根目录直接展示盘符）" : ""}
+            </p>
+            <p>• 选择包含字幕文件的目录</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

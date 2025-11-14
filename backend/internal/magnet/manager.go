@@ -365,20 +365,20 @@ func (m *Manager) DeleteTask(ctx context.Context, taskID string) error {
 }
 
 // AddSubtitles implements Interface.
-func (m *Manager) AddSubtitles(ctx context.Context, req AddSubtitlesReq) error {
+func (m *Manager) AddSubtitles(ctx context.Context, req AddSubtitlesReq) (int, error) {
 	// 1. 获取任务信息
 	task, err := m.repository.GetTask(ctx, req.TaskID)
 	if err != nil {
-		return fmt.Errorf("获取任务信息失败: %w", err)
+		return 0, fmt.Errorf("获取任务信息失败: %w", err)
 	}
 	if task.Status != TaskStatusInitSuccess {
-		return fmt.Errorf("请先解析并确认下载任务后再进行字幕转移")
+		return 0, fmt.Errorf("请先解析并确认下载任务后再进行字幕转移")
 	}
 
 	// 修正DstDir
 	torrent, err := m.torrentOp.Get(ctx, task.Torrent.Hash)
 	if err != nil {
-		return fmt.Errorf("获取种子信息失败: %w", err)
+		return 0, fmt.Errorf("获取种子信息失败: %w", err)
 	}
 	dstDirs := append([]string{torrent.Path}, strings.Split(req.DstDir, "/")...)
 	path := filepath.Join(dstDirs...)
@@ -386,21 +386,20 @@ func (m *Manager) AddSubtitles(ctx context.Context, req AddSubtitlesReq) error {
 	// 2. 根据DstDir找到对应的媒体文件
 	mediaFiles, err := m.findMediaFilesByDir(task, req.DstDir)
 	if err != nil {
-		return fmt.Errorf("查找媒体文件失败: %w", err)
+		return 0, fmt.Errorf("查找媒体文件失败: %w", err)
 	}
 
 	// 3. 获取字幕文件列表
 	subtitleFiles, err := m.getSubtitleFiles(req.SubtitleDir)
 	if err != nil {
-		return fmt.Errorf("获取字幕文件失败: %w", err)
+		return 0, fmt.Errorf("获取字幕文件失败: %w", err)
 	}
 
 	// 4. 根据下载类型进行不同处理
 	if task.DownloadType == downloader.DownloadTypeMovie {
 		return m.processMovieSubtitles(subtitleFiles, mediaFiles, path)
-	} else {
-		return m.processTVSubtitles(ctx, subtitleFiles, mediaFiles, req, path)
 	}
+	return m.processTVSubtitles(ctx, subtitleFiles, mediaFiles, req, path)
 }
 
 // GetTask implements Interface.
@@ -501,34 +500,38 @@ func (m *Manager) getSubtitleFiles(subtitleDir string) ([]string, error) {
 }
 
 // processMovieSubtitles 处理电影字幕
-func (m *Manager) processMovieSubtitles(subtitleFiles []string, mediaFiles []TorrentFile, path string) error {
-	// 电影类型：字幕和媒体文件都应该只有一个
-	if len(subtitleFiles) != 1 {
-		return fmt.Errorf("剧场版应该只有一个字幕文件，但找到了 %d 个", len(subtitleFiles))
-	}
+func (m *Manager) processMovieSubtitles(subtitleFiles []string, mediaFiles []TorrentFile, path string) (int, error) {
 	if len(mediaFiles) != 1 {
-		return fmt.Errorf("剧场版应该只有一个媒体文件，但找到了 %d 个", len(mediaFiles))
+		return 0, fmt.Errorf("剧场版应该只有一个媒体文件，但找到了 %d 个", len(mediaFiles))
 	}
 
 	mediaFile := mediaFiles[0]
-	subtitleFile := subtitleFiles[0]
 
-	// 生成目标文件名
-	targetFileName := m.generateSubtitleFileName(mediaFile, subtitleFile)
-	targetPath := filepath.Join(path, targetFileName)
+	successCount := 0
+	for _, subtitleFile := range subtitleFiles {
+		// 生成目标文件名
+		targetFileName := m.generateSubtitleFileName(mediaFile, subtitleFile)
+		targetPath := filepath.Join(path, targetFileName)
 
-	// 移动字幕文件
-	if err := m.copySubtitleFile(subtitleFile, targetPath); err != nil {
-		return fmt.Errorf("处理字幕文件失败: %w", err)
+		// 移动字幕文件
+		if err := m.copySubtitleFile(subtitleFile, targetPath); err != nil {
+			log.Warnf(context.Background(), "拷贝字幕 %s 到 %s 失败: %v", subtitleFile, targetPath, err)
+			continue
+		}
+		successCount++
+		log.Infof(context.Background(), "拷贝字幕 %s 到 %s", subtitleFile, targetPath)
 	}
-	log.Infof(context.Background(), "拷贝字幕 %s 到 %s", subtitleFile, targetPath)
-	return nil
+	return successCount, nil
 }
 
 // processTVSubtitles 处理TV字幕
-func (m *Manager) processTVSubtitles(ctx context.Context, subtitleFiles []string, mediaFiles []TorrentFile, req AddSubtitlesReq, path string) error {
+func (m *Manager) processTVSubtitles(ctx context.Context, subtitleFiles []string, mediaFiles []TorrentFile, req AddSubtitlesReq, path string) (int, error) {
 	// 为每个字幕文件解析集数信息
-	subtitleEpisodes := make(map[int]string) // episode -> subtitleFile
+	subtitleEpisodes := make(map[int][]string) // episode -> subtitleFiles
+	offset := 0
+	if req.EpisodeOffset != nil {
+		offset = *req.EpisodeOffset
+	}
 
 	for _, subtitleFile := range subtitleFiles {
 		var episode int
@@ -549,30 +552,35 @@ func (m *Manager) processTVSubtitles(ctx context.Context, subtitleFiles []string
 				continue
 			}
 		}
-
-		subtitleEpisodes[episode] = subtitleFile
+		episode += offset
+		subtitleEpisodes[episode] = append(subtitleEpisodes[episode], subtitleFile)
 	}
 
 	// 遍历媒体文件，匹配字幕文件
+	successCount := 0
 	for _, mediaFile := range mediaFiles {
-		subtitleFile, exists := subtitleEpisodes[mediaFile.Episode]
+		subtitleFiles, exists := subtitleEpisodes[mediaFile.Episode]
 		if !exists {
 			log.Warnf(ctx, "未找到第 %d 集的字幕文件", mediaFile.Episode)
 			continue
 		}
 
-		// 生成目标文件名
-		targetFileName := m.generateSubtitleFileName(mediaFile, subtitleFile)
-		targetPath := filepath.Join(path, targetFileName)
+		for _, subtitleFile := range subtitleFiles {
+			// 生成目标文件名
+			targetFileName := m.generateSubtitleFileName(mediaFile, subtitleFile)
+			targetPath := filepath.Join(path, targetFileName)
 
-		// 移动字幕文件
-		if err := m.copySubtitleFile(subtitleFile, targetPath); err != nil {
-			return fmt.Errorf("处理第 %d 集字幕文件失败: %w", mediaFile.Episode, err)
+			// 移动字幕文件
+			if err := m.copySubtitleFile(subtitleFile, targetPath); err != nil {
+				log.Warnf(ctx, "拷贝字幕 %s 到 %s 失败: %v", subtitleFile, targetPath, err)
+				continue
+			}
+			successCount++
+			log.Infof(ctx, "拷贝字幕 %s 到 %s", subtitleFile, targetPath)
 		}
-		log.Infof(ctx, "拷贝字幕 %s 到 %s", subtitleFile, targetPath)
 	}
 
-	return nil
+	return successCount, nil
 }
 
 // generateSubtitleFileName 生成字幕文件的目标文件名

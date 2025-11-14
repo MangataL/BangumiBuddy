@@ -19,6 +19,7 @@ import {
   CircleAlert,
   CircleX,
   CircleArrowRight,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,14 +83,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatDate } from "@/utils/time";
 import { useMobile } from "@/hooks/useMobile";
 import { TruncatedText } from "@/components/common/truncate-rss-item";
@@ -648,7 +641,8 @@ export function SubscriptionDetailDialog({
               确认删除订阅
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm mt-2 break-words">
-              你确定要删除 <strong className="break-all">{selectedSubGroup}</strong>{" "}
+              你确定要删除{" "}
+              <strong className="break-all">{selectedSubGroup}</strong>{" "}
               订阅吗？此操作无法撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -749,7 +743,7 @@ export function SubscriptionDetailDialog({
 
     return (
       <Dialog open={showFileDetails} onOpenChange={setShowFileDetails}>
-        <DialogContent className="w-[95dvw] sm:max-w-[700px] max-h-[80dvh] overflow-auto p-4 md:p-6">
+        <DialogContent className="w-[95dvw] sm:max-w-[700px] max-h-[80dvh] overflow-auto p-4 md:p-6 scrollbar-hide rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg md:text-xl">
               文件转移详情
@@ -766,33 +760,91 @@ export function SubscriptionDetailDialog({
               无文件信息
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-1/2 text-xs md:text-sm">
-                      原始文件
-                    </TableHead>
-                    <TableHead className="w-1/2 text-xs md:text-sm">
-                      转移后文件
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {files.map((file, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="break-all text-[10px] md:text-xs p-2 md:p-4">
-                        {file.fileName}
-                      </TableCell>
-                      <TableCell className="break-all text-[10px] md:text-xs p-2 md:p-4">
-                        {file.linkName ||
-                          "存在更高优先级的文件，未转移或被覆盖"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <ScrollArea className="max-h-[60dvh]">
+              <div className="space-y-3">
+                {files.map((file, index) => {
+                  const hasLinkName =
+                    file.linkName && file.linkName.trim() !== "";
+                  return (
+                    <Card
+                      key={index}
+                      className={cn(
+                        "anime-card transition-all duration-200",
+                        hasLinkName
+                          ? "border-green-500/30 bg-gradient-to-r from-green-500/5 to-transparent hover:border-green-500/50"
+                          : "border-gray-500/30 bg-gradient-to-r from-gray-500/5 to-transparent hover:border-gray-500/50"
+                      )}
+                    >
+                      <CardContent className="p-3 md:p-4">
+                        <div className="space-y-3">
+                          {/* 季度和集数标签 - 突出显示识别信息 */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-lg border border-primary/30">
+                              <Sparkles className="h-3 w-3 text-primary" />
+                              <span className="text-xs font-medium text-muted-foreground">
+                                识别季集:
+                              </span>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="bg-primary/20 text-primary border-primary/40 px-2.5 py-1 text-xs font-semibold shadow-sm"
+                            >
+                              第 {file.season} 季
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className="bg-blue-500/20 text-blue-500 border-blue-500/40 px-2.5 py-1 text-xs font-semibold shadow-sm"
+                            >
+                              第 {file.episode.toString().padStart(2, "0")} 集
+                            </Badge>
+                          </div>
+
+                          {/* 原始文件和媒体库文件 - 左右排布 */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            {/* 原始文件 */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  原始文件:
+                                </span>
+                              </div>
+                              <div className="break-all text-xs md:text-sm bg-muted/50 rounded-lg px-3 py-2 font-mono min-h-[2.5rem] flex items-center">
+                                <TruncatedText text={file.fileName} />
+                              </div>
+                            </div>
+
+                            {/* 媒体库文件 */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  媒体库文件:
+                                </span>
+                              </div>
+                              <div
+                                className={cn(
+                                  "break-all text-xs md:text-sm rounded-lg px-3 py-2 font-mono min-h-[2.5rem] flex items-center",
+                                  hasLinkName
+                                    ? "bg-primary/10 text-primary"
+                                    : "bg-gray-500/10 text-gray-600 dark:text-gray-400 italic"
+                                )}
+                              >
+                                {hasLinkName ? (
+                                  <TruncatedText text={file.linkName || ""} />
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">
+                                    存在更高优先级的文件，未转移或被覆盖
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </ScrollArea>
           )}
         </DialogContent>
       </Dialog>
@@ -1591,8 +1643,39 @@ export function SubscriptionDetailDialog({
                                                   text={torrent.name}
                                                 />
                                               </div>
-                                              <div className="text-xs text-muted-foreground">
-                                                {formatDate(torrent.createdAt)}
+                                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <span>
+                                                  {formatDate(
+                                                    torrent.createdAt
+                                                  )}
+                                                </span>
+                                                {torrent.collection ? (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20 px-1.5 py-0 text-xs"
+                                                  >
+                                                    合集
+                                                  </Badge>
+                                                ) : (
+                                                  torrent.season !==
+                                                    undefined &&
+                                                  torrent.episode !==
+                                                    undefined && (
+                                                    <Badge
+                                                      variant="outline"
+                                                      className="bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20 px-1.5 py-0 text-xs font-mono"
+                                                    >
+                                                      S
+                                                      {torrent.season
+                                                        .toString()
+                                                        .padStart(2, "0")}
+                                                      E
+                                                      {torrent.episode
+                                                        .toString()
+                                                        .padStart(2, "0")}
+                                                    </Badge>
+                                                  )
+                                                )}
                                               </div>
                                             </div>
                                           </HybridTooltipTrigger>
