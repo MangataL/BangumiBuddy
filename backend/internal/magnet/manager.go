@@ -480,15 +480,19 @@ func (m *Manager) getSubtitleFiles(subtitleDir string) ([]string, error) {
 		return nil, fmt.Errorf("需要提供字幕目录路径")
 	}
 
-	files, err := filepath.Glob(filepath.Join(subtitleDir, "*"))
+	entries, err := os.ReadDir(subtitleDir)
 	if err != nil {
-		return nil, fmt.Errorf("扫描字幕目录失败: %w", err)
+		return nil, fmt.Errorf("读取字幕目录失败: %w", err)
 	}
 
 	var subtitleFiles []string
-	for _, file := range files {
-		if utils.IsSubtitleFile(file) {
-			subtitleFiles = append(subtitleFiles, file)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		fp := filepath.Join(subtitleDir, entry.Name())
+		if utils.IsSubtitleFile(fp) {
+			subtitleFiles = append(subtitleFiles, fp)
 		}
 	}
 
