@@ -17,6 +17,9 @@ type Interface interface {
 	// GetTorrentFileNames 获取种子文件内容
 	GetTorrentFileNames(ctx context.Context, hash string) ([]string, error)
 
+	// SetTorrentFilePriorities 设置种子文件下载选择
+	SetTorrentFilePriorities(ctx context.Context, hash string, files []TorrentFileSelection) error
+
 	// DeleteTorrent 删除种子文件
 	DeleteTorrent(ctx context.Context, hash string) error
 

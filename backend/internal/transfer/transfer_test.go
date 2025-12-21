@@ -1,6 +1,8 @@
 package transfer
 
 import (
+	"archive/zip"
+	"os"
 	"testing"
 
 	"github.com/creasty/defaults"
@@ -136,4 +138,19 @@ func Test_getCommonParent(t *testing.T) {
 			require.Equal(t, tc.want, got)
 		})
 	}
+}
+
+func createZipWithFont(t *testing.T, archivePath string, fontName string) {
+	t.Helper()
+	zipFile, err := os.Create(archivePath)
+	require.NoError(t, err)
+	defer zipFile.Close()
+
+	writer := zip.NewWriter(zipFile)
+	defer writer.Close()
+
+	file, err := writer.Create(fontName)
+	require.NoError(t, err)
+	_, err = file.Write([]byte("x"))
+	require.NoError(t, err)
 }

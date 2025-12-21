@@ -69,6 +69,9 @@ func (f *fontMetaRepository) Save(ctx context.Context, fontMetas []ass.FontMeta)
 func (f *fontMetaRepository) Find(ctx context.Context, req ass.FindFontMetaReq) ([]ass.FontMeta, error) {
 	var models []fontMetaSchema
 	query := f.db.WithContext(ctx)
+	if req.Type == "ttf" {
+		query = query.Debug()
+	}
 
 	// 构建查询条件
 	if req.FullName != "" {
@@ -83,6 +86,7 @@ func (f *fontMetaRepository) Find(ctx context.Context, req ass.FindFontMetaReq) 
 	if req.Type != "" {
 		query = query.Where("type = ?", string(req.Type))
 	}
+	query = req.Page.Apply(query)
 
 	// 执行查询
 	if err := query.Find(&models).Error; err != nil {

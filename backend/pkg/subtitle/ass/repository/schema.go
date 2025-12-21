@@ -7,12 +7,12 @@ import (
 // fontMetaSchema 字体元数据数据库模型
 type fontMetaSchema struct {
 	ID                    uint   `gorm:"type:int;primaryKey;autoIncrement"`
-	FamilyName            string `gorm:"type:varchar(255);not null;index"`
-	FullName              string `gorm:"column:full_name;type:varchar(255);not null;uniqueIndex:idx_full_name"`
-	PostScriptName        string `gorm:"type:varchar(255);not null;index"`
-	ChineseFamilyName     string `gorm:"type:varchar(255);not null;default:'';index"`
-	ChineseFullName       string `gorm:"type:varchar(255);not null;default:'';index"`
-	ChinesePostScriptName string `gorm:"type:varchar(255);not null;default:''"`
+	FamilyName            string `gorm:"type:varchar(255) COLLATE NOCASE;not null;index"`
+	FullName              string `gorm:"column:full_name;type:varchar(255) COLLATE NOCASE;not null;uniqueIndex:idx_full_name"`
+	PostScriptName        string `gorm:"type:varchar(255) COLLATE NOCASE;not null;index"`
+	ChineseFamilyName     string `gorm:"type:varchar(255) COLLATE NOCASE;not null;default:'';index"`
+	ChineseFullName       string `gorm:"type:varchar(255) COLLATE NOCASE;not null;default:'';index"`
+	ChinesePostScriptName string `gorm:"type:varchar(255) COLLATE NOCASE;not null;default:''"`
 	Path                  string `gorm:"type:varchar(512);not null;index"`
 	Index                 int    `gorm:"type:int;not null;default:0"`
 	BoldWeight            int    `gorm:"type:int;not null;default:400"`

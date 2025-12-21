@@ -34,6 +34,20 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
+// ContinueDownload mocks base method.
+func (m *MockInterface) ContinueDownload(ctx context.Context, hash string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ContinueDownload", ctx, hash)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ContinueDownload indicates an expected call of ContinueDownload.
+func (mr *MockInterfaceMockRecorder) ContinueDownload(ctx, hash interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ContinueDownload", reflect.TypeOf((*MockInterface)(nil).ContinueDownload), ctx, hash)
+}
+
 // DeleteTorrent mocks base method.
 func (m *MockInterface) DeleteTorrent(ctx context.Context, hash string) error {
 	m.ctrl.T.Helper()
@@ -90,6 +104,20 @@ func (m *MockInterface) GetTorrentFileNames(ctx context.Context, hash string) ([
 func (mr *MockInterfaceMockRecorder) GetTorrentFileNames(ctx, hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTorrentFileNames", reflect.TypeOf((*MockInterface)(nil).GetTorrentFileNames), ctx, hash)
+}
+
+// SetTorrentFilePriorities mocks base method.
+func (m *MockInterface) SetTorrentFilePriorities(ctx context.Context, hash string, files []TorrentFileSelection) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTorrentFilePriorities", ctx, hash, files)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetTorrentFilePriorities indicates an expected call of SetTorrentFilePriorities.
+func (mr *MockInterfaceMockRecorder) SetTorrentFilePriorities(ctx, hash, files interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTorrentFilePriorities", reflect.TypeOf((*MockInterface)(nil).SetTorrentFilePriorities), ctx, hash, files)
 }
 
 // MockCloser is a mock of Closer interface.
@@ -162,6 +190,34 @@ func (m *MockTorrentOperator) Delete(ctx context.Context, hash string) error {
 func (mr *MockTorrentOperatorMockRecorder) Delete(ctx, hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockTorrentOperator)(nil).Delete), ctx, hash)
+}
+
+// DeleteBySubscriptionID mocks base method.
+func (m *MockTorrentOperator) DeleteBySubscriptionID(ctx context.Context, subscriptionID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBySubscriptionID", ctx, subscriptionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBySubscriptionID indicates an expected call of DeleteBySubscriptionID.
+func (mr *MockTorrentOperatorMockRecorder) DeleteBySubscriptionID(ctx, subscriptionID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBySubscriptionID", reflect.TypeOf((*MockTorrentOperator)(nil).DeleteBySubscriptionID), ctx, subscriptionID)
+}
+
+// DeleteByTaskID mocks base method.
+func (m *MockTorrentOperator) DeleteByTaskID(ctx context.Context, taskID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteByTaskID", ctx, taskID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteByTaskID indicates an expected call of DeleteByTaskID.
+func (mr *MockTorrentOperatorMockRecorder) DeleteByTaskID(ctx, taskID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteByTaskID", reflect.TypeOf((*MockTorrentOperator)(nil).DeleteByTaskID), ctx, taskID)
 }
 
 // Get mocks base method.

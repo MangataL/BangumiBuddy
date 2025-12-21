@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
+	"github.com/MangataL/BangumiBuddy/pkg/bangumifile/anito"
 )
 
 func TestParser_Parse(t *testing.T) {
@@ -79,7 +80,7 @@ func TestParser_Parse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			url, clo := tc.stub(t)
 			defer clo()
-			p := NewParser()
+			p := NewParser(anito.NewParser())
 
 			rss, err := p.Parse(context.Background(), url)
 			t.Log(err)
@@ -103,16 +104,4 @@ func getRSSContent(t *testing.T, name string) []byte {
 	data, err := os.ReadFile(fmt.Sprintf("./testdata/%s.xml", name))
 	require.Nil(t, err)
 	return data
-}
-
-func TestParseReleaseGroup(t *testing.T) {
-	items := []subscriber.RSSItem{
-		{
-			GUID:        "[ANi] 小市民系列 第二季 - 11 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]",
-			TorrentLink: "https://mikanani.me/Download/20240414/3a2e456a689ead23ca8f49fdc74ba1872c6f0c12.torrent",
-		},
-	}
-
-	rg := parseReleaseGroup(items)
-	assert.Equal(t, "ANi", rg)
 }

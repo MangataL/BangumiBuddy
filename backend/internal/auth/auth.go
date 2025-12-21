@@ -82,7 +82,7 @@ func (a *authenticator) Authorize(ctx context.Context, username, password string
 
 func (a *authenticator) validateLogin(ctx context.Context, username, password, token string) error {
 	if username == "" || password == "" {
-		return errs.NewBadRequest("用户名或密码不能为空")
+		return errs.NewUnauthorized("用户名或密码不能为空")
 	}
 	if username != a.getUsername() {
 		return ErrUsernameOrPasswordError

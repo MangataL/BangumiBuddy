@@ -95,13 +95,21 @@ type ListMagnetTasksResp struct {
 }
 
 type ListDirsResp struct {
-	Dirs          []FileDir `json:"dirs"`
-	FilePathSplit string    `json:"filePathSplit"`
-	FileRoots     []string  `json:"fileRoots"`
+	Dirs          []DirInfo  `json:"dirs"`
+	Files         []FileInfo `json:"files"`
+	FilePathSplit string     `json:"filePathSplit"`
+	FileRoots     []string   `json:"fileRoots"`
 }
 
-type FileDir struct {
+type DirInfo struct {
 	Path          string `json:"path"`
+	Name          string `json:"name"`
 	HasDir        bool   `json:"hasDir"`
 	SubtitleCount int    `json:"subtitleCount"`
+}
+
+type FileInfo struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+	Size int64  `json:"size"`
 }

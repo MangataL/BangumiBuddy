@@ -13,6 +13,7 @@ import {
   Calendar,
   ArrowUpFromLine,
   Info,
+  Search,
 } from "lucide-react";
 import {
   HybridTooltip,
@@ -55,21 +56,13 @@ import { extractErrorMessage } from "@/utils/error";
 import { FileTree } from "./file-tree";
 import { renderTypeIcon, getTaskStatus, canTransfer } from "./magnet-utils";
 import { TMDBInput } from "@/components/tmdb";
+import { formatFileSize } from "@/utils/util";
 
 interface MagnetDetailDialogProps {
   taskID: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdated?: () => void;
-}
-
-// 格式化文件大小
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
 }
 
 export function MagnetDetailDialog({
@@ -126,6 +119,31 @@ export function MagnetDetailDialog({
     const updatedFiles = task.torrent.files.map((file) =>
       file.fileName === fileName ? { ...file, ...updates } : file
     );
+
+    setTask({
+      ...task,
+      torrent: {
+        ...task.torrent,
+        files: updatedFiles,
+      },
+    });
+  };
+
+  // 处理多个文件变更
+  const handleFilesChange = (
+    fileUpdates: { fileName: string; updates: Partial<TorrentFile> }[]
+  ) => {
+    if (!task) return;
+
+    const updateMap = new Map(fileUpdates.map((u) => [u.fileName, u.updates]));
+
+    const updatedFiles = task.torrent.files.map((file) => {
+      const updates = updateMap.get(file.fileName);
+      if (updates) {
+        return { ...file, ...updates };
+      }
+      return file;
+    });
 
     setTask({
       ...task,
@@ -839,13 +857,41 @@ export function MagnetDetailDialog({
                   </HybridTooltip>
                 </TooltipProvider>
               </h3>
-              <FileTree
-                files={task.torrent.files || []}
-                downloadType={task.downloadType}
-                taskID={task.taskID}
-                onFileChange={handleFileChange}
-                onSubtitleTransferSuccess={fetchTaskDetail}
-              />
+              {task.status === TaskStatusSet.WaitingForParsing ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 rounded-xl border border-dashed border-primary/20 bg-primary/5 anime-card space-y-4">
+                  <div className="relative">
+                    <div className="absolute -inset-1 rounded-full bg-primary/20 animate-pulse" />
+                    <div className="relative p-3 rounded-full bg-primary/10 border border-primary/20">
+                      <Search className="h-6 w-6 text-primary" />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-1.5">
+                    <h4
+                      className={`font-semibold text-primary ${
+                        isMobile ? "text-sm" : "text-base"
+                      }`}
+                    >
+                      等待解析元数据
+                    </h4>
+                    <p
+                      className={`text-muted-foreground max-w-[240px] mx-auto ${
+                        isMobile ? "text-[10px]" : "text-xs"
+                      }`}
+                    >
+                      解析种子后即可查看完整文件树并进行自定义配置
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <FileTree
+                  files={task.torrent.files || []}
+                  downloadType={task.downloadType}
+                  taskID={task.taskID}
+                  onFileChange={handleFileChange}
+                  onFilesChange={handleFilesChange}
+                  onSubtitleTransferSuccess={fetchTaskDetail}
+                />
+              )}
             </div>
           </div>
         ) : null}

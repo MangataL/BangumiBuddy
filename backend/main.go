@@ -34,7 +34,6 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	downloadadapter "github.com/MangataL/BangumiBuddy/internal/downloader/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/magnet"
-	"github.com/MangataL/BangumiBuddy/internal/magnet/parser"
 	magnetrepo "github.com/MangataL/BangumiBuddy/internal/magnet/repository"
 	"github.com/MangataL/BangumiBuddy/internal/meta/tmdb"
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
@@ -47,10 +46,10 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/subscriber/rss/mikan"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	_ "github.com/MangataL/BangumiBuddy/internal/transfer/hadrlink"
-	episodeparser "github.com/MangataL/BangumiBuddy/internal/transfer/parser"
 	transferrepo "github.com/MangataL/BangumiBuddy/internal/transfer/repository"
 	_ "github.com/MangataL/BangumiBuddy/internal/transfer/softlink"
 	"github.com/MangataL/BangumiBuddy/internal/web"
+	"github.com/MangataL/BangumiBuddy/pkg/bangumifile/anito"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass"
 	assrepo "github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/repository"
@@ -106,8 +105,9 @@ func main() {
 		Cipher:        pbkdf2.NewCipher(),
 		TokenOperator: jwt.NewTokenOperator(),
 	})
+	bfParser := anito.NewParser()
 
-	rssParser := mikan.NewParser()
+	rssParser := mikan.NewParser(bfParser)
 	tmdbConfig, err := conf.GetTMDBConfig()
 	if err != nil {
 		log.Fatalf(ctx, "get tmdb config failed %s", err)
@@ -161,10 +161,11 @@ func main() {
 	conf.RegisterReloadable(viper.ComponentNameSubscriber, subscriber)
 
 	magnetService := magnet.New(magnet.Dependency{
-		Downloader: downloadManager,
-		TorrentOp:  torrentOperator,
-		MetaParser: parser.NewParser(metaParser),
-		Repository: magnetrepo.New(db),
+		Downloader:        downloadManager,
+		TorrentOp:         torrentOperator,
+		MetaParser:        metaParser,
+		Repository:        magnetrepo.New(db),
+		BangumiFileParser: bfParser,
 	})
 
 	subtitleOperatorConfig, err := conf.GetSubtitleOperatorConfig()
@@ -191,25 +192,26 @@ func main() {
 		log.Fatalf(ctx, "get transfer config failed %s", err)
 	}
 	transfer := transfer.NewTransfer(transfer.Dependency{
-		Config:          transferConfig,
-		TorrentOperator: torrentOperator,
-		Downloader:      downloadManager,
-		EpisodeParser:   episodeparser.NewEpisodeParser(),
-		Subscriber:      subscriber,
-		TransferFiles:   transferrepo.NewTransferFilesRepo(db),
-		Notifier:        noticeAdapter,
-		MagnetManager:   magnetService,
-		FontOperator:    subtitleOperator,
-		Scraper:         scraper,
+		Config:            transferConfig,
+		TorrentOperator:   torrentOperator,
+		Downloader:        downloadManager,
+		Subscriber:        subscriber,
+		TransferFiles:     transferrepo.NewTransferFilesRepo(db),
+		Notifier:          noticeAdapter,
+		MagnetManager:     magnetService,
+		FontOperator:      subtitleOperator,
+		Scraper:           scraper,
+		BangumiFileParser: bfParser,
 	})
 	conf.RegisterReloadable(viper.ComponentNameTransfer, transfer)
 
 	webService := web.New(web.Dependency{
-		Subscriber:      subscriber,
-		Downloader:      downloadManager,
-		TorrentOperator: torrentOperator,
-		Transfer:        transfer,
-		Magnet:          magnetService,
+		Subscriber:        subscriber,
+		Downloader:        downloadManager,
+		TorrentOperator:   torrentOperator,
+		Transfer:          transfer,
+		Magnet:            magnetService,
+		BangumiFileParser: bfParser,
 	})
 
 	// 注册路由
@@ -282,6 +284,8 @@ func main() {
 	apisRouter.PUT("/magnets/:id", router.UpdateMagnetTask)
 	apisRouter.DELETE("/magnets/:id", router.DeleteMagnetTask)
 	apisRouter.POST("/magnets/:id/subtitles", router.AddSubtitles)
+	apisRouter.POST("/magnets/:id/subtitles/preview", router.PreviewAddSubtitles)
+	apisRouter.GET("/magnets/:id/files", router.FindTaskSimilarFiles)
 
 	// 注册元数据相关路由
 	apisRouter.GET("/meta/tvs", router.SearchTVs)
@@ -295,6 +299,7 @@ func main() {
 	// 注册字幕相关路由
 	apisRouter.POST("/subtitle/meta-sets", router.InitSubtitleMetaSet)
 	apisRouter.GET("/subtitle/meta-sets/stats", router.GetSubtitleMetaSetStats)
+	apisRouter.GET("/subtitle/meta-sets/fonts", router.ListFonts)
 
 	r.NoRoute(func(c *gin.Context) {
 		http.ServeFileFS(c.Writer, c.Request, html, "/web/index.html")

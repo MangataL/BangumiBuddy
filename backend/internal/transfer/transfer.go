@@ -19,6 +19,7 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/notice"
 	"github.com/MangataL/BangumiBuddy/internal/scrape"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
+	"github.com/MangataL/BangumiBuddy/pkg/bangumifile"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
@@ -35,7 +36,7 @@ func NewTransfer(dep Dependency) *Transfer {
 		torrentOperator: dep.TorrentOperator,
 		downloader:      dep.Downloader,
 		subscriber:      dep.Subscriber,
-		episodeParser:   dep.EpisodeParser,
+		bfParser:        dep.BangumiFileParser,
 		transferFiles:   dep.TransferFiles,
 		notifier:        dep.Notifier,
 		magnetManager:   dep.MagnetManager,
@@ -50,14 +51,14 @@ func NewTransfer(dep Dependency) *Transfer {
 type Dependency struct {
 	Config
 	downloader.TorrentOperator
-	EpisodeParser
-	Downloader    downloader.Interface
-	Subscriber    subscriber.Interface
-	TransferFiles TransferFilesRepo
-	Notifier      notice.Notifier
-	MagnetManager magnet.Interface
-	FontOperator  subtitle.Subsetter
-	Scraper       scrape.Interface
+	BangumiFileParser bangumifile.Parser
+	Downloader        downloader.Interface
+	Subscriber        subscriber.Interface
+	TransferFiles     TransferFilesRepo
+	Notifier          notice.Notifier
+	MagnetManager     magnet.Interface
+	FontOperator      subtitle.Subsetter
+	Scraper           scrape.Interface
 }
 
 type EpisodeParser interface {
@@ -105,7 +106,7 @@ type Transfer struct {
 	downloader      downloader.Interface
 	magnetManager   magnet.Interface
 	subscriber      subscriber.Interface
-	episodeParser   EpisodeParser
+	bfParser        bangumifile.Parser
 	transferFiles   TransferFilesRepo
 	notifier        notice.Notifier
 	fontSubsetter   subtitle.Subsetter
@@ -349,11 +350,14 @@ type transferChecker func(ctx context.Context, newFileID string) (bool, error)
 
 func (t *Transfer) transferFileWithCheckers(ctx context.Context, meta Meta, checkers ...transferChecker) (int, string, bool, error) {
 	log.Infof(ctx, "开始转移文件 %s", meta.FileName)
-	episode, err := t.ParseEpisode(ctx, meta.FileName, meta.EpisodeLocation)
+	bf, err := t.bfParser.Parse(ctx, meta.FileName,
+		bangumifile.WithEpisodeLocation(meta.EpisodeLocation),
+		bangumifile.WithEpisodeOffset(meta.EpisodeOffset),
+	)
 	if err != nil {
 		return 0, "", false, err
 	}
-	episode += meta.EpisodeOffset
+	episode := bf.Episode
 
 	newFileID := fmt.Sprintf("%s/%s/%s", meta.ChineseName, strconv.Itoa(meta.Season), strconv.Itoa(episode))
 
@@ -372,21 +376,6 @@ func (t *Transfer) transferFileWithCheckers(ctx context.Context, meta Meta, chec
 		return 0, "", false, errors.WithMessage(err, "转移文件失败")
 	}
 	return episode, newFilePath, true, nil
-}
-
-func (t *Transfer) ParseEpisode(ctx context.Context, fileName string, epLocation string) (int, error) {
-	if epLocation == "" {
-		episode, err := t.episodeParser.Parse(ctx, fileName)
-		if err != nil {
-			return 0, errors.WithMessage(err, "解析文件集数失败")
-		}
-		return episode, nil
-	}
-	episode, err := utils.ParseEpisodeWithLocation(fileName, epLocation)
-	if err != nil {
-		return 0, errors.WithMessage(err, "通过集数定位解析文件集数失败")
-	}
-	return episode, nil
 }
 
 func (t *Transfer) transferFileForTV(ctx context.Context, meta Meta, episode int, newFileID string) (originFile string, newFilePath string, err error) {
@@ -549,6 +538,7 @@ func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloade
 	}
 	var fontSubsetter subtitle.Subsetter
 	if fontPath != "" {
+		log.Infof(ctx, "使用临时字体目录: %s", fontPath)
 		fontSubsetter, err = t.fontSubsetter.UsingTempFontDir(ctx, fontPath)
 		if err != nil {
 			log.Warnf(ctx, "使用临时字体目录创建字体库失败: %v", err)

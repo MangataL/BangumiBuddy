@@ -48,16 +48,38 @@ type UpdateTaskReq struct {
 
 // AddSubtitlesReq 添加字幕请求
 type AddSubtitlesReq struct {
-	SubtitleDir     string `json:"subtitleDir"`
-	EpisodeLocation string `json:"episodeLocation"`
-	EpisodeOffset   *int   `json:"episodeOffset,omitempty"`
-	TaskID          string `json:"-"`
-	DstDir          string `json:"dstDir"`
+	SubtitleFiles    map[string]string `json:"subtitleFiles"`
+	PreserveOriginal bool              `json:"preserveOriginal"`
 }
 
 // AddSubtitlesResp 添加字幕响应
 type AddSubtitlesResp struct {
-	SuccessCount int `json:"successCount"`
+	SuccessCount  int               `json:"successCount"`
+	FailedDetails map[string]string `json:"failedDetails"`
+}
+
+// PreviewAddSubtitlesReq 预览添加字幕请求
+type PreviewAddSubtitlesReq struct {
+	SubtitlePath    string `json:"subtitlePath"`
+	EpisodeLocation string `json:"episodeLocation"`
+	EpisodeOffset   *int   `json:"episodeOffset,omitempty"`
+	Season          *int   `json:"season"`
+	TaskID          string `json:"-"`
+	DstPath         string `json:"dstPath"`
+	ExtensionLevel  *int   `json:"extensionLevel"`
+}
+
+// PreviewAddSubtitlesResp 预览添加字幕响应
+type PreviewAddSubtitlesResp struct {
+	SubtileFiles map[string]AddSubtitlesResult `json:"subtitleFiles"`
+}
+
+type AddSubtitlesResult struct {
+	SubtitleFile  string `json:"subtitleFile"`
+	NewFileName   string `json:"newFileName,omitempty"`
+	TargetPath    string `json:"targetPath,omitempty"`
+	Error         string `json:"error,omitempty"`
+	MediaFileName string `json:"mediaFileName,omitempty"`
 }
 
 // Task 下载任务概览

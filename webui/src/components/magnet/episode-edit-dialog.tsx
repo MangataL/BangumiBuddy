@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { FileVideo, Calendar, Hash } from "lucide-react";
 import { TorrentFile } from "@/api/magnet";
+import { cn } from "@/lib/utils";
 
 interface EpisodeEditDialogProps {
   open: boolean;
@@ -67,7 +68,7 @@ export function EpisodeEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="rounded-xl border-primary/20 bg-card/95 backdrop-blur-md w-[92vw] max-w-[92vw] p-4 sm:max-w-md sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileVideo className="w-5 h-5 text-green-600" />

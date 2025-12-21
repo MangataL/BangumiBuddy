@@ -74,6 +74,19 @@ export interface FontMetaSetStats {
   initDone: boolean; // 是否已初始化
 }
 
+// 字体信息类型
+export interface Font {
+  familyName: string;
+  fullName: string;
+  postScriptName: string;
+  chineseFamilyName: string;
+  chineseFullName: string;
+  chinesePostScriptName: string;
+  boldWeight: number; // 字重
+  italic: boolean; // 是否斜体
+  fontFileName: string;
+}
+
 // 通知配置类型
 export interface NoticeConfig {
   enabled: boolean;
@@ -161,6 +174,12 @@ export const configAPI = {
   // 获取字体库状态
   getSubtitleFontMetaSetStats: (): Promise<FontMetaSetStats> =>
     http.get("/subtitle/meta-sets/stats") as Promise<FontMetaSetStats>,
+
+  // 获取字体列表
+  listFonts: (page: number, pageSize: number): Promise<Font[]> =>
+    http.get("/subtitle/meta-sets/fonts", {
+      params: { page, page_size: pageSize },
+    }) as Promise<Font[]>,
 
   // 检查qBittorrent连通性
   checkQBittorrentConnection: (config: QBittorrentConfig): Promise<void> =>

@@ -10,10 +10,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/MangataL/BangumiBuddy/internal/types"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/freetype"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
+	"github.com/samber/lo"
 )
 
 var (
@@ -41,6 +43,7 @@ type FindFontMetaReq struct {
 	ChinesePostScriptName string
 	ChineseFamilyName     string
 	Type                  FontType
+	types.Page
 }
 
 func NewFontMetaSet(fontDir string, repo FontMetaRepository) *FontMetaSet {
@@ -65,6 +68,31 @@ func (r *FontMetaSet) GetFontMetaSetStats(ctx context.Context) (subtitle.FontMet
 		Total:    total,
 		InitDone: initDone,
 	}, nil
+}
+
+func (r *FontMetaSet) ListFonts(ctx context.Context, req subtitle.ListFontsReq) ([]subtitle.Font, error) {
+	fontMetas, err := r.repo.Find(ctx, FindFontMetaReq{
+		Page: types.Page{
+			Num:  req.Page,
+			Size: req.PageSize,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return lo.Map(fontMetas, func(fontMeta FontMeta, _ int) subtitle.Font {
+		return subtitle.Font{
+			FamilyName:            fontMeta.FamilyName,
+			FullName:              fontMeta.FullName,
+			PostScriptName:        fontMeta.PostScriptName,
+			ChineseFamilyName:     fontMeta.ChineseFamilyName,
+			ChineseFullName:       fontMeta.ChineseFullName,
+			ChinesePostScriptName: fontMeta.ChinesePostScriptName,
+			BoldWeight:            fontMeta.BoldWeight,
+			Italic:                fontMeta.Italic,
+			FontFileName:          strings.TrimPrefix(fontMeta.Location.Path, r.fontDir),
+		}
+	}), nil
 }
 
 func (r *FontMetaSet) Init(ctx context.Context, useSystemFontsDir bool) error {
@@ -92,7 +120,6 @@ func (r *FontMetaSet) Init(ctx context.Context, useSystemFontsDir bool) error {
 
 		allFontMetas = append(allFontMetas, fontMetas...)
 	}
-
 	if err := r.repo.Save(ctx, allFontMetas); err != nil {
 		return fmt.Errorf("保存字体元数据失败: %w", err)
 	}

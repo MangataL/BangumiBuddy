@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	tmdb "github.com/cyruzin/golang-tmdb"
@@ -26,8 +27,13 @@ func TestClient_Search(t *testing.T) {
 			name: "success",
 			fake: func() (*tmdb.Client, func()) {
 				ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					rsp := `{"results":[{"id":1,"name":"test","first_air_date":"2021-01-01"}]}`
-					_, _ = w.Write([]byte(rsp))
+					if strings.Contains(r.URL.Path, "search/tv") {
+						rsp := `{"results":[{"id":1,"name":"test","first_air_date":"2021-01-01"}]}`
+						_, _ = w.Write([]byte(rsp))
+					} else {
+						rsp := `{"id":1,"name":"test","first_air_date":"2021-01-01"}`
+						_, _ = w.Write([]byte(rsp))
+					}
 				}))
 				certPool := x509.NewCertPool()
 				certPool.AddCert(ts.Certificate())

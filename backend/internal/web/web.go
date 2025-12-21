@@ -17,6 +17,7 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	"github.com/MangataL/BangumiBuddy/internal/types"
+	"github.com/MangataL/BangumiBuddy/pkg/bangumifile"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
@@ -27,14 +28,16 @@ type Web struct {
 	torrentOperator downloader.TorrentOperator
 	transfer        transfer.Interface
 	magnet          magnet.Interface
+	bfParser        bangumifile.Parser
 }
 
 type Dependency struct {
-	Subscriber      subscriber.Interface
-	Downloader      downloader.Interface
-	TorrentOperator downloader.TorrentOperator
-	Transfer        transfer.Interface
-	Magnet          magnet.Interface
+	Subscriber        subscriber.Interface
+	Downloader        downloader.Interface
+	TorrentOperator   downloader.TorrentOperator
+	Transfer          transfer.Interface
+	Magnet            magnet.Interface
+	BangumiFileParser bangumifile.Parser
 }
 
 func New(dep Dependency) Interface {
@@ -44,6 +47,7 @@ func New(dep Dependency) Interface {
 		torrentOperator: dep.TorrentOperator,
 		transfer:        dep.Transfer,
 		magnet:          dep.Magnet,
+		bfParser:        dep.BangumiFileParser,
 	}
 }
 
@@ -164,10 +168,14 @@ func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]
 			torrent.StatusDetail = ds[0].Error
 		}
 
-		torrent.Collection = w.isCollection(ctx, t.Name)
+		torrent.Collection = w.isCollection(t.Name)
 		if !torrent.Collection {
-			episode, _ := w.transfer.ParseEpisode(ctx, t.Name, bangumi.EpisodeLocation)
-			torrent.Episode = episode
+			bf, _ := w.bfParser.Parse(ctx, t.Name,
+				bangumifile.IgnoreValidateEpisode(),
+				bangumifile.WithEpisodeLocation(bangumi.EpisodeLocation),
+				bangumifile.WithEpisodeOffset(bangumi.EpisodeOffset),
+			)
+			torrent.Episode = bf.Episode
 			torrent.Season = bangumi.Season
 		}
 
@@ -178,7 +186,7 @@ func (w *Web) GetBangumiTorrents(ctx context.Context, subscriptionID string) ([]
 
 var collectionRegex = regexp.MustCompile(`\d+-\d+`)
 
-func (w *Web) isCollection(ctx context.Context, torrentName string) bool {
+func (w *Web) isCollection(torrentName string) bool {
 	if utils.IsMediaFile(torrentName) {
 		return false
 	}
@@ -265,8 +273,12 @@ func (w *Web) GetBangumiTorrentFiles(ctx context.Context, hash string) ([]File, 
 		if utils.IsMediaFile(filePath) {
 			file := File{FileName: filePath}
 			linkFile, err := w.transfer.GetTransferFile(ctx, filePath)
-			episode, _ := w.transfer.ParseEpisode(ctx, fileName, bangumi.EpisodeLocation)
-			file.Episode = episode
+			bf, _ := w.bfParser.Parse(ctx, fileName,
+				bangumifile.IgnoreValidateEpisode(),
+				bangumifile.WithEpisodeLocation(bangumi.EpisodeLocation),
+				bangumifile.WithEpisodeOffset(bangumi.EpisodeOffset),
+			)
+			file.Episode = bf.Episode
 			file.Season = bangumi.Season
 			if err != nil {
 				if errors.Is(errors.Unwrap(err), transfer.ErrFileTransferredNotFound) {
@@ -476,21 +488,32 @@ func (w *Web) ListDirs(ctx context.Context, path string) (ListDirsResp, error) {
 		return ListDirsResp{}, err
 	}
 
-	paths := make([]FileDir, 0, len(entries))
+	dirs := make([]DirInfo, 0)
+	files := make([]FileInfo, 0)
+
 	for _, entry := range entries {
+		fullPath := filepath.Join(path, entry.Name())
 		if entry.IsDir() {
-			dirPath := filepath.Join(path, entry.Name())
-			hasDir, subtitleCount := w.dirStats(dirPath)
-			paths = append(paths, FileDir{
-				Path:          dirPath,
+			hasDir, subtitleCount, _ := w.dirStats(fullPath)
+			dirs = append(dirs, DirInfo{
+				Path:          fullPath,
+				Name:          entry.Name(),
 				HasDir:        hasDir,
 				SubtitleCount: subtitleCount,
+			})
+		} else if utils.IsSubtitleFile(entry.Name()) {
+			info, _ := entry.Info()
+			files = append(files, FileInfo{
+				Path: fullPath,
+				Name: entry.Name(),
+				Size: info.Size(),
 			})
 		}
 	}
 
 	return ListDirsResp{
-		Dirs:          paths,
+		Dirs:          dirs,
+		Files:         files,
 		FilePathSplit: string(filepath.Separator),
 		FileRoots:     w.getFileRoots(),
 	}, nil
@@ -515,22 +538,26 @@ func (w *Web) getWindowsDrives() []string {
 }
 
 // dirStats 返回目录下是否包含子目录以及字幕文件数量
-func (w *Web) dirStats(dirPath string) (bool, int) {
+func (w *Web) dirStats(dirPath string) (bool, int, []string) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return false, 0
+		return false, 0, nil
 	}
 
-	hasDir := false
-	subtitleCount := 0
+	var (
+		hasDir        bool
+		subtitleCount int
+		subtitleFiles []string
+	)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			hasDir = true
 		}
 		if utils.IsSubtitleFile(entry.Name()) {
 			subtitleCount++
+			subtitleFiles = append(subtitleFiles, entry.Name())
 		}
 	}
 
-	return hasDir, subtitleCount
+	return hasDir, subtitleCount, subtitleFiles
 }

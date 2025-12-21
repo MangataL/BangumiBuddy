@@ -9,7 +9,7 @@ var _ Downloader = (*Empty)(nil)
 
 var ErrDownloaderNotSet = errors.New("下载器未设置，如已设置，请检查下载器连接情况")
 
-type Empty struct{
+type Empty struct {
 }
 
 // AddTorrent implements Downloader.
@@ -30,6 +30,11 @@ func (e *Empty) GetDownloadStatuses(ctx context.Context, hashes []string) ([]Dow
 // GetTorrentFileNames implements Downloader.
 func (e *Empty) GetTorrentFileNames(ctx context.Context, hash string) ([]string, error) {
 	return nil, ErrDownloaderNotSet
+}
+
+// SetTorrentFilePriorities implements Downloader.
+func (e *Empty) SetTorrentFilePriorities(ctx context.Context, hash string, files []TorrentFileSelection) error {
+	return ErrDownloaderNotSet
 }
 
 // GetTorrentName implements Downloader.

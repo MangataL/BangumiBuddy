@@ -38,6 +38,12 @@ type DownloadStatus struct {
 	Size          int64         // 种子大小，单位 bytes
 }
 
+// TorrentFileSelection 种子文件下载选择
+type TorrentFileSelection struct {
+	FileName string // 文件名
+	Download bool   // 是否下载
+}
+
 // TorrentFilter 种子过滤条件
 type TorrentFilter struct {
 	Statuses       []TorrentStatus // 状态过滤
@@ -47,7 +53,7 @@ type TorrentFilter struct {
 	StartTime      time.Time       // 按创建时间过滤
 	EndTime        time.Time       // 按更新时间过滤
 	Order          types.Order     // 排序
-	MagnetTask     *bool            // 是否是磁力任务
+	MagnetTask     *bool           // 是否是磁力任务
 }
 
 // Torrent 种子文件
@@ -83,6 +89,13 @@ const (
 	// TorrentStatusTransferredError 转移错误
 	TorrentStatusTransferredError TorrentStatus = "transferredError"
 )
+
+// IsDownloading 是否正在下载
+func (t TorrentStatus) IsDownloading() bool {
+	return t == TorrentStatusDownloading ||
+		t == TorrentStatusDownloadPaused ||
+		t == TorrentStatusDownloadError
+}
 
 // ParseTorrentRsp 解析种子响应
 type ParseTorrentRsp struct {

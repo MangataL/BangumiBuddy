@@ -105,12 +105,13 @@ func TestAuthenticator_Authorize(t *testing.T) {
 				mockConfig.EXPECT().GetUsername().Return("", nil).AnyTimes()
 				mockConfig.EXPECT().SetUsername(defaultUsername).AnyTimes()
 				mockConfig.EXPECT().GetPassword().Return("", nil).AnyTimes()
-				mockConfig.EXPECT().SetPassword(defaultPassword).AnyTimes()
+				mockConfig.EXPECT().SetPassword(gomock.Any()).AnyTimes()
 				mockConfig.EXPECT().GetUserToken().Return("", nil).AnyTimes()
 				mockConfig.EXPECT().SetUserToken(gomock.Any()).AnyTimes()
 				mockCipher := NewMockCipher(ctrl)
 				mockCipher.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				mockCipher.EXPECT().GenerateKey(gomock.Any()).Return("token", nil).AnyTimes()
+				mockCipher.EXPECT().Encrypt(gomock.Any(), "token", defaultPassword).Return("cipher", nil).AnyTimes()
 				mockTokenOperator := NewMockTokenOperator(ctrl)
 				gomock.InOrder(
 					mockTokenOperator.EXPECT().Generate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return("access", nil),
@@ -124,7 +125,7 @@ func TestAuthenticator_Authorize(t *testing.T) {
 			},
 			args: args{
 				username: "admin",
-				password: "password",
+				password: "admin123",
 			},
 			want: Credentials{
 				AccessToken:  "access",

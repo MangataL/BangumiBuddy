@@ -113,21 +113,43 @@ func (r *Router) DeleteMagnetTask(c *gin.Context) {
 }
 
 // AddSubtitles 添加字幕
-// POST /apis/v1/magnets/:id/subtitles
+// POST /apis/v1/magnets/subtitles
 func (r *Router) AddSubtitles(c *gin.Context) {
-	taskID := c.Param("id")
 	var req magnet.AddSubtitlesReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, err)
 		return
 	}
+	c.JSON(http.StatusOK, r.magnet.AddSubtitles(c.Request.Context(), req))
+}
+
+// PreviewAddSubtitles 预览添加字幕
+// POST /apis/v1/magnets/:id/subtitles/preview
+func (r *Router) PreviewAddSubtitles(c *gin.Context) {
+	taskID := c.Param("id")
+	var req magnet.PreviewAddSubtitlesReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, err)
+		return
+	}
 	req.TaskID = taskID
-	count, err := r.magnet.AddSubtitles(c.Request.Context(), req)
+	resp, err := r.magnet.PreviewAddSubtitles(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, magnet.AddSubtitlesResp{
-		SuccessCount: count,
-	})
+	c.JSON(http.StatusOK, resp)
+}
+
+// FindTaskSimilarFiles 查找任务中相似的文件
+// GET /apis/v1/magnets/:id/files?similar_file_path=xxx
+func (r *Router) FindTaskSimilarFiles(c *gin.Context) {
+	taskID := c.Param("id")
+	filePath := c.Query("similar_file_path")
+	files, err := r.magnet.FindTaskSimilarFiles(c.Request.Context(), taskID, filePath)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, files)
 }

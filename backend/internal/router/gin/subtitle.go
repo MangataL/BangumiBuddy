@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
 )
 
 // InitSubtitleMetaSet 初始化字幕元数据集
@@ -26,4 +28,20 @@ func (r *Router) GetSubtitleMetaSetStats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stats)
+}
+
+// ListFonts 列出所有字体
+// GET /apis/v1/subtitle/meta-sets/fonts?page=1&page_size=10
+func (r *Router) ListFonts(c *gin.Context) {
+	var req subtitle.ListFontsReq
+	if err := c.ShouldBindQuery(&req); err != nil {
+		writeError(c, err)
+		return
+	}
+	fonts, err := r.subtitleSubsetter.ListFonts(c.Request.Context(), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, fonts)
 }

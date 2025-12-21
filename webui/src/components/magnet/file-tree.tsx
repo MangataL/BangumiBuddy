@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -8,6 +8,10 @@ import {
   FileVideo,
   CheckCircle2,
   Eye,
+  Minus,
+  CloudDownload,
+  CloudOff,
+  Layers,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +20,7 @@ import { TorrentFile, type DownloadType } from "@/api/magnet";
 import { cn } from "@/lib/utils";
 import { useMobile } from "@/hooks/useMobile";
 import { EpisodeEditDialog } from "./episode-edit-dialog";
+import { BatchEpisodeEditDialog } from "./batch-episode-edit-dialog";
 import { SubtitleTransferDialog } from "./subtitle-transfer-dialog";
 import {
   Dialog,
@@ -44,6 +49,9 @@ interface FileTreeProps {
   downloadType: DownloadType;
   taskID: string;
   onFileChange: (fileName: string, updates: Partial<TorrentFile>) => void;
+  onFilesChange: (
+    updates: { fileName: string; updates: Partial<TorrentFile> }[]
+  ) => void;
   onSubtitleTransferSuccess?: () => void;
   defaultExpandLevel?: number; // 默认展开层级，0 表示不展开
 }
@@ -88,18 +96,24 @@ function buildTree(files: TorrentFile[]): TreeNode {
 // 树节点组件
 function TreeNodeComponent({
   node,
+  allFiles,
   downloadType,
   taskID,
   onFileChange,
+  onFilesChange,
   onSubtitleTransferSuccess,
   level = 0,
   defaultExpandLevel = 0,
   isMobile = false,
 }: {
   node: TreeNode;
+  allFiles: TorrentFile[];
   downloadType: DownloadType;
   taskID: string;
   onFileChange: (fileName: string, updates: Partial<TorrentFile>) => void;
+  onFilesChange: (
+    updates: { fileName: string; updates: Partial<TorrentFile> }[]
+  ) => void;
   onSubtitleTransferSuccess?: () => void;
   level?: number;
   defaultExpandLevel?: number;
@@ -108,6 +122,7 @@ function TreeNodeComponent({
   const [expanded, setExpanded] = useState(level < defaultExpandLevel);
   const [isHovered, setIsHovered] = useState(false);
   const [showEpisodeDialog, setShowEpisodeDialog] = useState(false);
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
 
   // 智能截断文件夹名称 - 仅在移动端对文件夹生效
   const truncateFolderName = (name: string): string => {
@@ -135,6 +150,18 @@ function TreeNodeComponent({
     return name.substring(0, 25) + "...";
   };
 
+  // 获取该节点下所有的文件
+  const getAllFiles = (currentNode: TreeNode): TorrentFile[] => {
+    let results: TorrentFile[] = [];
+    if (currentNode.file) {
+      results.push(currentNode.file);
+    }
+    currentNode.children.forEach((child) => {
+      results = results.concat(getAllFiles(child));
+    });
+    return results;
+  };
+
   // 目录节点
   if (node.isDirectory) {
     const folderColors = [
@@ -144,6 +171,21 @@ function TreeNodeComponent({
       "from-green-500/5 to-transparent border-green-500/20",
     ];
     const colorIndex = level % folderColors.length;
+
+    const childrenFiles = getAllFiles(node);
+    const allSelected = childrenFiles.every((f) => f.download);
+    const someSelected = childrenFiles.some((f) => f.download);
+    const isIndeterminate = someSelected && !allSelected;
+
+    const toggleFolderDownload = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const targetStatus = !allSelected;
+      const updates = childrenFiles.map((f) => ({
+        fileName: f.fileName,
+        updates: { download: targetStatus },
+      }));
+      onFilesChange(updates);
+    };
 
     return (
       <div className="select-none my-1">
@@ -161,6 +203,21 @@ function TreeNodeComponent({
           onMouseLeave={() => setIsHovered(false)}
         >
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div
+              className="p-1 hover:bg-primary/10 rounded transition-colors group/dl"
+              onClick={toggleFolderDownload}
+            >
+              {allSelected ? (
+                <CloudDownload className="w-4 h-4 text-blue-500 animate-pulse" />
+              ) : isIndeterminate ? (
+                <div className="relative">
+                  <CloudDownload className="w-4 h-4 text-blue-500/50" />
+                  <Minus className="absolute -bottom-1 -right-1 w-2.5 h-2.5 text-primary bg-background rounded-full" />
+                </div>
+              ) : (
+                <CloudOff className="w-4 h-4 text-muted-foreground/50 group-hover/dl:text-blue-400 transition-colors" />
+              )}
+            </div>
             {expanded ? (
               <ChevronDown className="w-4 h-4 text-primary transition-transform" />
             ) : (
@@ -199,9 +256,11 @@ function TreeNodeComponent({
               <TreeNodeComponent
                 key={child.path}
                 node={child}
+                allFiles={allFiles}
                 downloadType={downloadType}
                 taskID={taskID}
                 onFileChange={onFileChange}
+                onFilesChange={onFilesChange}
                 onSubtitleTransferSuccess={onSubtitleTransferSuccess}
                 level={level + 1}
                 defaultExpandLevel={defaultExpandLevel}
@@ -216,6 +275,7 @@ function TreeNodeComponent({
 
   // 文件节点
   const isMediaFile = node.file?.media;
+  const isDownload = node.file?.download;
   const hasLinkFile = !!node.file?.linkFile;
   const isLibraryFile = hasLinkFile; // 已入库
   const isPendingFile = isMediaFile && !hasLinkFile; // 待入库
@@ -226,11 +286,17 @@ function TreeNodeComponent({
   const getFileIconAndStyle = (
     isMedia: boolean,
     isLibrary: boolean,
-    isPending: boolean
+    isPending: boolean,
+    download: boolean
   ) => {
     const IconComponent = isMedia ? FileVideo : File;
 
     let className = "w-3.5 h-3.5 ";
+    if (!download) {
+      className += "text-muted-foreground/40";
+      return { IconComponent, className };
+    }
+
     if (isMedia) {
       if (isLibrary) {
         className += "text-green-600 dark:text-green-400";
@@ -253,8 +319,19 @@ function TreeNodeComponent({
     return (num || 0).toString().padStart(2, "0");
   };
 
+  // 切换下载状态
+  const toggleDownloadStatus = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (node.file) {
+      onFileChange(node.file.fileName, {
+        download: !node.file.download,
+      });
+    }
+  };
+
   // 切换待入库状态
-  const toggleMediaStatus = () => {
+  const toggleMediaStatus = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (node.file) {
       onFileChange(node.file.fileName, {
         media: !node.file.media,
@@ -268,6 +345,12 @@ function TreeNodeComponent({
     setShowEpisodeDialog(true);
   };
 
+  // 处理批量修改点击
+  const handleBatchEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowBatchDialog(true);
+  };
+
   // 处理查看转移详情
   const handleViewTransferDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -276,27 +359,56 @@ function TreeNodeComponent({
 
   return (
     <>
+      <style>
+        {`
+          @keyframes cloud-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(2px); }
+          }
+          .animate-cloud-float {
+            animation: cloud-float 2s ease-in-out infinite;
+          }
+        `}
+      </style>
       <Card
         className={cn(
-          "transition-all duration-200 anime-card my-1 group",
-          isLibraryFile
-            ? "border-green-500/30 bg-gradient-to-r from-green-500/5 to-transparent hover:border-green-500/50"
-            : isPendingFile
-            ? "border-amber-500/30 bg-gradient-to-r from-amber-500/5 to-transparent hover:border-amber-500/50"
-            : "border-primary/10 hover:border-primary/20"
+          "transition-all duration-300 anime-card my-1 group",
+          isDownload
+            ? "border-primary/20 bg-card/50 backdrop-blur-sm"
+            : "border-transparent bg-transparent opacity-60 grayscale-[0.5]",
+          isLibraryFile && isDownload && "border-green-500/30 bg-green-500/5",
+          isPendingFile && isDownload && "border-amber-500/30 bg-amber-500/5"
         )}
-        style={{ marginLeft: `${level * 16 + 24}px` }}
+        style={{ marginLeft: `${level * 16}px` }}
       >
         <CardContent className="p-3">
           <div className="space-y-3">
             {/* 文件名行 */}
             <div className="flex items-start gap-2">
+              <div
+                className="pt-1 flex-shrink-0 cursor-pointer group/dl"
+                onClick={toggleDownloadStatus}
+                title={isDownload ? "点击取消下载" : "点击加入下载"}
+              >
+                {isDownload ? (
+                  <div className="p-1 rounded-full bg-blue-500/10">
+                    <CloudDownload className="w-4 h-4 text-blue-500 animate-cloud-float" />
+                  </div>
+                ) : (
+                  <div className="p-1 rounded-full hover:bg-muted transition-colors">
+                    <CloudOff className="w-4 h-4 text-muted-foreground/40 group-hover/dl:text-blue-400 transition-colors" />
+                  </div>
+                )}
+              </div>
+
               {/* 可点击的图标区域 */}
               <div
                 className={cn(
                   "p-1.5 rounded-md flex-shrink-0 cursor-pointer transition-all",
                   "hover:scale-110 active:scale-95",
-                  isLibraryFile
+                  !isDownload
+                    ? "bg-muted/5 opacity-50"
+                    : isLibraryFile
                     ? "bg-green-500/20 hover:bg-green-500/30"
                     : isPendingFile
                     ? "bg-amber-500/20 hover:bg-amber-500/30"
@@ -304,7 +416,9 @@ function TreeNodeComponent({
                 )}
                 onClick={toggleMediaStatus}
                 title={
-                  isLibraryFile
+                  !isDownload
+                    ? "未选择下载 - 点击标记为媒体文件将自动开启下载"
+                    : isLibraryFile
                     ? "已入库 - 点击取消标记"
                     : isPendingFile
                     ? "待入库 - 点击取消标记"
@@ -315,20 +429,29 @@ function TreeNodeComponent({
                   const { IconComponent, className } = getFileIconAndStyle(
                     !!isMediaFile,
                     isLibraryFile,
-                    !!isPendingFile
+                    !!isPendingFile,
+                    !!isDownload
                   );
                   return <IconComponent className={className} />;
                 })()}
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm break-all leading-tight">{node.name}</p>
+                <p
+                  className={cn(
+                    "text-sm break-all leading-tight transition-colors",
+                    !isDownload ? "text-muted-foreground/60" : "text-foreground"
+                  )}
+                >
+                  {node.name}
+                </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   {hasEpisodeInfo && (
                     <Badge
                       variant="outline"
                       className={cn(
                         "text-xs cursor-pointer transition-all duration-200",
+                        !isDownload && "opacity-40",
                         isLibraryFile
                           ? "border-green-500/30 text-green-700 dark:text-green-300 hover:bg-green-500/10 hover:border-green-500/50"
                           : "border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/50"
@@ -339,6 +462,23 @@ function TreeNodeComponent({
                       S{formatEpisodeNumber(node.file?.season)}E
                       {formatEpisodeNumber(node.file?.episode)}
                     </Badge>
+                  )}
+                  {hasEpisodeInfo && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-500/10"
+                            onClick={handleBatchEditClick}
+                          >
+                            <Layers className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>批量设置相似文件</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                   {isLibraryFile && (
                     <TooltipProvider>
@@ -371,6 +511,18 @@ function TreeNodeComponent({
           onOpenChange={setShowEpisodeDialog}
           file={node.file}
           onSave={onFileChange}
+        />
+      )}
+
+      {/* 批量季集编辑弹窗 */}
+      {node.file && (
+        <BatchEpisodeEditDialog
+          open={showBatchDialog}
+          onOpenChange={setShowBatchDialog}
+          taskID={taskID}
+          triggerFile={node.file}
+          allFiles={allFiles}
+          onSave={onFilesChange}
         />
       )}
 
@@ -448,6 +600,7 @@ export function FileTree({
   downloadType,
   taskID,
   onFileChange,
+  onFilesChange,
   onSubtitleTransferSuccess,
   defaultExpandLevel = 1,
 }: FileTreeProps) {
@@ -476,7 +629,25 @@ export function FileTree({
   const libraryFilesCount = files.filter((f) => f.linkFile).length;
 
   // 待入库：media=true 但没有 linkFile
-  const pendingFilesCount = files.filter((f) => f.media && !f.linkFile).length;
+  const pendingFilesCount = files.filter(
+    (f) => f.media && !f.linkFile && f.download
+  ).length;
+
+  // 按季度统计媒体文件总数
+  const seasonStats = useMemo(() => {
+    if (downloadType !== "tv") return [];
+
+    const stats: Record<number, number> = {};
+    files.forEach((f) => {
+      if (f.media && f.download) {
+        stats[f.season] = (stats[f.season] || 0) + 1;
+      }
+    });
+
+    return Object.entries(stats)
+      .map(([season, count]) => ({ season: parseInt(season), count }))
+      .sort((a, b) => a.season - b.season);
+  }, [files, downloadType]);
 
   const mediaLabel = downloadType === "tv" ? "番剧" : "剧场版";
 
@@ -509,6 +680,16 @@ export function FileTree({
             {!isMobile && `已入库${mediaLabel}: `}
             {libraryFilesCount}
           </Badge>
+          {seasonStats.map(({ season, count }) => (
+            <Badge
+              key={season}
+              variant="secondary"
+              className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-0 flex items-center gap-1.5"
+            >
+              <FileVideo className="w-3 h-3" />S
+              {String(season).padStart(2, "0")}: {count}
+            </Badge>
+          ))}
         </div>
 
         {/* 转移字幕按钮 */}
@@ -535,9 +716,11 @@ export function FileTree({
             <TreeNodeComponent
               key={child.path}
               node={child}
+              allFiles={files}
               downloadType={downloadType}
               taskID={taskID}
               onFileChange={onFileChange}
+              onFilesChange={onFilesChange}
               onSubtitleTransferSuccess={onSubtitleTransferSuccess}
               defaultExpandLevel={defaultExpandLevel}
               isMobile={isMobile}

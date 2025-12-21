@@ -96,17 +96,24 @@ export interface AddSubtitlesResponse {
 }
 
 export interface ListDirsResp {
-  dirs: FileDir[];
+  dirs: DirInfo[];
+  files: FileInfo[];
   filePathSplit: string;
   fileRoots: string[];
 }
 
-export interface FileDir {
+export interface DirInfo {
   path: string;
+  name: string;
   hasDir: boolean;
   subtitleCount: number;
 }
 
+export interface FileInfo {
+  path: string;
+  name: string;
+  size: number;
+}
 
 const magnetAPI = {
   // 添加磁力任务
@@ -157,11 +164,40 @@ const magnetAPI = {
   // 添加字幕
   addSubtitles: (
     taskID: string,
-    data: AddSubtitlesRequest
+    data: {
+      subtitleFiles: Record<string, string>;
+      preserveOriginal?: boolean;
+    }
   ): Promise<AddSubtitlesResponse> => {
-    return http
-      .post<AddSubtitlesResponse>(`/magnets/${taskID}/subtitles`, data)
-      .then((res) => res.data);
+    return http.post<AddSubtitlesResponse>(
+      `/magnets/${taskID}/subtitles`,
+      data
+    );
+  },
+
+  // 预览添加字幕
+  previewAddSubtitles: (
+    taskID: string,
+    data: {
+      subtitlePath: string;
+      dstPath: string;
+      episodeLocation?: string;
+      episodeOffset?: number;
+      season?: number;
+      extensionLevel?: number;
+    }
+  ): Promise<PreviewAddSubtitlesResponse> => {
+    return http.post<PreviewAddSubtitlesResponse>(
+      `/magnets/${taskID}/subtitles/preview`,
+      data
+    );
+  },
+
+  // 查找任务中相似的文件
+  findSimilarFiles: (taskID: string, filePath: string): Promise<string[]> => {
+    return http.get(`/magnets/${taskID}/files`, {
+      params: { similar_file_path: filePath },
+    });
   },
 
   // 列出目录（返回目录路径数组）
@@ -171,5 +207,17 @@ const magnetAPI = {
     });
   },
 };
+
+export interface PreviewAddSubtitlesResponse {
+  subtitleFiles: Record<string, AddSubtitlesResult>;
+}
+
+export interface AddSubtitlesResult {
+  subtitleFile: string;
+  newFileName?: string;
+  targetPath?: string;
+  mediaFileName?: string;
+  error?: string;
+}
 
 export default magnetAPI;

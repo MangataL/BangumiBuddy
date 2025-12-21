@@ -33,17 +33,18 @@ func TestRepository_SaveAndGet(t *testing.T) {
 
 	// 测试数据
 	bangumi := subscriber.Bangumi{
-		Name:          "测试番剧",
-		RSSLink:       "https://example.com/rss",
-		Active:        true,
-		IncludeRegs:   []string{".*1080p.*", ".*HEVC.*"},
-		ExcludeRegs:   []string{".*720p.*", ".*预告.*"},
-		Priority:      10,
-		EpisodeOffset: 0,
-		Season:        1,
-		Year:          "2023",
-		TMDBID:        12345,
-		ReleaseGroup:  "测试字幕组",
+		SubscriptionID: "test-subscription-id",
+		Name:           "测试番剧",
+		RSSLink:        "https://example.com/rss",
+		Active:         true,
+		IncludeRegs:    []string{".*1080p.*", ".*HEVC.*"},
+		ExcludeRegs:    []string{".*720p.*", ".*预告.*"},
+		Priority:       10,
+		EpisodeOffset:  0,
+		Season:         1,
+		Year:           "2023",
+		TMDBID:         12345,
+		ReleaseGroup:   "测试字幕组",
 	}
 
 	// 保存
@@ -51,8 +52,10 @@ func TestRepository_SaveAndGet(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 获取
-	got, err := repo.Get(ctx, bangumi.RSSLink)
+	got, err := repo.Get(ctx, bangumi.SubscriptionID)
 	assert.NoError(t, err)
+	// 忽略 CreatedAt 进行比较，因为数据库存储可能存在精度差异
+	bangumi.CreatedAt = got.CreatedAt
 	assert.Equal(t, bangumi, got)
 
 	// 更新
@@ -61,8 +64,9 @@ func TestRepository_SaveAndGet(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 再次获取
-	got, err = repo.Get(ctx, bangumi.RSSLink)
+	got, err = repo.Get(ctx, bangumi.SubscriptionID)
 	assert.NoError(t, err)
+	bangumi.CreatedAt = got.CreatedAt
 	assert.Equal(t, bangumi, got)
 }
 
@@ -74,28 +78,31 @@ func TestRepository_List(t *testing.T) {
 	// 插入测试数据
 	bangumis := []subscriber.Bangumi{
 		{
-			Name:        "番剧1",
-			RSSLink:     "https://example.com/rss1",
-			Active:      true,
-			IncludeRegs: []string{".*1080p.*"},
-			Season:      1,
-			Year:        "2021",
+			SubscriptionID: "sub1",
+			Name:           "番剧1",
+			RSSLink:        "https://example.com/rss1",
+			Active:         true,
+			IncludeRegs:    []string{".*1080p.*"},
+			Season:         1,
+			Year:           "2021",
 		},
 		{
-			Name:        "番剧2",
-			RSSLink:     "https://example.com/rss2",
-			Active:      true,
-			IncludeRegs: []string{".*1080p.*", ".*HEVC.*"},
-			Season:      2,
-			Year:        "2022",
+			SubscriptionID: "sub2",
+			Name:           "番剧2",
+			RSSLink:        "https://example.com/rss2",
+			Active:         true,
+			IncludeRegs:    []string{".*1080p.*", ".*HEVC.*"},
+			Season:         2,
+			Year:           "2022",
 		},
 		{
-			Name:        "番剧3",
-			RSSLink:     "https://example.com/rss3",
-			Active:      false,
-			ExcludeRegs: []string{".*720p.*"},
-			Season:      1,
-			Year:        "2023",
+			SubscriptionID: "sub3",
+			Name:           "番剧3",
+			RSSLink:        "https://example.com/rss3",
+			Active:         false,
+			ExcludeRegs:    []string{".*720p.*"},
+			Season:         1,
+			Year:           "2023",
 		},
 	}
 

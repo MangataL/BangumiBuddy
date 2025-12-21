@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import {
   HybridTooltip,
   HybridTooltipContent,
@@ -13,27 +14,43 @@ interface EpisodePositionInputProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  className?: string;
+  inputClassName?: string;
+  labelClassName?: string;
+  labelContainerClassName?: string;
+  showTooltipButton?: boolean;
 }
 
 export function EpisodePositionInput({
   value,
   onChange,
   label = "集数定位",
+  className = "space-y-2",
+  inputClassName,
+  labelClassName,
+  labelContainerClassName,
+  showTooltipButton = true,
 }: EpisodePositionInputProps) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Label htmlFor="episodePosition">{label}</Label>
+    <div className={className}>
+      <div className={cn("flex items-center gap-2", labelContainerClassName)}>
+        <Label htmlFor="episodePosition" className={labelClassName}>
+          {label}
+        </Label>
         <TooltipProvider>
           <HybridTooltip>
-            <HybridTooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 rounded-full"
-              >
-                <Info className="h-3.5 w-3.5 text-muted-foreground" />
-              </Button>
+            <HybridTooltipTrigger asChild={showTooltipButton}>
+              {showTooltipButton ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 rounded-full"
+                >
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              ) : (
+                <Info className="h-3 w-3 text-muted-foreground/60 hover:text-blue-500 transition-colors" />
+              )}
             </HybridTooltipTrigger>
             <HybridTooltipContent className="max-w-xs space-y-2">
               <p>
@@ -64,7 +81,7 @@ export function EpisodePositionInput({
         id="episodePosition"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-xl"
+        className={cn("rounded-xl", inputClassName)}
       />
     </div>
   );

@@ -1,6 +1,10 @@
 package ass
 
-import "context"
+import (
+	"context"
+
+	"github.com/MangataL/BangumiBuddy/pkg/log"
+)
 
 type TempFontMetaRepository struct {
 	firstRepo  FontMetaRepository
@@ -20,10 +24,13 @@ func (r *TempFontMetaRepository) Find(ctx context.Context, req FindFontMetaReq) 
 	if err != nil {
 		return nil, err
 	}
-	if len(fontMetas) != 0 {
+	fontMetasSecond, err := r.secondRepo.Find(ctx, req)
+	if err != nil {
+		// 如果第二仓库查询失败，则返回第一仓库的结果
+		log.Warnf(ctx, "第二仓库查询失败，返回第一仓库的结果: %v", err)
 		return fontMetas, nil
 	}
-	return r.secondRepo.Find(ctx, req)
+	return append(fontMetas, fontMetasSecond...), nil
 }
 
 func (r *TempFontMetaRepository) Count(ctx context.Context) (int64, error) {

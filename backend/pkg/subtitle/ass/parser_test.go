@@ -2,10 +2,12 @@ package ass
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"unicode/utf16"
 )
 
 // 基础的 ASS 文件模板，除了 Dialogue 之外的内容可以复用
@@ -121,6 +123,13 @@ func TestParseFontSet(t *testing.T) {
 				Font{FontName: "Times New Roman", BoldWeight: WeightNormal, Italic: false}: buildCodePoint("C"),
 			},
 		},
+		{
+			name:     "字体样式使用指针引用",
+			dialogue: `Dialogue: 0,0:00:00.00,0:00:05.00,*Default,,0,0,0,,\hHello \nWorld\N`,
+			expectedSet: FontSet{
+				Font{FontName: "Arial", BoldWeight: WeightNormal, Italic: false}: buildCodePoint("Hello World"),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -143,6 +152,50 @@ func TestParseFontSet(t *testing.T) {
 
 			// 验证 FontSet
 			compareFontSets(t, fontSet, tt.expectedSet)
+		})
+	}
+}
+
+func TestParseFontSet_UTF16(t *testing.T) {
+	dialogue := `Dialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,Hello`
+	content := fmt.Sprintf(assBaseTemplate, dialogue)
+	expected := FontSet{
+		Font{FontName: "Arial", BoldWeight: WeightNormal, Italic: false}: buildCodePoint("Hello"),
+	}
+
+	tests := []struct {
+		name      string
+		writeFile func(*testing.T, string) string
+	}{
+		{
+			name: "utf8",
+			writeFile: func(t *testing.T, content string) string {
+				return createTempASSFile(t, content)
+			},
+		},
+		{
+			name: "utf16le",
+			writeFile: func(t *testing.T, content string) string {
+				return createTempASSFileUTF16(t, content)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := tt.writeFile(t, content)
+			defer os.Remove(tmpFile)
+
+			parser := NewParser()
+			fontSet, needTransfer, err := parser.ParseFontSet(context.Background(), tmpFile)
+			if err != nil {
+				t.Fatalf("ParseFontSet failed: %v", err)
+			}
+			if needTransfer {
+				t.Fatal("Expected needTransfer to be false")
+			}
+
+			compareFontSets(t, fontSet, expected)
 		})
 	}
 }
@@ -242,6 +295,27 @@ func createTempASSFile(t *testing.T, content string) string {
 	err := os.WriteFile(tmpFile, []byte(content), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	return tmpFile
+}
+
+func createTempASSFileUTF16(t *testing.T, content string) string {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test_utf16.ass")
+
+	encoded := utf16.Encode([]rune(content))
+	data := make([]byte, 2+len(encoded)*2)
+	data[0] = 0xFF
+	data[1] = 0xFE
+	for i, v := range encoded {
+		binary.LittleEndian.PutUint16(data[2+i*2:], v)
+	}
+
+	if err := os.WriteFile(tmpFile, data, 0o600); err != nil {
+		t.Fatalf("Failed to write temp ASS file: %v", err)
 	}
 
 	return tmpFile

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -57,8 +57,12 @@ export function RecentUpdatesDialog({
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [showLoadingUI, setShowLoadingUI] = useState(false);
   const pageSize = 5;
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; // 获取当前浏览器的时区
+  const cacheRef = useRef<
+    Record<string, { torrents: RecentUpdatedTorrent[]; total: number }>
+  >({});
 
   const getDayTime = (date: Date) => {
     const start = new Date(date.setHours(0, 0, 0, 0));
@@ -112,6 +116,20 @@ export function RecentUpdatesDialog({
   };
 
   const timeRanges = getTimeRanges();
+  const totalPages = useMemo(
+    () => Math.ceil(total / pageSize),
+    [total, pageSize]
+  );
+
+  // 避免“闪一下骨架屏”：只有加载超过一定时间才显示加载 UI
+  useEffect(() => {
+    if (!loading) {
+      setShowLoadingUI(false);
+      return;
+    }
+    const t = window.setTimeout(() => setShowLoadingUI(true), 150);
+    return () => window.clearTimeout(t);
+  }, [loading]);
 
   const toRFC3339WithTimezone = (date: Date) => {
     const zonedDate = toZonedTime(date, timeZone);
@@ -137,6 +155,10 @@ export function RecentUpdatesDialog({
       setTorrents(data.torrents);
       setTotal(data.total);
       setCurrentPage(page);
+      cacheRef.current[`${activeTab}:${page}`] = {
+        torrents: data.torrents,
+        total: data.total,
+      };
     } catch (error) {
       const description = extractErrorMessage(error);
       toast({
@@ -153,22 +175,29 @@ export function RecentUpdatesDialog({
   useEffect(() => {
     if (open) {
       setCurrentPage(1);
+      const cached = cacheRef.current[`${activeTab}:1`];
+      if (cached) {
+        // 先用缓存顶上，避免切 tab 时闪 skeleton 或短暂显示别的 tab 数据
+        setTorrents(cached.torrents);
+        setTotal(cached.total);
+      }
       fetchTorrents(1);
     }
   }, [open, activeTab]);
 
   const renderPagination = () => {
-    const totalPages = Math.ceil(total / pageSize);
     if (totalPages <= 1) return null;
 
     return (
-      <Pagination className="mt-4">
+      <Pagination>
         <PaginationContent>
           <PaginationItem>
             <PaginationPrevious
               onClick={() => currentPage > 1 && fetchTorrents(currentPage - 1)}
               className={
-                currentPage <= 1 ? "pointer-events-none opacity-50" : ""
+                currentPage <= 1 || loading
+                  ? "pointer-events-none opacity-50"
+                  : ""
               }
             />
           </PaginationItem>
@@ -191,7 +220,8 @@ export function RecentUpdatesDialog({
               <PaginationItem key={pageNum}>
                 <PaginationLink
                   isActive={pageNum === currentPage}
-                  onClick={() => fetchTorrents(pageNum)}
+                  onClick={() => !loading && fetchTorrents(pageNum)}
+                  className={loading ? "pointer-events-none opacity-50" : ""}
                 >
                   {pageNum}
                 </PaginationLink>
@@ -205,7 +235,7 @@ export function RecentUpdatesDialog({
                 currentPage < totalPages && fetchTorrents(currentPage + 1)
               }
               className={
-                currentPage >= totalPages
+                currentPage >= totalPages || loading
                   ? "pointer-events-none opacity-50"
                   : ""
               }
@@ -226,7 +256,7 @@ export function RecentUpdatesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90dvh] sm:max-h-[80dvh] w-[95dvw] xs:w-[90dvw] overflow-y-auto">
+      <DialogContent className="max-w-5xl w-[95dvw] xs:w-[90dvw] max-h-[90dvh] overflow-hidden rounded-xl border-primary/20 bg-card/95 backdrop-blur-md scrollbar-hide flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl sm:text-2xl font-bold">
             近期更新
@@ -234,12 +264,12 @@ export function RecentUpdatesDialog({
         </DialogHeader>
         <DialogDescription></DialogDescription>
 
-        <div className="flex-grow overflow-hidden flex flex-col">
+        <div className="overflow-hidden flex flex-col">
           <Tabs
             defaultValue="yesterday-to-now"
             value={activeTab}
             onValueChange={setActiveTab}
-            className="w-full"
+            className="w-full flex flex-col"
           >
             <TabsList className="w-full justify-center sm:justify-start mb-4 overflow-x-auto">
               {Object.entries(timeRanges).map(([key, range]) => (
@@ -257,67 +287,68 @@ export function RecentUpdatesDialog({
               <TabsContent
                 key={key}
                 value={key}
-                className="flex-grow overflow-auto min-h-[400px] max-h-[450px] transition-opacity duration-200"
+                className="transition-opacity duration-200"
               >
-                {loading ? (
-                  <div className="rounded-md border overflow-auto">
-                    <Table>
-                      <TableBody>
-                        {Array(pageSize)
-                          .fill(0)
-                          .map((_, index) => (
-                            <TableRow key={index}>
-                              <TableCell className="w-14 sm:w-20 p-1 sm:p-2 hidden sm:table-cell">
-                                <Skeleton className="w-12 h-16 sm:w-16 sm:h-20 rounded-sm" />
-                              </TableCell>
-                              <TableCell className="align-top py-2 px-2 sm:px-4">
-                                <div className="flex flex-col space-y-2">
-                                  <Skeleton className="h-4 sm:h-5 w-[96px] sm:w-[160px]" />
-                                  <Skeleton className="h-3 sm:h-4 w-[150px] sm:w-[500px]" />
-                                </div>
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap text-center w-20 sm:w-40 text-xs sm:text-sm px-1 sm:px-4">
-                                <Skeleton className="h-3 sm:h-4 w-[64px] sm:w-[96px] ml-auto" />
-                              </TableCell>
-                              <TableCell className="w-24 sm:w-32 text-center whitespace-nowrap px-1 sm:px-4">
-                                <div className="ml-auto">
-                                  <Skeleton className="h-5 sm:h-6 w-[48px] sm:w-[64px] ml-auto" />
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : torrents.length === 0 ? (
-                  <div className="flex items-center justify-center py-8 sm:py-12 text-center px-4">
-                    <img
-                      src="/logo.png"
-                      alt="暂无更新"
-                      onError={(e) => {
-                        // 图片加载失败时使用emoji作为备用
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null; // 防止循环触发错误
-                        target.style.display = "none";
-                      }}
-                      className="w-32 sm:h-32 mb-4"
-                    />
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="text-lg sm:text-xl font-bold text-primary mt-2 sm:mt-4">
-                        现在还没有更新哦
+                <div className="flex flex-col">
+                  {/* 固定列表高度：刚好展示 5 行（pageSize=5） */}
+                  <div className="rounded-md border overflow-auto h-[400px] sm:h-[480px]">
+                    {showLoadingUI && loading && torrents.length === 0 ? (
+                      <Table>
+                        <TableBody>
+                          {Array(pageSize)
+                            .fill(0)
+                            .map((_, index) => (
+                              <TableRow key={index} className="h-20 sm:h-24">
+                                <TableCell className="w-14 sm:w-20 p-1 sm:p-2 hidden sm:table-cell">
+                                  <Skeleton className="w-12 h-16 sm:w-16 sm:h-20 rounded-sm" />
+                                </TableCell>
+                                <TableCell className="align-top py-2 px-2 sm:px-4">
+                                  <div className="flex flex-col space-y-2">
+                                    <Skeleton className="h-4 sm:h-5 w-[96px] sm:w-[160px]" />
+                                    <Skeleton className="h-3 sm:h-4 w-[150px] sm:w-[500px]" />
+                                  </div>
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap text-center w-20 sm:w-40 text-xs sm:text-sm px-1 sm:px-4">
+                                  <Skeleton className="h-3 sm:h-4 w-[64px] sm:w-[96px] ml-auto" />
+                                </TableCell>
+                                <TableCell className="w-24 sm:w-32 text-center whitespace-nowrap px-1 sm:px-4">
+                                  <div className="ml-auto">
+                                    <Skeleton className="h-5 sm:h-6 w-[48px] sm:w-[64px] ml-auto" />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    ) : torrents.length === 0 ? (
+                      <div className="h-full flex items-center justify-center py-8 sm:py-12 text-center px-4">
+                        <div className="flex flex-col items-center justify-center">
+                          <img
+                            src="/logo.png"
+                            alt="暂无更新"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.onerror = null;
+                              target.style.display = "none";
+                            }}
+                            className="w-32 sm:h-32 mb-4"
+                          />
+                          <div className="text-lg sm:text-xl font-bold text-primary mt-2 sm:mt-4">
+                            现在还没有更新哦
+                          </div>
+                          <div className="text-sm sm:text-base text-secondary-foreground mt-1 sm:mt-2">
+                            稍后再来看看吧~
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm sm:text-base text-secondary-foreground mt-1 sm:mt-2">
-                        稍后再来看看吧~
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="rounded-md border overflow-auto">
+                    ) : (
                       <Table>
                         <TableBody>
                           {torrents.map((torrent, index) => (
-                            <TableRow key={index} className="hover:bg-muted/30">
+                            <TableRow
+                              key={index}
+                              className="hover:bg-muted/30 h-20 sm:h-24"
+                            >
                               <TableCell className="w-14 sm:w-20 p-1 sm:p-2 hidden sm:table-cell">
                                 <img
                                   src={
@@ -406,10 +437,14 @@ export function RecentUpdatesDialog({
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
+                    )}
+                  </div>
+
+                  {/* 固定占位高度，避免“有/无分页”导致 Dialog 高度抖动 */}
+                  <div className="mt-4 h-12 flex items-center justify-center">
                     {renderPagination()}
-                  </>
-                )}
+                  </div>
+                </div>
               </TabsContent>
             ))}
           </Tabs>

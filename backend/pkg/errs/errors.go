@@ -55,7 +55,7 @@ func NewNotFoundf(format string, args ...interface{}) *Error {
 func ParseError(err error) (int, string) {
 	cause := errors.Cause(err)
 	if e := (&Error{}); errors.As(cause, &e) {
-		return e.HTTPCode, e.Error()
+		return e.HTTPCode, err.Error()
 	}
 	return http.StatusInternalServerError, err.Error()
 }

@@ -2,6 +2,7 @@ package ass
 
 import (
 	"context"
+	"strings"
 )
 
 func NewMemoryRepository() FontMetaRepository {
@@ -29,18 +30,18 @@ func (r *MemoryRepository) Find(ctx context.Context, req FindFontMetaReq) ([]Fon
 	fontMetas := make([]FontMeta, 0)
 	for _, fontMeta := range r.fonts {
 		if req.FullName != "" &&
-			fontMeta.FullName != req.FullName &&
-			fontMeta.ChineseFullName != req.FullName {
+			!strings.EqualFold(fontMeta.FullName, req.FullName) &&
+			!strings.EqualFold(fontMeta.ChineseFullName, req.FullName) {
 			continue
 		}
 		if req.PostScriptName != "" &&
-			fontMeta.PostScriptName != req.PostScriptName &&
-			fontMeta.ChinesePostScriptName != req.PostScriptName {
+			!strings.EqualFold(fontMeta.PostScriptName, req.PostScriptName) &&
+			!strings.EqualFold(fontMeta.ChinesePostScriptName, req.PostScriptName) {
 			continue
 		}
 		if req.FamilyName != "" &&
-			fontMeta.FamilyName != req.FamilyName &&
-			fontMeta.ChineseFamilyName != req.FamilyName {
+			!strings.EqualFold(fontMeta.FamilyName, req.FamilyName) &&
+			!strings.EqualFold(fontMeta.ChineseFamilyName, req.FamilyName) {
 			continue
 		}
 		if req.Type != "" && fontMeta.Type != req.Type {

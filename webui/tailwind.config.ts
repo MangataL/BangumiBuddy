@@ -14,7 +14,7 @@ const config = {
     },
     extend: {
       screens: {
-        xs: "400px",
+        xs: "410px",
       },
       fontFamily: {
         poppins: [

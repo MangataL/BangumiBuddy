@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/autobrr/go-qbittorrent"
@@ -103,6 +105,58 @@ func (q *QBittorrent) GetDownloadStatuses(ctx context.Context, hashes []string) 
 	return q.convertTorrentsToDownloadStatuses(ctx, torrents), nil
 }
 
+func (q *QBittorrent) SetTorrentFilePriorities(ctx context.Context, hash string, files []downloader.TorrentFileSelection) error {
+	if err := q.init(); err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("未提供文件选择信息")
+	}
+	fileSelections := make(map[string]bool, len(files))
+	for _, file := range files {
+		fileSelections[file.FileName] = file.Download
+	}
+
+	fileInfos, err := q.client.GetFilesInformationCtx(ctx, hash)
+	if err != nil {
+		return fmt.Errorf("获取种子文件信息失败: %w", err)
+	}
+
+	usedSelections := make(map[string]struct{}, len(files))
+	downloadIDs := make([]string, 0, len(*fileInfos))
+	skipIDs := make([]string, 0, len(*fileInfos))
+	for _, info := range *fileInfos {
+		download, ok := fileSelections[info.Name]
+		if !ok {
+			return fmt.Errorf("文件 %s 不在任务选择列表中", info.Name)
+		}
+		usedSelections[info.Name] = struct{}{}
+		if download {
+			downloadIDs = append(downloadIDs, strconv.Itoa(info.Index))
+		} else {
+			skipIDs = append(skipIDs, strconv.Itoa(info.Index))
+		}
+	}
+	if len(usedSelections) != len(fileSelections) {
+		return fmt.Errorf("任务选择列表包含未匹配的文件")
+	}
+	if len(downloadIDs) == 0 {
+		return fmt.Errorf("未选择任何文件，无法开始下载")
+	}
+
+	if len(skipIDs) > 0 {
+		if err := q.client.SetFilePriorityCtx(ctx, hash, strings.Join(skipIDs, "|"), 0); err != nil {
+			return fmt.Errorf("设置文件为不下载失败: %w", err)
+		}
+	}
+	if len(downloadIDs) > 0 {
+		if err := q.client.SetFilePriorityCtx(ctx, hash, strings.Join(downloadIDs, "|"), 1); err != nil {
+			return fmt.Errorf("设置文件下载失败: %w", err)
+		}
+	}
+	return nil
+}
+
 // convertTorrentsToDownloadStatuses 将qbittorrent的种子信息转换为DownloadStatus
 func (q *QBittorrent) convertTorrentsToDownloadStatuses(ctx context.Context, torrents []qbittorrent.Torrent) []downloader.DownloadStatus {
 	// 转换为DownloadStatus
@@ -113,7 +167,7 @@ func (q *QBittorrent) convertTorrentsToDownloadStatuses(ctx context.Context, tor
 			Name:          t.Name,
 			Progress:      t.Progress,
 			DownloadSpeed: t.DlSpeed,
-			Size:          t.TotalSize,
+			Size:          t.Size,
 		}
 
 		switch {
@@ -171,7 +225,7 @@ func (q *QBittorrent) GetTorrentName(ctx context.Context, hash string) (string, 
 		return "", err
 	}
 	var name string
-	if err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+	if err := wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		props, err := q.client.GetTorrentPropertiesCtx(ctx, hash)
 		if err != nil {
 			log.Errorf(ctx, "获取种子属性信息失败: %s", err)

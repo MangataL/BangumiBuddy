@@ -222,7 +222,7 @@ export default function SubscriptionManagement() {
           refreshSuccess && "animate-[pulse_0.5s_ease-in-out]"
         )}
       >
-        <div className="flex flex-wrap gap-4 p-4 pb-10">
+        <div className="grid grid-cols-2 gap-4 p-4 pb-10 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
           {bangumis.map((bangumi) => (
             <div
               key={bangumi.bangumiName + bangumi.season}
@@ -230,7 +230,7 @@ export default function SubscriptionManagement() {
             >
               <Card
                 className={cn(
-                  "anime-card overflow-hidden border-primary/10 cursor-pointer transition-all duration-300 hover:scale-105 w-[130px] xs:w-[160px]",
+                  "anime-card overflow-hidden border-primary/10 cursor-pointer transition-all duration-300 hover:scale-105 w-full",
                   selectedBangumi?.bangumiName === bangumi.bangumiName &&
                     selectedBangumi?.season === bangumi.season &&
                     "scale-105 border-primary/30 shadow-lg"

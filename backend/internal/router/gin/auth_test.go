@@ -219,7 +219,7 @@ func TestAuth_UpdateUser(t *testing.T) {
 				return mockAuth, ctrl.Finish
 			},
 			wantStatus: http.StatusInternalServerError,
-			wantBody:   `{"error":"err"}`,
+			wantBody:   `{"error":"server_error","error_description":"err"}`,
 		},
 	}
 

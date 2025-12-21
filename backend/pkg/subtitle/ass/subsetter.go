@@ -44,7 +44,6 @@ func (s *Subsetter) InitFontMetaSet(ctx context.Context) error {
 }
 
 func (s *Subsetter) SubsetFont(ctx context.Context, filePath string) (string, error) {
-
 	var parseFontOpts []ParseFontSetOption
 	if s.config.CoverExistSubFont {
 		parseFontOpts = append(parseFontOpts, IgnoreFontExist())
@@ -281,6 +280,10 @@ func formatMissingGlyphs(glyphs []rune) string {
 
 func (s *Subsetter) GetFontMetaSetStats(ctx context.Context) (subtitle.FontMetaSetStats, error) {
 	return s.fontMetaSet.GetFontMetaSetStats(ctx)
+}
+
+func (s *Subsetter) ListFonts(ctx context.Context, req subtitle.ListFontsReq) ([]subtitle.Font, error) {
+	return s.fontMetaSet.ListFonts(ctx, req)
 }
 
 func (s *Subsetter) Reload(config interface{}) error {

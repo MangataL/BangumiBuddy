@@ -1,44 +1,62 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Folder, FolderOpen, ChevronRight, Home, Loader2 } from "lucide-react";
-import magnetAPI, { type FileDir } from "@/api/magnet";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  Home,
+  Loader2,
+  Search,
+  FileText,
+  Subtitles,
+} from "lucide-react";
+import magnetAPI, { type DirInfo, type FileInfo } from "@/api/magnet";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 import { extractErrorMessage } from "@/utils/error";
+import { formatFileSize } from "@/utils/util";
+export type SourceType = "dir" | "file";
+
+export interface SourceSelection {
+  path: string;
+  type: SourceType;
+}
+
 interface SourceDirectorySelectorProps {
-  /** 初始路径 */
   initialPath?: string;
-  /** 选中的目录路径 */
-  selectedDir: string;
-  /** 目录选中时的回调 */
-  onSelectDir: (path: string) => void;
-  /** 是否为移动端 */
+  selectedSource: SourceSelection | null;
+  onSelectSource: (source: SourceSelection | null) => void;
   isMobile?: boolean;
   className?: string;
 }
 
 export function SourceDirectorySelector({
   initialPath = "/",
-  selectedDir,
-  onSelectDir,
+  selectedSource,
+  onSelectSource,
   isMobile = false,
   className,
 }: SourceDirectorySelectorProps) {
   const { toast } = useToast();
   const [currentPath, setCurrentPath] = useState<string>(initialPath);
-  const [directories, setDirectories] = useState<FileDir[]>([]);
+  const [directories, setDirectories] = useState<DirInfo[]>([]);
+  const [files, setFiles] = useState<FileInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [filePathSplit, setFilePathSplit] = useState<string>("/");
   const [fileRoots, setFileRoots] = useState<string[]>([]);
   const [showRoots, setShowRoots] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // 加载指定路径下的目录
   const loadDirectories = async (path: string) => {
     setLoading(true);
+    setSearchTerm("");
     try {
       const resp = await magnetAPI.listDirs(path);
       setDirectories(resp.dirs);
+      setFiles(resp.files);
       setFilePathSplit(resp.filePathSplit);
       setFileRoots(resp.fileRoots);
     } catch (error) {
@@ -49,12 +67,12 @@ export function SourceDirectorySelector({
         variant: "destructive",
       });
       setDirectories([]);
+      setFiles([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // 初始加载和初始路径变化时加载目录
   useEffect(() => {
     if (showRoots) return;
     if (initialPath) {
@@ -63,14 +81,12 @@ export function SourceDirectorySelector({
     }
   }, [initialPath]);
 
-  // 进入子目录
   const handleEnterDir = async (dirPath: string) => {
     setShowRoots(false);
     setCurrentPath(dirPath);
     await loadDirectories(dirPath);
   };
 
-  // 计算上级目录
   const getParentPath = (path: string): string => {
     const sep = filePathSplit || "/";
     const roots = fileRoots.length ? fileRoots : [sep];
@@ -87,15 +103,14 @@ export function SourceDirectorySelector({
     return stripped.slice(0, idx);
   };
 
-  // 返回上级目录
   const handleGoBack = async () => {
     const parentPath = getParentPath(currentPath);
     setCurrentPath(parentPath);
     await loadDirectories(parentPath);
   };
 
-  // 回到根目录
   const handleGoHome = async () => {
+    setSearchTerm("");
     if (fileRoots.length <= 1) {
       setShowRoots(false);
       const rootPath = fileRoots[0] || filePathSplit || "/";
@@ -103,9 +118,7 @@ export function SourceDirectorySelector({
       await loadDirectories(rootPath);
       return;
     }
-    // 多根盘场景：直接展示 roots
     setShowRoots(true);
-    // 将 fileRoots 转换为 FileDir 格式，并检查每个根盘
     setLoading(true);
     try {
       const rootDirs = await Promise.all(
@@ -114,219 +127,265 @@ export function SourceDirectorySelector({
             const resp = await magnetAPI.listDirs(rootPath);
             return {
               path: rootPath,
+              name: rootPath,
               hasDir: resp.dirs.length > 0,
               subtitleCount: 0,
             };
           } catch {
-            return { path: rootPath, hasDir: false, subtitleCount: 0 };
+            return {
+              path: rootPath,
+              name: rootPath,
+              hasDir: false,
+              subtitleCount: 0,
+            };
           }
         })
       );
       setDirectories(rootDirs);
+      setFiles([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // 获取目录名称（路径的最后一部分）
-  const getDirName = (path: string): string => {
+  const pathSegments = useMemo(() => {
     const sep = filePathSplit || "/";
-    // 保持根盘完整显示，例如 C:\
-    if (fileRoots.includes(path)) return path;
-    const parts = path.split(sep).filter(Boolean);
-    return parts[parts.length - 1] || sep;
+    const roots = fileRoots.length ? fileRoots : [sep];
+    const matchedRoot =
+      roots.find((r) => currentPath.startsWith(r)) || roots[0];
+
+    let relative = currentPath.slice(matchedRoot.length);
+    const segments = relative.split(sep).filter(Boolean);
+
+    return [
+      { name: matchedRoot, path: matchedRoot },
+      ...segments.map((seg, i) => ({
+        name: seg,
+        path: matchedRoot + segments.slice(0, i + 1).join(sep),
+      })),
+    ];
+  }, [currentPath, filePathSplit, fileRoots]);
+
+  const filteredDirs = useMemo(() => {
+    if (!searchTerm.trim()) return directories;
+    const lowerTerm = searchTerm.toLowerCase();
+    return directories.filter((dir) =>
+      dir.name.toLowerCase().includes(lowerTerm)
+    );
+  }, [directories, searchTerm]);
+
+  const filteredFiles = useMemo(() => {
+    if (!searchTerm.trim()) return files;
+    const lowerTerm = searchTerm.toLowerCase();
+    return files.filter((file) => file.name.toLowerCase().includes(lowerTerm));
+  }, [files, searchTerm]);
+
+  const toggleFile = (filePath: string) => {
+    if (selectedSource?.path === filePath) {
+      onSelectSource(null);
+    } else {
+      onSelectSource({ path: filePath, type: "file" });
+    }
   };
 
-  // 截断文件夹名称，过长时省略
-  const truncateDirName = (name: string, maxLength: number = 30): string => {
+  const handleSelectDir = (dirPath: string) => {
+    onSelectSource({ path: dirPath, type: "dir" });
+  };
+
+  // 截断名称，过长时省略
+  const truncateName = (name: string, maxLength: number = 32): string => {
     if (name.length <= maxLength) return name;
     return name.slice(0, maxLength) + "...";
   };
 
   return (
-    <div className={cn("space-y-3 h-full flex flex-col min-h-0", className)}>
-      {/* 当前路径导航 */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleGoHome}
-          disabled={
-            (fileRoots.length <= 1
-              ? currentPath === (fileRoots[0] || filePathSplit || "/")
-              : showRoots) || loading
-          }
-          className={cn(isMobile ? "h-7 px-2" : "h-8 px-2")}
-        >
-          <Home className={cn(isMobile ? "w-3 h-3" : "w-3.5 h-3.5")} />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleGoBack}
-          disabled={
-            (fileRoots.length <= 1
-              ? currentPath === (fileRoots[0] || filePathSplit || "/")
-              : showRoots) || loading
-          }
-          className={cn(isMobile ? "h-7 px-2" : "h-8 px-2")}
-        >
-          <ChevronRight
-            className={cn("rotate-180", isMobile ? "w-3 h-3" : "w-3.5 h-3.5")}
+    <div className={cn("space-y-2 h-full flex flex-col min-h-0", className)}>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-1 overflow-x-auto py-0.5 scrollbar-hide no-scrollbar">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleGoHome}
+            className={cn("flex-shrink-0", isMobile ? "h-6 w-6" : "h-7 w-7")}
+          >
+            <Home className={cn(isMobile ? "w-3.5 h-3.5" : "w-4 h-4")} />
+          </Button>
+          {pathSegments.map((seg, i) => (
+            <div key={seg.path} className="flex items-center flex-shrink-0">
+              <ChevronRight className="w-3 h-3 text-muted-foreground mx-0.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "font-normal",
+                  isMobile ? "h-6 px-1 text-[11px]" : "h-7 px-1.5 text-xs",
+                  i === pathSegments.length - 1 && "bg-muted font-medium"
+                )}
+                onClick={() => handleEnterDir(seg.path)}
+              >
+                {seg.name}
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="relative group">
+          <Search
+            className={cn(
+              "absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-blue-500",
+              isMobile ? "w-3.5 h-3.5" : "w-4 h-4"
+            )}
           />
-        </Button>
-        <div
-          className={cn(
-            "flex-1 rounded-lg bg-muted/50 border overflow-x-auto whitespace-nowrap scrollbar-hide",
-            isMobile ? "p-1.5 text-xs" : "p-2 text-xs"
-          )}
-        >
-          <code>{currentPath}</code>
+          <Input
+            placeholder="搜索文件夹或字幕..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className={cn(
+              "pl-9 rounded-xl bg-muted/30 border-none focus-visible:ring-blue-500/30",
+              isMobile ? "h-8 text-xs" : "h-9"
+            )}
+          />
         </div>
       </div>
 
-      {/* 已选择的源目录 */}
-      {selectedDir && (
-        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <FolderOpen
-                className={cn(
-                  "text-blue-600 flex-shrink-0",
-                  isMobile ? "w-3.5 h-3.5" : "w-4 h-4"
-                )}
-              />
-              <code
-                className={cn(
-                  "break-all text-blue-700 dark:text-blue-300",
-                  isMobile ? "text-xs" : "text-xs"
-                )}
-              >
-                {selectedDir}
-              </code>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onSelectDir("")}
-              className={cn(
-                "text-xs flex-shrink-0",
-                isMobile ? "h-5 px-1.5" : "h-6 px-2"
-              )}
-            >
-              清除
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* 目录列表 */}
-      <ScrollArea className="flex-1 min-h-0 rounded-lg border bg-muted/20">
-        <div className="p-2 space-y-1">
+      <ScrollArea className="flex-1 rounded-xl border bg-muted/10">
+        <div className={cn("space-y-0.5", isMobile ? "p-1.5" : "p-2")}>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2
-                className={cn(
-                  "animate-spin text-muted-foreground",
-                  isMobile ? "w-5 h-5" : "w-6 h-6"
-                )}
-              />
-            </div>
-          ) : directories.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <Folder
-                className={cn(isMobile ? "w-6 h-6 mb-2" : "w-8 h-8 mb-2")}
-              />
-              <p className={cn(isMobile ? "text-xs" : "text-sm")}>此目录为空</p>
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="animate-spin w-6 h-6 text-blue-500" />
             </div>
           ) : (
-            directories.map((dir, index) => {
-              return (
-                <div
-                  key={index}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg transition-all hover:bg-accent cursor-pointer",
-                    isMobile ? "p-2" : "p-2",
-                    selectedDir === dir.path &&
-                      "bg-blue-500/10 border border-blue-500/30"
-                  )}
-                  onClick={() => onSelectDir(dir.path)}
-                >
-                  {/* 只有当目录有子目录时才显示箭头 */}
-                  {dir.hasDir && (
-                    <div
-                      className="p-1 hover:bg-blue-500/20 rounded transition-colors cursor-pointer flex-shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEnterDir(dir.path);
-                      }}
-                    >
-                      <ChevronRight
-                        className={cn(
-                          "text-muted-foreground",
-                          isMobile ? "w-4 h-4" : "w-4 h-4"
-                        )}
-                      />
-                    </div>
-                  )}
-                  {/* 没有子目录时用占位符保持布局对齐 */}
-                  {!dir.hasDir && (
-                    <div
-                      className={cn("flex-shrink-0", isMobile ? "w-6" : "w-6")}
-                    />
-                  )}
+            <>
+              {filteredDirs.map((dir) => {
+                const canEnter = dir.hasDir || dir.subtitleCount > 0;
+                const chevronBoxClass = isMobile ? "w-6 h-6" : "w-7 h-7";
+                return (
                   <div
+                    key={dir.path}
                     className={cn(
-                      "rounded-md flex-shrink-0 bg-blue-500/10 hover:bg-blue-500/20",
-                      isMobile ? "p-1.5" : "p-1.5"
+                      "flex items-center gap-2 rounded-lg cursor-pointer transition-colors group",
+                      isMobile ? "p-1.5" : "p-2",
+                      selectedSource?.path === dir.path
+                        ? "bg-blue-500/10"
+                        : "hover:bg-accent"
                     )}
+                    onClick={() => handleSelectDir(dir.path)}
                   >
+                    {canEnter ? (
+                      <div
+                        className={cn(
+                          "flex items-center justify-center rounded-md transition-colors",
+                          "hover:bg-blue-500/20",
+                          chevronBoxClass
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEnterDir(dir.path);
+                        }}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            isMobile ? "w-3.5 h-3.5" : "w-4 h-4",
+                            "text-muted-foreground group-hover:text-blue-500"
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <div className={chevronBoxClass} /> // 保持缩进对齐
+                    )}
                     <Folder
                       className={cn(
-                        "text-blue-600",
-                        isMobile ? "w-3.5 h-3.5" : "w-3.5 h-3.5"
+                        isMobile ? "w-3.5 h-3.5" : "w-4 h-4",
+                        "text-blue-500 fill-blue-500/10"
                       )}
                     />
+                    <span className="flex-1 text-sm truncate" title={dir.name}>
+                      {truncateName(dir.name, isMobile ? 30 : 45)}
+                    </span>
+                    {dir.subtitleCount > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-medium">
+                        {dir.subtitleCount}
+                      </span>
+                    )}
                   </div>
+                );
+              })}
+
+              {filteredFiles.map((file) => (
+                <div
+                  key={file.path}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg cursor-pointer transition-colors",
+                    isMobile ? "p-1.5" : "p-2",
+                    selectedSource?.path === file.path
+                      ? "bg-blue-500/10 border border-blue-500/30"
+                      : "hover:bg-accent border border-transparent"
+                  )}
+                  onClick={() => toggleFile(file.path)}
+                >
+                  <Subtitles
+                    className={cn(
+                      isMobile ? "w-3.5 h-3.5 ml-0.5" : "w-4 h-4 ml-1",
+                      selectedSource?.path === file.path
+                        ? "text-blue-600 fill-blue-600/10"
+                        : "text-orange-500 fill-orange-500/10"
+                    )}
+                  />
                   <span
                     className={cn(
-                      "flex-1 min-w-0 text-foreground",
-                      isMobile ? "text-sm" : "text-sm"
+                      "flex-1 text-sm truncate",
+                      selectedSource?.path === file.path &&
+                        "font-medium text-blue-700"
                     )}
-                    title={getDirName(dir.path)}
+                    title={file.name}
                   >
-                    {truncateDirName(getDirName(dir.path), isMobile ? 20 : 30)}
+                    {truncateName(file.name, isMobile ? 30 : 45)}
                   </span>
-                  <span
-                    className={cn(
-                      "text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0",
-                      isMobile ? "ml-1" : "ml-2"
-                    )}
-                  >
-                    {dir.subtitleCount ?? 0}
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatFileSize(file.size)}
                   </span>
                 </div>
-              );
-            })
+              ))}
+
+              {filteredDirs.length === 0 && filteredFiles.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                  <Folder className="w-10 h-10 mb-2 opacity-20" />
+                  <p className="text-sm">空空如也</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </ScrollArea>
 
-      {/* 操作提示 */}
-      {!isMobile && (
-        <div
-          className={cn(
-            "flex items-start gap-2 p-2 rounded-lg bg-muted/50 text-muted-foreground",
-            "text-xs"
-          )}
-        >
-          <div className="flex-shrink-0 mt-0.5">💡</div>
-          <div className="space-y-1">
-            <p>
-              • 点击选择目录，点击左侧箭头进入，数字是该目录下的字幕文件数量
-              {fileRoots.length > 1 ? "（根目录直接展示盘符）" : ""}
-            </p>
-            <p>• 选择包含字幕文件的目录</p>
+      {selectedSource && (
+        <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              {selectedSource.type === "dir" ? (
+                <>
+                  <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-blue-700">
+                    已选目录: {selectedSource.path.split(filePathSplit).pop()}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Subtitles className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-blue-700">
+                    已选文件: {selectedSource.path.split(filePathSplit).pop()}
+                  </span>
+                </>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onSelectSource(null)}
+              className="h-6 px-2 text-[10px] hover:bg-blue-500/10 text-blue-600"
+            >
+              重置
+            </Button>
           </div>
         </div>
       )}

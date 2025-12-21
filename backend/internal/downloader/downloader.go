@@ -56,12 +56,17 @@ type Downloader interface {
 	SetLocation(ctx context.Context, hash, savePath string) error
 	GetTorrentName(ctx context.Context, hash string) (string, error)
 	ListTorrentsStatus(ctx context.Context) ([]DownloadStatus, error)
+	SetTorrentFilePriorities(ctx context.Context, hash string, files []TorrentFileSelection) error
 	DeleteTorrent(ctx context.Context, hash string) error
 	ContinueDownload(ctx context.Context, hash string) error
 }
 
 func (m *Manager) GetTorrentFileNames(ctx context.Context, hash string) ([]string, error) {
 	return m.downloader.GetTorrentFileNames(ctx, hash)
+}
+
+func (m *Manager) SetTorrentFilePriorities(ctx context.Context, hash string, files []TorrentFileSelection) error {
+	return m.downloader.SetTorrentFilePriorities(ctx, hash, files)
 }
 
 func (m *Manager) Download(ctx context.Context, req DownloadReq) error {

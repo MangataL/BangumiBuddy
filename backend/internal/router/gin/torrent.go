@@ -1,6 +1,7 @@
 package gin
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +29,8 @@ func (r *Router) DeleteTorrent(c *gin.Context) {
 // POST /api/v1/torrents/:hash/transfer
 func (r *Router) Transfer(c *gin.Context) {
 	hash := c.Param("hash")
-	err := r.transfer.Transfer(c.Request.Context(), hash)
+	// 因为转移可能耗时很久，接口失败了也应该继续在后台跑
+	err := r.transfer.Transfer(context.Background(), hash)
 	if err != nil {
 		writeError(c, err)
 		return

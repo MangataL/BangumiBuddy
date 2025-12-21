@@ -10,7 +10,7 @@ import (
 
 var (
 	// ErrUsernameOrPasswordError 用户名或密码错误
-	ErrUsernameOrPasswordError = errs.NewBadRequest("用户名或密码错误")
+	ErrUsernameOrPasswordError = errs.NewUnauthorized("用户名或密码错误")
 )
 
 // Authenticator 鉴权接口

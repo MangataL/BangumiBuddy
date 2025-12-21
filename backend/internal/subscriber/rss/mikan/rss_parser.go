@@ -9,21 +9,23 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
-	"github.com/nssteinbrenner/anitogo"
 	"github.com/pkg/errors"
 
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
+	"github.com/MangataL/BangumiBuddy/pkg/bangumifile"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 )
 
-func NewParser() subscriber.RSSParser {
+func NewParser(bfParser bangumifile.Parser) subscriber.RSSParser {
 	return &parser{
-		fp: gofeed.NewParser(),
+		fp:       gofeed.NewParser(),
+		bfParser: bfParser,
 	}
 }
 
 type parser struct {
-	fp *gofeed.Parser
+	fp       *gofeed.Parser
+	bfParser bangumifile.Parser
 }
 
 func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error) {
@@ -32,7 +34,7 @@ func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error)
 		return subscriber.RSS{}, errors.WithMessage(err, "解析RSS失败")
 	}
 	items := getItems(ctx, feed.Items)
-	rg := parseReleaseGroup(items)
+	rg := p.parseReleaseGroup(ctx, items)
 	return subscriber.RSS{
 		BangumiName:  getBangumiName(ctx, feed.Title),
 		ReleaseGroup: rg,
@@ -40,12 +42,18 @@ func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error)
 	}, nil
 }
 
-func parseReleaseGroup(items []subscriber.RSSItem) string {
+func (p *parser) parseReleaseGroup(ctx context.Context, items []subscriber.RSSItem) string {
 	if len(items) == 0 {
 		return ""
 	}
-	meta := anitogo.Parse(items[0].GUID, anitogo.DefaultOptions)
-	return meta.ReleaseGroup
+	bf, err := p.bfParser.Parse(ctx, items[0].GUID,
+		bangumifile.IgnoreValidateEpisode(),
+		bangumifile.PreserveOriginName(),
+	)
+	if err != nil {
+		return ""
+	}
+	return bf.ReleaseGroup
 }
 
 var (

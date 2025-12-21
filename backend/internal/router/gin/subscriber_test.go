@@ -46,7 +46,7 @@ func TestSubscriber_ParseRSS(t *testing.T) {
 				return sm, ctrl.Finish
 			},
 			wantStatus: http.StatusOK,
-			wantBody:   `{"name":"name","season":2,"year":"2024","tmdb_id":1,"rss_link":"link"}`,
+			wantBody:   `{"name":"name","season":2,"year":"2024","tmdbID":1,"rssLink":"link","releaseGroup":"","episodeTotalNum":0,"airWeekday":null}`,
 		},
 	}
 	for _, tc := range testCases {

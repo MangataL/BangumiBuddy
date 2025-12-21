@@ -7,4 +7,5 @@ type Subsetter interface {
 	InitFontMetaSet(ctx context.Context) error
 	GetFontMetaSetStats(ctx context.Context) (FontMetaSetStats, error)
 	UsingTempFontDir(ctx context.Context, fontDir string) (Subsetter, error)
+	ListFonts(ctx context.Context, req ListFontsReq) ([]Font, error)
 }
