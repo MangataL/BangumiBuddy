@@ -14,6 +14,7 @@ interface EpisodePositionInputProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  icon?: React.ReactNode;
   className?: string;
   inputClassName?: string;
   labelClassName?: string;
@@ -25,6 +26,7 @@ export function EpisodePositionInput({
   value,
   onChange,
   label = "集数定位",
+  icon,
   className = "space-y-2",
   inputClassName,
   labelClassName,
@@ -33,8 +35,17 @@ export function EpisodePositionInput({
 }: EpisodePositionInputProps) {
   return (
     <div className={className}>
-      <div className={cn("flex items-center gap-2", labelContainerClassName)}>
-        <Label htmlFor="episodePosition" className={labelClassName}>
+      <div
+        className={cn("flex items-center gap-2 mb-1", labelContainerClassName)}
+      >
+        <Label
+          htmlFor="episodePosition"
+          className={cn(
+            "flex items-center gap-2 text-muted-foreground",
+            labelClassName
+          )}
+        >
+          {icon}
           {label}
         </Label>
         <TooltipProvider>
@@ -52,7 +63,11 @@ export function EpisodePositionInput({
                 <Info className="h-3 w-3 text-muted-foreground/60 hover:text-blue-500 transition-colors" />
               )}
             </HybridTooltipTrigger>
-            <HybridTooltipContent className="max-w-xs space-y-2">
+            <HybridTooltipContent
+              side="top"
+              align="start"
+              className="max-w-xs space-y-2"
+            >
               <p>
                 集数定位用来确定文件名中集数的位置，用于部分命名不规范解析集数出错的文件，一般不需要设置。
               </p>
@@ -81,7 +96,10 @@ export function EpisodePositionInput({
         id="episodePosition"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={cn("rounded-xl", inputClassName)}
+        className={cn(
+          "rounded-xl bg-muted/30 border-muted-foreground/10",
+          inputClassName
+        )}
       />
     </div>
   );

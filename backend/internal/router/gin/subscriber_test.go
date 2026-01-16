@@ -3,6 +3,8 @@ package gin
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -13,10 +15,19 @@ import (
 )
 
 func TestSubscriber_ParseRSS(t *testing.T) {
-	initArgs := func(link string) args {
+	initArgs := func(req subscriber.ParserRSSReq) args {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request, _ = http.NewRequest("GET", "/bangumi/rss?link="+link, nil)
+		u, _ := url.Parse("/bangumi/rss")
+		q := u.Query()
+		if req.RSSLink != "" {
+			q.Set("rss_link", req.RSSLink)
+		}
+		if req.TMDBID != 0 {
+			q.Set("tmdb_id", strconv.Itoa(req.TMDBID))
+		}
+		u.RawQuery = q.Encode()
+		c.Request, _ = http.NewRequest("GET", u.String(), nil)
 		return args{
 			ctx:    c,
 			writer: w,
@@ -32,11 +43,17 @@ func TestSubscriber_ParseRSS(t *testing.T) {
 	}{
 		{
 			name: "success",
-			args: initArgs("link"),
+			args: initArgs(subscriber.ParserRSSReq{
+				RSSLink: "link",
+				TMDBID:  1,
+			}),
 			fake: func(t *testing.T) (subscriber.Interface, func()) {
 				ctrl := gomock.NewController(t)
 				sm := subscriber.NewMockInterface(ctrl)
-				sm.EXPECT().ParseRSS(gomock.Any(), "link").Return(subscriber.ParseRSSRsp{
+				sm.EXPECT().ParseRSS(gomock.Any(), subscriber.ParserRSSReq{
+					RSSLink: "link",
+					TMDBID:  1,
+				}).Return(subscriber.ParseRSSRsp{
 					Name:    "name",
 					Season:  2,
 					Year:    "2024",

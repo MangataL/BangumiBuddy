@@ -12,10 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import { subscriptionAPI } from "@/api/subscription";
 import { useToast } from "@/hooks/useToast";
-import { AxiosError } from "axios";
 import { ConfirmSubscriptionDialog } from "./confirm-subscription-dialog";
 import { ParseRSSResponse } from "@/api/subscription";
 import { extractErrorMessage } from "@/utils/error";
+import { TMDBInput } from "@/components/tmdb/input";
 
 export interface AddSubscriptionDialogProps {
   open: boolean;
@@ -30,7 +30,9 @@ export function AddSubscriptionDialog({
 }: AddSubscriptionDialogProps) {
   const { toast } = useToast();
   const [subscriptionUrl, setSubscriptionUrl] = useState("");
+  const [tmdbID, setTmdbID] = useState<number>(0);
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [parseRSSRsp, setParseRSSRsp] = useState<ParseRSSResponse>({
     name: "",
     season: 1,
@@ -40,17 +42,24 @@ export function AddSubscriptionDialog({
     episodeTotalNum: 0,
     airWeekday: 0,
     rssLink: "",
+    posterURL: "",
+    backdropURL: "",
   });
 
   const handleOpenChange = (open: boolean) => {
     setSubscriptionUrl("");
+    setTmdbID(0);
     onOpenChange(open);
   };
 
   const handleParseSubscription = async () => {
-    if (subscriptionUrl.trim()) {
+    if (subscriptionUrl.trim() || tmdbID !== 0) {
       try {
-        const rssInfo = await subscriptionAPI.parseRSS(subscriptionUrl.trim());
+        setLoading(true);
+        const rssInfo = await subscriptionAPI.parseRSS({
+          rssLink: subscriptionUrl.trim(),
+          tmdbID: tmdbID || undefined,
+        });
         setParseRSSRsp((prev) => ({
           ...prev,
           name: rssInfo.name,
@@ -61,16 +70,23 @@ export function AddSubscriptionDialog({
           releaseGroup: rssInfo.releaseGroup,
           airWeekday: rssInfo.airWeekday,
           rssLink: subscriptionUrl.trim(),
+          posterURL: rssInfo.posterURL,
+          backdropURL: rssInfo.backdropURL,
         }));
         handleOpenChange(false);
         setParseDialogOpen(true);
       } catch (error) {
-        const description = extractErrorMessage(error, "未知原因失败，请检查RSS链接是否正确");
+        const description = extractErrorMessage(
+          error,
+          "未知原因失败，请检查RSS链接或TMDB ID是否正确"
+        );
         toast({
-          title: "解析RSS链接失败",
+          title: "解析失败",
           description: description,
           variant: "destructive",
         });
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -83,7 +99,9 @@ export function AddSubscriptionDialog({
             <DialogTitle className="text-xl anime-gradient-text">
               添加订阅
             </DialogTitle>
-            <DialogDescription>请输入RSS订阅链接</DialogDescription>
+            <DialogDescription>
+              请输入RSS订阅链接，默认解析出错时可以手动输入TMDB ID进行解析
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -102,20 +120,30 @@ export function AddSubscriptionDialog({
                 className="rounded-xl border-primary/20 focus:border-primary focus:ring-primary"
               />
             </div>
+            <div className="grid gap-2">
+              <TMDBInput
+                value={tmdbID}
+                onTMDBIDChange={(id) => setTmdbID(id)}
+                onMetaChange={() => {}}
+                type="tv"
+              />
+            </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => handleOpenChange(false)}
               className="rounded-xl"
+              disabled={loading}
             >
               取消
             </Button>
             <Button
               onClick={handleParseSubscription}
               className="rounded-xl bg-gradient-to-r from-primary to-blue-500"
+              disabled={loading || (!subscriptionUrl.trim() && tmdbID === 0)}
             >
-              解析
+              {loading ? "解析中..." : "解析"}
             </Button>
           </DialogFooter>
         </DialogContent>

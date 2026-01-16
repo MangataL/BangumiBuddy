@@ -17,6 +17,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import {
+  Info,
+  Filter,
+  Settings,
+  Tv,
+  Calendar,
+  Hash,
+  Users,
+  Type,
+  Flag,
+  MapPin,
+  Clock,
+  ArrowUpCircle,
+  Search,
+  X,
+} from "lucide-react";
 import { subscriptionAPI } from "@/api/subscription";
 import { useToast } from "@/hooks/useToast";
 import { MatchInput } from "../common/match-input";
@@ -26,6 +44,8 @@ import { getSortedWeekDays } from "@/utils/time";
 import { ParseRSSResponse, SubscribeRequest } from "@/api/subscription";
 import { extractErrorMessage } from "@/utils/error";
 import { Meta } from "@/api/meta";
+import { cn } from "@/lib/utils";
+
 interface ConfirmSubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,6 +57,8 @@ interface ConfirmSubscriptionDialogProps {
 interface BangumiFormState extends SubscribeRequest {
   name: string;
   year: string;
+  backdropURL: string;
+  posterURL: string;
 }
 
 export function ConfirmSubscriptionDialog({
@@ -61,11 +83,13 @@ export function ConfirmSubscriptionDialog({
     episodeOffset: 0,
     priority: 1,
     episodeLocation: "",
+    backdropURL: "",
+    posterURL: "",
   });
 
   // 监听 parseRSSRsp 变化
   useEffect(() => {
-    if (parseRSSRsp) {
+    if (parseRSSRsp && open) {
       setBangumiInfo((prev) => ({
         ...prev,
         name: parseRSSRsp.name,
@@ -76,9 +100,11 @@ export function ConfirmSubscriptionDialog({
         releaseGroup: parseRSSRsp.releaseGroup,
         episodeTotalNum: parseRSSRsp.episodeTotalNum,
         airWeekday: parseRSSRsp.airWeekday,
+        backdropURL: parseRSSRsp.backdropURL,
+        posterURL: parseRSSRsp.posterURL,
       }));
     }
-  }, [open]);
+  }, [open, parseRSSRsp]);
 
   const [fieldErrors, setFieldErrors] = useState({
     season: "",
@@ -124,6 +150,8 @@ export function ConfirmSubscriptionDialog({
         episodeOffset: 0,
         priority: 1,
         episodeLocation: "",
+        backdropURL: "",
+        posterURL: "",
       });
     }
     setFieldErrors({
@@ -182,6 +210,8 @@ export function ConfirmSubscriptionDialog({
       season: meta.season,
       episodeTotalNum: meta.episodeTotalNum,
       airWeekday: meta.airWeekday || 0,
+      posterURL: meta.posterURL,
+      backdropURL: meta.backdropURL,
     }));
 
     // 验证相关字段
@@ -195,197 +225,322 @@ export function ConfirmSubscriptionDialog({
       open={Boolean(open && parseRSSRsp.name)}
       onOpenChange={handleOpenChange}
     >
-      <DialogContent className="max-w-md w-[95dvw] max-h-[90dvh] overflow-y-auto rounded-xl border-primary/20 bg-card/95 backdrop-blur-md sm:max-w-md scrollbar-hide">
-        <DialogHeader>
-          <DialogTitle className="text-xl anime-gradient-text">
-            订阅信息
-          </DialogTitle>
-          <DialogDescription>请确认或修改以下订阅信息</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label>番剧名称</Label>
-            <Input value={bangumiInfo.name} className="rounded-xl" readOnly />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid content-start gap-2">
-              <Label htmlFor="season">季度</Label>
-              <Input
-                id="season"
-                type="number"
-                value={bangumiInfo.season}
-                onChange={(e) =>
-                  updateBangumiInfo("season", parseInt(e.target.value))
-                }
-                className={`rounded-xl ${
-                  fieldErrors.season ? "border-destructive" : ""
-                }`}
-              />
-              {fieldErrors.season && (
-                <span className="text-sm text-destructive">
-                  {fieldErrors.season}
-                </span>
-              )}
-            </div>
-            <div className="grid content-start gap-2">
-              <Label htmlFor="year">年份</Label>
-              <Input
-                id="year"
-                type="number"
-                value={bangumiInfo.year}
-                className="rounded-xl"
-                readOnly
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid content-start gap-2">
-              <Label htmlFor="episodeTotalNum">总集数</Label>
-              <Input
-                id="episodeTotalNum"
-                type="number"
-                min="1"
-                value={bangumiInfo.episodeTotalNum}
-                onChange={(e) =>
-                  updateBangumiInfo("episodeTotalNum", parseInt(e.target.value))
-                }
-                className={`rounded-xl ${
-                  fieldErrors.episodeTotalNum ? "border-destructive" : ""
-                }`}
-              />
-              {fieldErrors.episodeTotalNum && (
-                <span className="text-sm text-destructive">
-                  {fieldErrors.episodeTotalNum}
-                </span>
-              )}
-            </div>
-            <div className="grid content-start gap-2">
-              <Label htmlFor="airWeekDay">更新星期</Label>
-              <Select
-                value={bangumiInfo.airWeekday.toString()}
-                onValueChange={(value) =>
-                  updateBangumiInfo("airWeekday", parseInt(value))
-                }
+      <DialogContent className="max-w-lg w-[95dvw] max-h-[90dvh] overflow-y-auto rounded-2xl border-primary/20 bg-card/95 backdrop-blur-md sm:max-w-lg scrollbar-hide p-0 [&>button:last-child]:hidden">
+        <div className="relative w-full overflow-hidden rounded-t-2xl">
+          {/* 背景图 */}
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: `url(${
+                bangumiInfo.backdropURL || bangumiInfo.posterURL
+              })`,
+              backgroundPosition: "center",
+              filter: "blur(4px) brightness(0.5)",
+              transform: "scale(1.1)",
+            }}
+          />
+          {/* 渐变遮罩 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-card" />
+
+          <div className="relative p-6 pt-8">
+            <div className="flex justify-between items-start mb-4">
+              <div className="space-y-1">
+                <DialogTitle className="text-xl font-bold text-white/95">
+                  订阅确认
+                </DialogTitle>
+                <DialogDescription className="text-white/60 text-xs">
+                  请核对并完善番剧订阅信息
+                </DialogDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full border border-white/20 bg-black/10 text-white/70 hover:bg-black/30 hover:text-white backdrop-blur-md transition-all -mr-2 -mt-2"
+                onClick={() => handleOpenChange(false)}
               >
-                <SelectTrigger
-                  id="airWeekDay"
-                  className={`rounded-xl ${
-                    fieldErrors.airWeekday ? "border-destructive" : ""
-                  }`}
-                >
-                  <SelectValue placeholder="请选择更新星期" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getSortedWeekDays().map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {fieldErrors.airWeekday && (
-                <span className="text-sm text-destructive">
-                  {fieldErrors.airWeekday}
-                </span>
-              )}
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex gap-5 mt-4">
+              {/* 海报 */}
+              <div className="relative w-28 h-40 flex-shrink-0 rounded-xl bg-card/20 backdrop-blur-sm border-2 border-white/20 overflow-hidden shadow-2xl">
+                {bangumiInfo.posterURL ? (
+                  <img
+                    src={bangumiInfo.posterURL}
+                    className="w-full h-full object-cover"
+                    alt={bangumiInfo.name}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white/40">
+                    <Tv className="w-10 h-10" />
+                  </div>
+                )}
+              </div>
+
+              {/* 番剧简要信息 */}
+              <div className="flex-1 flex flex-col justify-end pb-1">
+                <h3 className="text-2xl font-bold text-white mb-3 line-clamp-2 leading-tight drop-shadow-md">
+                  {bangumiInfo.name}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/20 text-white backdrop-blur-md border border-white/10">
+                    {bangumiInfo.year || "未知年份"}
+                  </span>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/40 text-white backdrop-blur-md border border-white/10">
+                    第 {bangumiInfo.season} 季
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <TMDBInput
-            type="tv"
-            value={bangumiInfo.tmdbID}
-            onTMDBIDChange={handleTMDBIDChange}
-            onMetaChange={handleTMDBMetaChange}
-            label="TMDB ID"
-            error={fieldErrors.tmdbID}
-          />
-          <div className="grid gap-2">
-            <Label htmlFor="subgroup">字幕组</Label>
-            <Input
-              id="subgroup"
-              value={bangumiInfo.releaseGroup}
-              onChange={(e) =>
-                updateBangumiInfo("releaseGroup", e.target.value)
-              }
-              className={`rounded-xl ${
-                fieldErrors.releaseGroup ? "border-destructive" : ""
-              }`}
-            />
-            {fieldErrors.releaseGroup && (
-              <span className="text-sm text-destructive">
-                {fieldErrors.releaseGroup}
-              </span>
-            )}
-          </div>
-
-          <MatchInput
-            label="包含匹配"
-            items={bangumiInfo.includeRegs}
-            placeholder="添加包含匹配条件"
-            onChange={(items) =>
-              setBangumiInfo((prev) => ({
-                ...prev,
-                includeRegs: items,
-              }))
-            }
-          />
-
-          <MatchInput
-            label="排除匹配"
-            items={bangumiInfo.excludeRegs}
-            placeholder="添加排除匹配条件"
-            onChange={(items) =>
-              setBangumiInfo((prev) => ({
-                ...prev,
-                excludeRegs: items,
-              }))
-            }
-          />
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="priority">优先级</Label>
-              <Input
-                id="priority"
-                type="number"
-                value={bangumiInfo.priority}
-                onChange={(e) =>
-                  updateBangumiInfo("priority", parseInt(e.target.value))
-                }
-                className="rounded-xl"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="episodeOffset">集数偏移</Label>
-              <Input
-                id="episodeOffset"
-                type="number"
-                className="rounded-xl"
-                value={bangumiInfo.episodeOffset}
-                onChange={(e) =>
-                  updateBangumiInfo("episodeOffset", parseInt(e.target.value))
-                }
-              />
-            </div>
-          </div>
-
-          <EpisodePositionInput
-            value={bangumiInfo.episodeLocation}
-            onChange={(value) => updateBangumiInfo("episodeLocation", value)}
-          />
         </div>
-        <DialogFooter className="gap-2 sm:gap-0">
+
+        <div className="px-6 py-4">
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6 bg-muted/50 p-1 rounded-xl">
+              <TabsTrigger
+                value="basic"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <Info className="w-4 h-4 mr-2 text-primary" />
+                <span>基础信息</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="filter"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <Filter className="w-4 h-4 mr-2 text-blue-500" />
+                <span>过滤规则</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="advanced"
+                className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <Settings className="w-4 h-4 mr-2 text-orange-500" />
+                <span>高级设置</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-4 mt-0 outline-none">
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Tv className="w-4 h-4" /> 番剧名称
+                  </Label>
+                  <Input
+                    value={bangumiInfo.name}
+                    readOnly
+                    className="rounded-xl bg-muted/30 border-muted-foreground/10 cursor-default focus-visible:ring-0"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="season"
+                      className="flex items-center gap-2 text-muted-foreground mb-1"
+                    >
+                      <Clock className="w-4 h-4" /> 季度
+                    </Label>
+                    <Input
+                      id="season"
+                      type="number"
+                      value={bangumiInfo.season}
+                      onChange={(e) =>
+                        updateBangumiInfo("season", parseInt(e.target.value))
+                      }
+                      className={cn(
+                        "rounded-xl bg-muted/30 border-muted-foreground/10",
+                        fieldErrors.season &&
+                          "border-destructive focus-visible:ring-destructive"
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="episodeTotalNum"
+                      className="flex items-center gap-2 text-muted-foreground mb-1"
+                    >
+                      <Hash className="w-4 h-4" /> 总集数
+                    </Label>
+                    <Input
+                      id="episodeTotalNum"
+                      type="number"
+                      min="1"
+                      value={bangumiInfo.episodeTotalNum}
+                      onChange={(e) =>
+                        updateBangumiInfo(
+                          "episodeTotalNum",
+                          parseInt(e.target.value)
+                        )
+                      }
+                      className={cn(
+                        "rounded-xl bg-muted/30 border-muted-foreground/10",
+                        fieldErrors.episodeTotalNum &&
+                          "border-destructive focus-visible:ring-destructive"
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="airWeekDay"
+                      className="flex items-center gap-2 text-muted-foreground mb-1"
+                    >
+                      <Calendar className="w-4 h-4" /> 更新时间
+                    </Label>
+                    <Select
+                      value={bangumiInfo.airWeekday.toString()}
+                      onValueChange={(value) =>
+                        updateBangumiInfo("airWeekday", parseInt(value))
+                      }
+                    >
+                      <SelectTrigger
+                        id="airWeekDay"
+                        className="rounded-xl bg-muted/30 border-muted-foreground/10"
+                      >
+                        <SelectValue placeholder="更新星期" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getSortedWeekDays().map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="subgroup"
+                      className="flex items-center gap-2 text-muted-foreground mb-1"
+                    >
+                      <Users className="w-4 h-4" /> 字幕组
+                    </Label>
+                    <Input
+                      id="subgroup"
+                      value={bangumiInfo.releaseGroup}
+                      onChange={(e) =>
+                        updateBangumiInfo("releaseGroup", e.target.value)
+                      }
+                      placeholder="例如: VCB-Studio"
+                      className={cn(
+                        "rounded-xl bg-muted/30 border-muted-foreground/10",
+                        fieldErrors.releaseGroup &&
+                          "border-destructive focus-visible:ring-destructive"
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <Separator className="my-2 opacity-50" />
+
+                <TMDBInput
+                  type="tv"
+                  value={bangumiInfo.tmdbID}
+                  onTMDBIDChange={handleTMDBIDChange}
+                  onMetaChange={handleTMDBMetaChange}
+                  label="TMDB ID"
+                  icon={<Search className="w-4 h-4" />}
+                  className="mb-2"
+                  error={fieldErrors.tmdbID}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="filter" className="space-y-4 mt-0 outline-none">
+              <MatchInput
+                label="包含匹配"
+                items={bangumiInfo.includeRegs}
+                placeholder="添加包含匹配条件"
+                onChange={(items) =>
+                  setBangumiInfo((prev) => ({ ...prev, includeRegs: items }))
+                }
+              />
+              <MatchInput
+                label="排除匹配"
+                items={bangumiInfo.excludeRegs}
+                placeholder="添加排除匹配条件"
+                onChange={(items) =>
+                  setBangumiInfo((prev) => ({ ...prev, excludeRegs: items }))
+                }
+              />
+            </TabsContent>
+
+            <TabsContent
+              value="advanced"
+              className="space-y-4 mt-0 outline-none"
+            >
+              <div className="grid gap-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="priority"
+                      className="flex items-center gap-2 text-muted-foreground mb-1"
+                    >
+                      <Flag className="w-4 h-4" /> 优先级
+                    </Label>
+                    <Input
+                      id="priority"
+                      type="number"
+                      value={bangumiInfo.priority}
+                      onChange={(e) =>
+                        updateBangumiInfo("priority", parseInt(e.target.value))
+                      }
+                      className="rounded-xl bg-muted/30 border-muted-foreground/10"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="episodeOffset"
+                      className="flex items-center gap-2 text-muted-foreground mb-1"
+                    >
+                      <ArrowUpCircle className="w-4 h-4" /> 集数偏移
+                    </Label>
+                    <Input
+                      id="episodeOffset"
+                      type="number"
+                      value={bangumiInfo.episodeOffset}
+                      onChange={(e) =>
+                        updateBangumiInfo(
+                          "episodeOffset",
+                          parseInt(e.target.value)
+                        )
+                      }
+                      className="rounded-xl bg-muted/30 border-muted-foreground/10"
+                    />
+                  </div>
+                </div>
+
+                <EpisodePositionInput
+                  value={bangumiInfo.episodeLocation}
+                  onChange={(value) =>
+                    updateBangumiInfo("episodeLocation", value)
+                  }
+                  icon={<MapPin className="w-4 h-4" />}
+                  inputClassName="bg-muted/30 border-muted-foreground/10"
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <DialogFooter className="px-6 py-4 bg-muted/30 gap-2 sm:gap-0 border-t border-muted-foreground/5 rounded-b-2xl">
           <Button
-            variant="outline"
+            variant="ghost"
             onClick={() => handleOpenChange(false)}
-            className="rounded-xl"
+            className="rounded-xl hover:bg-muted"
           >
             取消
           </Button>
           <Button
             onClick={handleSubscribe}
-            className="rounded-xl bg-gradient-to-r from-primary to-blue-500"
+            className="rounded-xl px-8 bg-gradient-to-r from-primary to-blue-500 hover:opacity-90 transition-all shadow-md shadow-primary/20"
           >
-            订阅
+            确认订阅
           </Button>
         </DialogFooter>
       </DialogContent>

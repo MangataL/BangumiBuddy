@@ -1023,7 +1023,7 @@ export function SubscriptionDetailDialog({
                       <h4 className="text-sm font-medium text-muted-foreground mb-3">
                         详情选项
                       </h4>
-                      <div className="flex flex-col space-y-2">
+                      <div className="flex flex-row sm:flex-col sm:space-y-2">
                         <button
                           onClick={() => setActiveTab("config")}
                           className={cn(

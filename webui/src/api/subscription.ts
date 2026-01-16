@@ -10,6 +10,8 @@ export interface ParseRSSResponse {
   releaseGroup: string;
   episodeTotalNum: number;
   airWeekday: number;
+  posterURL: string;
+  backdropURL: string;
 }
 
 // 订阅请求类型
@@ -147,9 +149,15 @@ export interface ListRecentUpdatedTorrentsReq {
 
 export const subscriptionAPI = {
   // 解析RSS链接
-  parseRSS: async (link: string): Promise<ParseRSSResponse> => {
+  parseRSS: async (data: {
+    rssLink: string;
+    tmdbID?: number;
+  }): Promise<ParseRSSResponse> => {
     return http.get("/bangumis/rss", {
-      params: { link },
+      params: {
+        rss_link: data.rssLink,
+        tmdb_id: data.tmdbID,
+      },
     });
   },
 

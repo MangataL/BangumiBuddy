@@ -14,7 +14,7 @@ var ErrSubscriberNotFound = errs.NewNotFound("番剧未找到")
 // Interface 服务层
 type Interface interface {
 	// ParseRSS 解析RSS链接，获取番剧的基本信息，供用户确认
-	ParseRSS(ctx context.Context, rssLink string) (ParseRSSRsp, error)
+	ParseRSS(ctx context.Context, req ParserRSSReq) (ParseRSSRsp, error)
 	// Subscribe 订阅番剧
 	Subscribe(ctx context.Context, req SubscribeReq) (Bangumi, error)
 	// Get 获取番剧信息

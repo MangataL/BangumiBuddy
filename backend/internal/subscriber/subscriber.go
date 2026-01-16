@@ -106,18 +106,28 @@ type Subscriber struct {
 	rssTicker *time.Ticker
 }
 
-func (s *Subscriber) ParseRSS(ctx context.Context, rssLink string) (ParseRSSRsp, error) {
-	if rssLink == "" {
+func (s *Subscriber) ParseRSS(ctx context.Context, req ParserRSSReq) (ParseRSSRsp, error) {
+	rssLink := req.RSSLink
+	if rssLink == "" && req.TMDBID == 0 {
 		return ParseRSSRsp{}, errs.NewBadRequest("RSS链接不能为空")
 	}
+	var (
+		meta meta.Meta
+		err  error
+	)
 	rss, err := s.rssParser.Parse(ctx, rssLink)
 	if err != nil {
 		return ParseRSSRsp{}, err
 	}
-	meta, err := s.metaParser.SearchTV(ctx, rss.BangumiName)
+	if req.TMDBID != 0 {
+		meta, err = s.metaParser.ParseTV(ctx, req.TMDBID)
+	} else {
+		meta, err = s.metaParser.SearchTV(ctx, rss.BangumiName)
+	}
 	if err != nil {
 		return ParseRSSRsp{}, err
 	}
+
 	return ParseRSSRsp{
 		Name:            meta.ChineseName,
 		Season:          meta.Season,
@@ -127,6 +137,8 @@ func (s *Subscriber) ParseRSS(ctx context.Context, rssLink string) (ParseRSSRsp,
 		ReleaseGroup:    rss.ReleaseGroup,
 		EpisodeTotalNum: meta.EpisodeTotalNum,
 		AirWeekday:      meta.AirWeekday,
+		PosterURL:       meta.PosterURL,
+		BackdropURL:     meta.BackdropURL,
 	}, nil
 }
 

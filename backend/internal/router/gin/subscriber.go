@@ -13,11 +13,15 @@ const (
 )
 
 // ParseRSS parses RSS link and returns bangumi info
-// GET /apis/v1/bangumis/rss?link=xxx
+// GET /apis/v1/bangumis/rss?rss_link=xxx&tmdb_id=xxx
 func (r *Router) ParseRSS(c *gin.Context) {
-	link := c.Query("link")
+	var req subscriber.ParserRSSReq
+	if err := c.ShouldBindQuery(&req); err != nil {
+		writeError(c, err)
+		return
+	}
 
-	rsp, err := r.subscriber.ParseRSS(c.Request.Context(), link)
+	rsp, err := r.subscriber.ParseRSS(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return

@@ -27,6 +27,12 @@ type Bangumi struct {
 	CreatedAt       time.Time    `json:"-"`               // 创建时间
 }
 
+// ParserRSSReq 解析RSS请求
+type ParserRSSReq struct {
+	RSSLink string `form:"rss_link"`
+	TMDBID  int    `form:"tmdb_id"`
+}
+
 // ParseRSSRsp 解析RSS返回的番剧信息
 type ParseRSSRsp struct {
 	Name            string        `json:"name"`
@@ -37,6 +43,8 @@ type ParseRSSRsp struct {
 	ReleaseGroup    string        `json:"releaseGroup"`
 	EpisodeTotalNum int           `json:"episodeTotalNum"`
 	AirWeekday      *time.Weekday `json:"airWeekday"`
+	PosterURL       string        `json:"posterURL"`   
+	BackdropURL     string        `json:"backdropURL"` 
 }
 
 // RSS RSS信息

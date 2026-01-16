@@ -152,18 +152,18 @@ func (mr *MockInterfaceMockRecorder) MarkRSSRecord(ctx, req interface{}) *gomock
 }
 
 // ParseRSS mocks base method.
-func (m *MockInterface) ParseRSS(ctx context.Context, rssLink string) (ParseRSSRsp, error) {
+func (m *MockInterface) ParseRSS(ctx context.Context, req ParserRSSReq) (ParseRSSRsp, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ParseRSS", ctx, rssLink)
+	ret := m.ctrl.Call(m, "ParseRSS", ctx, req)
 	ret0, _ := ret[0].(ParseRSSRsp)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ParseRSS indicates an expected call of ParseRSS.
-func (mr *MockInterfaceMockRecorder) ParseRSS(ctx, rssLink interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ParseRSS(ctx, req interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseRSS", reflect.TypeOf((*MockInterface)(nil).ParseRSS), ctx, rssLink)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseRSS", reflect.TypeOf((*MockInterface)(nil).ParseRSS), ctx, req)
 }
 
 // StopSubscription mocks base method.

@@ -24,6 +24,7 @@ interface TMDBInputProps {
   onTMDBIDChange: (tmdbID: number) => void; // 仅TMDB ID变化回调（手动输入时）
   onMetaChange?: (meta: Meta) => void; // 完整元数据变化回调（确认获取或搜索选择时）
   label?: string; // 可选标签
+  icon?: React.ReactNode;
   placeholder?: string; // 占位符
   className?: string; // 自定义样式
   error?: string; // 错误提示
@@ -35,6 +36,7 @@ export function TMDBInput({
   onTMDBIDChange,
   onMetaChange,
   label = "TMDB ID",
+  icon,
   placeholder = "输入 TMDB ID 或点击搜索",
   className,
   error,
@@ -90,7 +92,12 @@ export function TMDBInput({
 
   return (
     <div className={cn("grid gap-2", className)}>
-      {label && <Label>{label}</Label>}
+      {label && (
+        <Label className="flex items-center gap-2 text-muted-foreground mb-1">
+          {icon}
+          {label}
+        </Label>
+      )}
       <div className="flex gap-2">
         <Input
           inputMode="numeric"
@@ -100,7 +107,10 @@ export function TMDBInput({
             handleManualInput(newValue ? parseInt(newValue) : 0);
           }}
           placeholder={placeholder}
-          className={cn("rounded-xl flex-1", error && "border-destructive")}
+          className={cn(
+            "rounded-xl flex-1 bg-muted/30 border-muted-foreground/10",
+            error && "border-destructive"
+          )}
         />
         <Button
           type="button"
