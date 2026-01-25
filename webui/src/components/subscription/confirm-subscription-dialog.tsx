@@ -34,17 +34,25 @@ import {
   ArrowUpCircle,
   Search,
   X,
+  Loader2,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
-import { subscriptionAPI } from "@/api/subscription";
+import { subscriptionAPI, RSSMatch } from "@/api/subscription";
 import { useToast } from "@/hooks/useToast";
 import { MatchInput } from "../common/match-input";
 import { EpisodePositionInput } from "./episode-position-input";
 import { TMDBInput } from "@/components/tmdb";
-import { getSortedWeekDays } from "@/utils/time";
+import { getSortedWeekDays, formatDate } from "@/utils/time";
 import { ParseRSSResponse, SubscribeRequest } from "@/api/subscription";
 import { extractErrorMessage } from "@/utils/error";
 import { Meta } from "@/api/meta";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+
+import { debounce } from "@/utils/debounce";
+import { useCallback, useRef } from "react";
 
 interface ConfirmSubscriptionDialogProps {
   open: boolean;
@@ -113,6 +121,69 @@ export function ConfirmSubscriptionDialog({
     releaseGroup: "",
     episodeTotalNum: "",
   });
+
+  const [previewMatches, setPreviewMatches] = useState<RSSMatch[]>([]);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
+  // 预览函数
+  const preview = async (
+    rssLink: string,
+    includeRegs: string[],
+    excludeRegs: string[]
+  ) => {
+    if (!rssLink) return;
+    setIsPreviewLoading(true);
+    try {
+      const matches = await subscriptionAPI.previewRSSMatch({
+        rssLink,
+        includeRegs,
+        excludeRegs,
+      });
+      setPreviewMatches(matches);
+    } catch (error) {
+      toast({
+        title: "预览失败",
+        description: extractErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  // 使用 useRef 保存防抖函数，确保每次渲染都使用同一个防抖实例
+  const debouncedPreview = useRef(
+    debounce(
+      (rssLink: string, includeRegs: string[], excludeRegs: string[]) =>
+        preview(rssLink, includeRegs, excludeRegs),
+      500
+    )
+  ).current;
+
+  // 手动触发预览（不防抖）
+  const handlePreview = () => {
+    preview(
+      bangumiInfo.rssLink,
+      bangumiInfo.includeRegs,
+      bangumiInfo.excludeRegs
+    );
+  };
+
+  // 监听匹配条件变化，自动触发预览
+  useEffect(() => {
+    if (open && bangumiInfo.rssLink) {
+      debouncedPreview(
+        bangumiInfo.rssLink,
+        bangumiInfo.includeRegs,
+        bangumiInfo.excludeRegs
+      );
+    }
+  }, [
+    bangumiInfo.includeRegs,
+    bangumiInfo.excludeRegs,
+    bangumiInfo.rssLink,
+    open,
+  ]);
 
   const validateField = (field: string, value: any) => {
     let error = "";
@@ -297,7 +368,15 @@ export function ConfirmSubscriptionDialog({
         </div>
 
         <div className="px-6 py-4">
-          <Tabs defaultValue="basic" className="w-full">
+          <Tabs
+            defaultValue="basic"
+            className="w-full"
+            onValueChange={(val) => {
+              if (val === "filter") {
+                handlePreview();
+              }
+            }}
+          >
             <TabsList className="grid w-full grid-cols-3 mb-6 bg-muted/50 p-1 rounded-xl">
               <TabsTrigger
                 value="basic"
@@ -468,6 +547,92 @@ export function ConfirmSubscriptionDialog({
                   setBangumiInfo((prev) => ({ ...prev, excludeRegs: items }))
                 }
               />
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2 text-muted-foreground">
+                    <Filter className="w-4 h-4" /> 预览结果
+                  </Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreview}
+                    disabled={isPreviewLoading}
+                    className="h-7 text-xs"
+                  >
+                    {isPreviewLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                    )}
+                    <span className="hidden sm:inline">刷新预览</span>
+                  </Button>
+                </div>
+                <div className="rounded-xl border border-muted-foreground/10 bg-muted/30 p-2 h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent">
+                  <div className="flex flex-col gap-2">
+                    {previewMatches.map((m, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "relative overflow-hidden rounded-lg border p-3 text-sm transition-all duration-200",
+                          m.match
+                            ? "bg-green-500/5 border-green-500/20 hover:border-green-500/40 hover:bg-green-500/10"
+                            : "bg-background/40 border-transparent opacity-60 hover:opacity-100 hover:bg-background/60"
+                        )}
+                      >
+                        {/* 匹配状态指示条 */}
+                        {m.match && (
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500" />
+                        )}
+
+                        <div
+                          className={cn(
+                            "flex flex-col gap-2",
+                            m.match ? "pl-2" : ""
+                          )}
+                        >
+                          {/* 标题 - 自动换行，最多显示2行 */}
+                          <div className="font-medium leading-relaxed break-all line-clamp-2 text-foreground/90">
+                            {m.guid}
+                          </div>
+
+                          {/* 底部信息栏 */}
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {formatDate(m.publishedAt)}
+                            </span>
+                            {m.match ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            ) : (
+                              <XCircle className="w-5 h-5 text-muted-foreground/30" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {previewMatches.length === 0 && !isPreviewLoading && (
+                      <div className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-3">
+                        <div className="p-3 rounded-full bg-muted/50">
+                          <Search className="w-6 h-6 opacity-40" />
+                        </div>
+                        <span className="text-sm opacity-60">
+                          点击右上角刷新预览
+                        </span>
+                      </div>
+                    )}
+                    
+                    {isPreviewLoading && previewMatches.length === 0 && (
+                      <div className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-3">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
+                        <span className="text-sm opacity-60">
+                          正在获取 RSS 数据...
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent

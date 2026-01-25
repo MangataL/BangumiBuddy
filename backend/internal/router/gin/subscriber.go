@@ -142,6 +142,22 @@ func (r *Router) GetRSSMatch(c *gin.Context) {
 	c.JSON(http.StatusOK, match)
 }
 
+// PreviewRSSMatch 预览RSS匹配
+// POST /apis/v1/bangumis/rss_match/preview
+func (r *Router) PreviewRSSMatch(c *gin.Context) {
+	var req subscriber.PreviewRSSMatchReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeError(c, err)
+		return
+	}
+	matches, err := r.subscriber.PreviewRSSMatch(c.Request.Context(), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, matches)
+}
+
 type markRSSRecordReq struct {
 	GUIDs     []string `json:"guids"`
 	Processed bool     `json:"processed"`

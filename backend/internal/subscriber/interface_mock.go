@@ -166,6 +166,21 @@ func (mr *MockInterfaceMockRecorder) ParseRSS(ctx, req interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParseRSS", reflect.TypeOf((*MockInterface)(nil).ParseRSS), ctx, req)
 }
 
+// PreviewRSSMatch mocks base method.
+func (m *MockInterface) PreviewRSSMatch(ctx context.Context, req PreviewRSSMatchReq) ([]RSSMatch, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PreviewRSSMatch", ctx, req)
+	ret0, _ := ret[0].([]RSSMatch)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PreviewRSSMatch indicates an expected call of PreviewRSSMatch.
+func (mr *MockInterfaceMockRecorder) PreviewRSSMatch(ctx, req interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PreviewRSSMatch", reflect.TypeOf((*MockInterface)(nil).PreviewRSSMatch), ctx, req)
+}
+
 // StopSubscription mocks base method.
 func (m *MockInterface) StopSubscription(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()

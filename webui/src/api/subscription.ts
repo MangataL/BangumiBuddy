@@ -184,11 +184,16 @@ export const subscriptionAPI = {
   // 获取番剧的RSS匹配情况
   getRSSMatch: async (id: string): Promise<RSSMatch[]> => {
     const response: RSSMatch[] = await http.get(`/bangumis/${id}/rss_match`);
-    // 为每个RSSMatch添加title字段，使其在UI中显示更友好
-    return response.map((item) => ({
-      ...item,
-      title: item.guid, // 使用guid作为显示文本
-    }));
+    return response;
+  },
+
+  // 预览RSS匹配
+  previewRSSMatch: async (data: {
+    rssLink: string;
+    includeRegs: string[];
+    excludeRegs: string[];
+  }): Promise<RSSMatch[]> => {
+    return http.post("/bangumis/rss_match/preview", data);
   },
 
   // 标记RSS记录的处理状态

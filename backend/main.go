@@ -259,6 +259,7 @@ func main() {
 	apisRouter.PUT("/bangumis/:id", router.UpdateSubscription)
 	apisRouter.DELETE("/bangumis/:id", router.DeleteSubscription)
 	apisRouter.GET("/bangumis/:id/rss_match", router.GetRSSMatch)
+	apisRouter.POST("/bangumis/rss_match/preview", router.PreviewRSSMatch)
 	apisRouter.POST("/bangumis/:id/rss_match", router.MarkRSSRecord)
 	apisRouter.POST("/bangumis/:id/download", router.HandleBangumiSubscription)
 	apisRouter.GET("/bangumis/:id/torrents", router.GetBangumiTorrents)

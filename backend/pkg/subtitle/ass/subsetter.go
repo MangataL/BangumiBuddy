@@ -45,7 +45,7 @@ func (s *Subsetter) InitFontMetaSet(ctx context.Context) error {
 
 func (s *Subsetter) SubsetFont(ctx context.Context, filePath string) (string, error) {
 	var parseFontOpts []ParseFontSetOption
-	if s.config.CoverExistSubFont {
+	if !s.config.CoverExistSubFont {
 		parseFontOpts = append(parseFontOpts, IgnoreFontExist())
 	}
 	fontSet, noNeedSubset, err := s.parser.ParseFontSet(ctx, filePath, parseFontOpts...)
@@ -177,6 +177,9 @@ func (s *Subsetter) checkGlyphsWithSfnt(fontData []byte, fontIndex int, codePoin
 
 	// 检查每个码点
 	for cp := range codePoints {
+		if cp == 0 {
+			continue
+		}
 		// 获取该码点的字形索引
 		glyphIndex := face.GetCharIndex(cp)
 
@@ -235,8 +238,14 @@ func (s *Subsetter) subsetSingleFont(ctx context.Context, subsetFont SubsetFont)
 	// 将CodePoints转换为rune切片
 	codePoints := make([]rune, 0, len(subsetFont.CodePoints))
 	for cp := range subsetFont.CodePoints {
+		if cp == 0 {
+			continue
+		}
 		codePoints = append(codePoints, cp)
 	}
+
+	// 补充一些常用字符，避免字幕里大量使用 \h 等转义导致缺失基础字符
+	codePoints = appendAdditionalCodePoints(codePoints)
 
 	// 如果字体数据已经加载（CheckGlyphs时加载），使用已加载的数据
 	// 否则读取字体文件
@@ -262,6 +271,20 @@ func (s *Subsetter) subsetSingleFont(ctx context.Context, subsetFont SubsetFont)
 	}
 
 	return subfontData, nil
+}
+
+// appendAdditionalCodePoints 
+// - 基本 ASCII 可见字符（含空格）
+// - 全角 ASCII 区间
+// 这些字符不参与缺字检查，但会参与子集化，避免字幕使用 \h 等转义时缺失基础字符。
+func appendAdditionalCodePoints(dst []rune) []rune {
+	for ch := rune(0x0020); ch <= 0x007e; ch++ {
+		dst = append(dst, ch)
+	}
+	for ch := rune(0xff01); ch <= 0xff5e; ch++ {
+		dst = append(dst, ch)
+	}
+	return dst
 }
 
 // formatMissingGlyphs 格式化缺失的字形，用于日志输出

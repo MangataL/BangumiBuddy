@@ -29,6 +29,8 @@ type Interface interface {
 	UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error
 	// GetRSSMatch 获取RSS匹配
 	GetRSSMatch(ctx context.Context, subscriptionID string) ([]RSSMatch, error)
+	// PreviewRSSMatch 预览RSS匹配
+	PreviewRSSMatch(ctx context.Context, req PreviewRSSMatchReq) ([]RSSMatch, error)
 	// HandleBangumiSubscription 运行订阅下载任务
 	HandleBangumiSubscription(ctx context.Context, subscriptionID string) error
 	// MarkRSSRecord 标记RSS记录

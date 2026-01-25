@@ -43,8 +43,8 @@ type ParseRSSRsp struct {
 	ReleaseGroup    string        `json:"releaseGroup"`
 	EpisodeTotalNum int           `json:"episodeTotalNum"`
 	AirWeekday      *time.Weekday `json:"airWeekday"`
-	PosterURL       string        `json:"posterURL"`   
-	BackdropURL     string        `json:"backdropURL"` 
+	PosterURL       string        `json:"posterURL"`
+	BackdropURL     string        `json:"backdropURL"`
 }
 
 // RSS RSS信息
@@ -97,6 +97,13 @@ type UpdateSubscribeReq struct {
 	EpisodeLocation string       `json:"episodeLocation"` // 集数位置
 	EpisodeTotalNum int          `json:"episodeTotalNum"` // 集数总数
 	AirWeekday      time.Weekday `json:"airWeekday"`      // 播出时间
+}
+
+// PreviewRSSMatchReq 预览RSS匹配请求
+type PreviewRSSMatchReq struct {
+	RSSLink     string   `json:"rssLink"`
+	IncludeRegs []string `json:"includeRegs"`
+	ExcludeRegs []string `json:"excludeRegs"`
 }
 
 // RSSMatch RSS匹配
