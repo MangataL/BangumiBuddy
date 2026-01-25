@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
+	"github.com/glebarez/go-sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"github.com/glebarez/go-sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 )
 
@@ -29,14 +29,16 @@ func (r *transferFilesRepo) Set(ctx context.Context, fileTransferred transfer.Fi
 	}).Create(&schema).Error; err != nil {
 		// 由于gorm不支持sqlite多个on conflict，所以这里调用两次来兼容。
 		// 目前不存在性能问题，所以不考虑手动写sql
-		if err := (&sqlite.Error{}); errors.As(err, &err) {
-			if err.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+		var sqliteErr *sqlite.Error
+		if errors.As(err, &sqliteErr) {
+			if sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 				return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 					Columns:   []clause.Column{{Name: "origin_file"}},
 					UpdateAll: true,
 				}).Create(&schema).Error
 			}
 		}
+		return err // 如果不是UNIQUE约束错误，应该返回原始错误
 	}
 	return nil
 }

@@ -69,6 +69,7 @@ type Repository interface {
 	Get(ctx context.Context, rssLink string) (Bangumi, error)
 	Delete(ctx context.Context, id string) error
 	UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error
+	ApplyLastAirEpisodeOffset(ctx context.Context, subscriptionID string, episodeOffset int) error
 	StopSubscription(ctx context.Context, id string) error
 }
 
@@ -237,7 +238,15 @@ func (s *Subscriber) UpdateSubscription(ctx context.Context, req UpdateSubscribe
 		Year:            oldBangumi.Year,
 		CreatedAt:       oldBangumi.CreatedAt,
 	}
-	return errors.WithMessage(s.repo.Save(ctx, bangumi), "更新订阅失败")
+	if err := s.repo.Save(ctx, bangumi); err != nil {
+		return errors.WithMessage(err, "更新订阅失败")
+	}
+	if oldBangumi.EpisodeOffset != req.EpisodeOffset {
+		if err := s.repo.ApplyLastAirEpisodeOffset(ctx, oldBangumi.SubscriptionID, req.EpisodeOffset-oldBangumi.EpisodeOffset); err != nil {
+			return errors.WithMessage(err, "更新最新集数失败，请重试")
+		}
+	}
+	return nil
 }
 
 func validateUpdateSubscribeReq(req UpdateSubscribeReq) error {
@@ -462,6 +471,23 @@ func (s *Subscriber) GetRSSMatch(ctx context.Context, subscriptionID string) ([]
 			GUID:        item.GUID,
 			Match:       s.matchesFilters(ctx, item.GUID, bangumi.IncludeRegs, bangumi.ExcludeRegs),
 			Processed:   processedMap[item.GUID],
+			PublishedAt: item.PublishedAt,
+		})
+	}
+	return matches, nil
+}
+
+func (s *Subscriber) PreviewRSSMatch(ctx context.Context, req PreviewRSSMatchReq) ([]RSSMatch, error) {
+	rss, err := s.rssParser.Parse(ctx, req.RSSLink)
+	if err != nil {
+		return nil, fmt.Errorf("解析RSS失败: %w", err)
+	}
+	matches := make([]RSSMatch, 0, len(rss.Items))
+	for _, item := range rss.Items {
+		matches = append(matches, RSSMatch{
+			GUID:        item.GUID,
+			Match:       s.matchesFilters(ctx, item.GUID, req.IncludeRegs, req.ExcludeRegs),
+			Processed:   false,
 			PublishedAt: item.PublishedAt,
 		})
 	}

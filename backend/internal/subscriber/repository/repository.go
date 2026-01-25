@@ -116,7 +116,7 @@ func (r *Repository) Get(ctx context.Context, subscriptionID string) (subscriber
 
 // Delete 删除番剧信息
 func (r *Repository) Delete(ctx context.Context, subscriptionID string) error {
-	tx := r.db.WithContext(ctx).Begin()	
+	tx := r.db.WithContext(ctx).Begin()
 	if err := tx.Where("subscription_id = ?", subscriptionID).Delete(&bangumiSchema{}).Error; err != nil {
 		tx.Rollback()
 		return err
@@ -131,6 +131,11 @@ func (r *Repository) Delete(ctx context.Context, subscriptionID string) error {
 // UpdateLastAirEpisode 更新番剧的最新集数
 func (r *Repository) UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error {
 	return r.db.WithContext(ctx).Model(&bangumiSchema{}).Where("subscription_id = ? AND last_air_episode < ?", subscriptionID, episode).Update("last_air_episode", episode).Error
+}
+
+// ApplyLastAirEpisodeOffset 应用集数偏移
+func (r *Repository) ApplyLastAirEpisodeOffset(ctx context.Context, subscriptionID string, episodeOffset int) error {
+	return r.db.WithContext(ctx).Model(&bangumiSchema{}).Where("subscription_id = ?", subscriptionID).Update("last_air_episode", gorm.Expr("last_air_episode + ?", episodeOffset)).Error
 }
 
 // IsProcessed 检查RSS条目是否已处理

@@ -72,6 +72,20 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
+// ApplyLastAirEpisodeOffset mocks base method.
+func (m *MockRepository) ApplyLastAirEpisodeOffset(ctx context.Context, subscriptionID string, episodeOffset int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplyLastAirEpisodeOffset", ctx, subscriptionID, episodeOffset)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplyLastAirEpisodeOffset indicates an expected call of ApplyLastAirEpisodeOffset.
+func (mr *MockRepositoryMockRecorder) ApplyLastAirEpisodeOffset(ctx, subscriptionID, episodeOffset interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLastAirEpisodeOffset", reflect.TypeOf((*MockRepository)(nil).ApplyLastAirEpisodeOffset), ctx, subscriptionID, episodeOffset)
+}
+
 // Delete mocks base method.
 func (m *MockRepository) Delete(ctx context.Context, id string) error {
 	m.ctrl.T.Helper()

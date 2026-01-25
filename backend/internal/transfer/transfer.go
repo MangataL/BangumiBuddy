@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -167,10 +168,24 @@ func (t *transferError) ErrorOrNil() error {
 }
 
 func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torrent) (err error) {
+	// 获取字体路径
+	fontPath, closeFunc, err := t.getFontPath(ctx, torrent)
+	defer closeFunc() // 确保临时目录被清理
+	if err != nil {
+		log.Warnf(ctx, "尝试获取字体库失败，使用默认字体库: %v", err)
+	}
+	var fontSubsetter subtitle.Subsetter
+	if fontPath != "" {
+		log.Infof(ctx, "使用临时字体目录: %s", fontPath)
+		fontSubsetter, err = t.fontSubsetter.UsingTempFontDir(ctx, fontPath)
+		if err != nil {
+			log.Warnf(ctx, "使用临时字体目录创建字体库失败: %v", err)
+		}
+	}
 	if torrent.SubscriptionID != "" {
-		err = t.transferTorrentForSubscribe(ctx, torrent)
+		err = t.transferTorrentForSubscribe(ctx, torrent, fontSubsetter)
 	} else {
-		err = t.transferTorrentForTask(ctx, torrent)
+		err = t.transferTorrentForTask(ctx, torrent, fontSubsetter)
 	}
 	transferState := downloader.TorrentStatusTransferred
 	var transferDetail string
@@ -186,7 +201,7 @@ func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torre
 	return err
 }
 
-func (t *Transfer) transferTorrentForSubscribe(ctx context.Context, torrent downloader.Torrent) error {
+func (t *Transfer) transferTorrentForSubscribe(ctx context.Context, torrent downloader.Torrent, fontSubsetter subtitle.Subsetter) error {
 	fileNames := torrent.FileNames
 	transferErr := &transferError{fileNum: len(fileNames)}
 	for _, fileName := range fileNames {
@@ -194,7 +209,7 @@ func (t *Transfer) transferTorrentForSubscribe(ctx context.Context, torrent down
 		if !utils.IsMediaFile(path) {
 			continue
 		}
-		if err := t.transferFileForSubscribe(ctx, torrent, path, fileName); err != nil {
+		if err := t.transferFileForSubscribe(ctx, torrent, path, fileName, fontSubsetter); err != nil {
 			log.Errorf(ctx, "文件 %s 转移失败： %v", fileName, err)
 			transferErr.Append(err, fileName)
 		}
@@ -202,7 +217,7 @@ func (t *Transfer) transferTorrentForSubscribe(ctx context.Context, torrent down
 	return transferErr.ErrorOrNil()
 }
 
-func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloader.Torrent, path, fileName string) error {
+func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloader.Torrent, path, fileName string, fontSubsetter subtitle.Subsetter) error {
 	bangumi, err := t.subscriber.Get(ctx, torrent.SubscriptionID)
 	if err != nil {
 		return errors.WithMessage(err, "文件转移时获取番剧信息失败")
@@ -217,6 +232,7 @@ func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloa
 		FilePath:        path,
 		SubscriptionID:  torrent.SubscriptionID,
 		ReleaseGroup:    bangumi.ReleaseGroup,
+		FontSubsetter:   fontSubsetter,
 	}
 	checkPriority := func(ctx context.Context, newFileID string) (bool, error) {
 		return t.checkPriority(ctx, newFilePriority{
@@ -322,27 +338,22 @@ func (t *Transfer) checkPriority(ctx context.Context, newFilePriority newFilePri
 		log.Warnf(ctx, "转移记录 %s 中没有新文件路径，跳过删除", transferred.NewFileID)
 		return true, nil
 	}
-	// 删除所有前缀相同的文件
-	matches, err := utils.FindSameBaseFiles(transferred.NewFile)
-	if err != nil {
-		log.Warnf(ctx, "删除低优先级文件时查找文件出错: %v", err)
-	} else {
-		log.Infof(ctx, "由于将转移更高优先级的文件 %s，执行删除低优先级文件 %v", newFilePriority.fileName, matches)
-		deleteFiles := make([]string, 0, len(matches))
-		for _, file := range matches {
-			if filepath.Ext(file) == ".nfo" {
-				// 元数据信息没必要删除
-				continue
-			}
-			if err := os.Remove(file); err != nil {
-				log.Warnf(ctx, "删除低优先级文件 %s 失败: %v", file, err)
-				continue
-			}
-			deleteFiles = append(deleteFiles, file)
-		}
-		log.Infof(ctx, "删除低优先级文件 %v 成功", deleteFiles)
-	}
-
+	_ = t.deleteTransferFiles(ctx, transferred.NewFile,
+		withFindBaseFileErrorHook(func(err error) error {
+			log.Warnf(ctx, "删除低优先级文件时查找文件出错: %v", err)
+			return nil
+		}),
+		withDeleteTransferFilesHook(func(files []string) {
+			log.Infof(ctx, "由于将转移更高优先级的文件 %s，执行删除低优先级文件 %v", newFilePriority.fileName, files)
+		}),
+		withDeleteTransferFileErrorHook(func(file string, err error) error {
+			log.Warnf(ctx, "删除低优先级文件 %s 失败: %v", file, err)
+			return nil
+		}),
+		withDeleteTransferFilesSuccessHook(func(files []string) {
+			log.Infof(ctx, "删除低优先级文件 %v 成功", files)
+		}),
+	)
 	return true, nil
 }
 
@@ -387,6 +398,35 @@ func (t *Transfer) transferFileForTV(ctx context.Context, meta Meta, episode int
 
 func (t *Transfer) transferFile(ctx context.Context, newFilePathWithoutExt string, meta Meta, newFileID string) (originFile, newFilePath string, err error) {
 	newFilePath = newFilePathWithoutExt + filepath.Ext(meta.FileName)
+
+	// 在转移文件之前，检查是否有旧的转移记录
+	// 如果有旧记录，则删除旧的转移记录
+	oldTransferred, queryErr := t.transferFiles.Get(ctx, GetFileTransferredReq{
+		OriginFile: meta.FilePath,
+	})
+	if queryErr == nil {
+		_ = t.deleteTransferFiles(ctx, oldTransferred.NewFile,
+			withFindBaseFileErrorHook(func(err error) error {
+				return errors.WithMessage(err, "文件重新转移时，查找旧媒体库转移文件失败，跳过删除已转移媒体库文件")
+			}),
+			withDeleteTransferFilesHook(func(files []string) {
+				log.Infof(ctx, "文件 %s 重新转移，删除旧媒体库转移文件 %v", meta.FileName, files)
+			}),
+			withDeleteTransferFileErrorHook(func(file string, err error) error {
+				log.Warnf(ctx, "文件 %s 重新转移时，删除媒体库文件 %s 失败: %v", meta.FileName, file, err)
+				return nil
+			}),
+			withDeleteTransferFilesSuccessHook(func(files []string) {
+				log.Infof(ctx, "文件 %s 重新转移，删除旧媒体库转移文件 %v 成功", meta.FileName, files)
+			}),
+		)
+	} else {
+		if !errors.Is(queryErr, ErrFileTransferredNotFound) {
+			log.Warnf(ctx, "文件 %s 重新转移时，查询旧媒体库转移文件缓存失败: %v", meta.FileName, queryErr)
+		}
+	}
+
+	// 执行文件转移
 	originFile, err = GetFileTransfer(t.config.TransferType).Transfer(ctx, meta.FilePath, newFilePath)
 	if err != nil {
 		return "", "", errors.WithMessage(err, "文件转移失败")
@@ -521,7 +561,7 @@ func (t *Transfer) makeFileExt(fileExt string, isSubtitle bool) string {
 	return fileExt
 }
 
-func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloader.Torrent) error {
+func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloader.Torrent, fontSubsetter subtitle.Subsetter) error {
 	task, err := t.magnetManager.GetTask(ctx, torrent.TaskID)
 	if err != nil {
 		return errors.WithMessage(err, "获取任务失败")
@@ -531,19 +571,6 @@ func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloade
 	})
 	transferErr := &transferError{fileNum: len(torrent.FileNames)}
 	successFilePaths := make(map[string]string)
-	fontPath, closeFunc, err := t.getFontPath(ctx, task, torrent.Path)
-	defer closeFunc() // 确保临时目录被清理
-	if err != nil {
-		log.Warnf(ctx, "尝试获取字体库失败，使用默认字体库: %v", err)
-	}
-	var fontSubsetter subtitle.Subsetter
-	if fontPath != "" {
-		log.Infof(ctx, "使用临时字体目录: %s", fontPath)
-		fontSubsetter, err = t.fontSubsetter.UsingTempFontDir(ctx, fontPath)
-		if err != nil {
-			log.Warnf(ctx, "使用临时字体目录创建字体库失败: %v", err)
-		}
-	}
 
 	for _, fileName := range torrent.FileNames {
 		file, ok := taskTorrents[fileName]
@@ -740,7 +767,7 @@ func findLongestCommonPrefix(paths []string) string {
 		return ""
 	}
 	if len(paths) == 1 {
-		return filepath.Dir(paths[0])
+		return paths[0]
 	}
 
 	// 分割所有路径
@@ -782,49 +809,59 @@ func findLongestCommonPrefix(paths []string) string {
 	return filepath.Join(common...)
 }
 
-func (t *Transfer) getFontPath(ctx context.Context, task magnet.Task, basePath string) (string, func(), error) {
+func (t *Transfer) getFontPath(ctx context.Context, torrent downloader.Torrent) (string, func(), error) {
 	var fontDirs []string
 	var tempDirs []string
 	closeFunc := func() {} // 默认空实现
 
-	// 遍历 task.Torrent.Files
-	for _, file := range task.Torrent.Files {
-		// 构建完整文件路径
-		filePath := filepath.Join(basePath, file.FileName)
+	// 确定要遍历的目录
+	searchPath := t.getTorrentSearchPath(torrent)
+	if searchPath == "" {
+		// 种子没有目录层级，直接跳过
+		return "", closeFunc, nil
+	}
 
-		// 检查是否为字体文件
-		if utils.IsFontFile(file.FileName) {
-			fontDir := filepath.Dir(filePath)
-			fontDirs = append(fontDirs, fontDir)
-			continue
+	walkErr := filepath.WalkDir(searchPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			log.Warnf(ctx, "遍历路径 %s 失败: %v", path, err)
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+
+		if utils.IsFontFile(name) {
+			fontDirs = append(fontDirs, filepath.Dir(path))
+			return nil
 		}
 
-		// 检查是否为包含 "fonts" 的压缩包
-		if isFontArchive(file.FileName) {
-			// 在压缩包所在目录创建临时目录
-			tempDir, err := os.MkdirTemp(filepath.Dir(filePath), ".fonts_extract_")
+		if isFontArchive(name) {
+			tempDir, err := os.MkdirTemp(filepath.Dir(path), ".fonts_extract_")
 			if err != nil {
 				log.Warnf(ctx, "创建临时目录失败: %v", err)
-				continue
+				return nil
 			}
 			tempDirs = append(tempDirs, tempDir)
 
-			// 解压到临时目录
-			if err := extractArchive(ctx, filePath, tempDir); err != nil {
-				log.Warnf(ctx, "解压文件 %s 失败: %v", file.FileName, err)
-				// 清理失败的临时目录
+			if err := extractArchive(ctx, path, tempDir); err != nil {
+				log.Warnf(ctx, "解压文件 %s 失败: %v", name, err)
 				os.RemoveAll(tempDir)
 				tempDirs = tempDirs[:len(tempDirs)-1]
-				continue
+				return nil
 			}
 
-			// 将临时目录本身作为字体目录记录
 			fontDirs = append(fontDirs, tempDir)
 		}
+
+		return nil
+	})
+	if walkErr != nil {
+		return "", closeFunc, errors.WithMessage(walkErr, "遍历字体目录失败")
 	}
 
 	// 计算公共父目录
-	commonParent := getCommonParent(fontDirs, basePath)
+	commonParent := getCommonParent(fontDirs, searchPath)
 
 	// 如果有临时目录需要清理，更新 closeFunc
 	if len(tempDirs) > 0 {
@@ -838,6 +875,54 @@ func (t *Transfer) getFontPath(ctx context.Context, task magnet.Task, basePath s
 	}
 
 	return commonParent, closeFunc, nil
+}
+
+// getTorrentSearchPath 获取种子的搜索路径
+// 如果种子包含目录，返回种子目录路径
+// 如果种子没有目录层级，返回空字符串（表示跳过）
+func (t *Transfer) getTorrentSearchPath(torrent downloader.Torrent) string {
+	if len(torrent.FileNames) == 0 {
+		return ""
+	}
+
+	// 检查是否有目录层级
+	var fileDirs []string
+	hasRootFile := false
+	hasSubDirFile := false
+
+	for _, fileName := range torrent.FileNames {
+		if !utils.IsMediaFile(fileName) {
+			continue
+		}
+		dir := filepath.Dir(fileName)
+		// 如果 dir 不是 "."，说明文件在子目录中
+		if dir != "." {
+			hasSubDirFile = true
+			fileDirs = append(fileDirs, dir)
+		} else {
+			hasRootFile = true
+		}
+	}
+
+	// 如果没有目录层级，直接返回空字符串
+	if !hasSubDirFile {
+		return ""
+	}
+
+	// 如果既有根目录文件又有子目录文件，这是混合情况，返回空字符串
+	if hasRootFile && hasSubDirFile {
+		return ""
+	}
+
+	// 找到所有文件的公共父目录
+	commonDir := findLongestCommonPrefix(fileDirs)
+	if commonDir == "" {
+		// 文件分散在不同的顶层目录中，跳过避免遍历整个下载目录
+		return ""
+	}
+
+	// 返回种子目录的完整路径
+	return filepath.Join(torrent.Path, commonDir)
 }
 
 func (t *Transfer) transferForTaskTV(ctx context.Context, meta Meta, file magnet.TorrentFile, newFileID string) (string, string, error) {
@@ -877,14 +962,43 @@ func (t *Transfer) Transfer(ctx context.Context, hash string) error {
 }
 
 func (t *Transfer) DeleteTransferFile(ctx context.Context, file string) error {
+	return t.deleteTransferFiles(ctx, file)
+}
+
+func (t *Transfer) deleteTransferFiles(ctx context.Context, file string, options ...deleteTransferFileOption) error {
+	opt := deleteTransferFilesOptions{
+		findBaseFileErrorHook: func(err error) error {
+			return errors.WithMessage(err, "获取媒体库相关文件列表失败")
+		},
+		deleteTransferFilesHook: func(files []string) {
+			log.Infof(ctx, "准备删除媒体库相关文件: %v", files)
+		},
+		deleteTransferFileErrorHook: func(file string, err error) error {
+			return errors.WithMessagef(err, "删除媒体库文件 %s 失败", file)
+		},
+		deleteTransferFilesSuccessHook: func(files []string) {
+			log.Infof(ctx, "删除媒体库相关文件成功: %v", files)
+		},
+	}
+
+	for _, option := range options {
+		option(&opt)
+	}
+
 	files, err := utils.FindSameBaseFiles(file)
 	if err != nil {
-		return errors.WithMessage(err, "获取相关文件列表失败")
+		return opt.findBaseFileErrorHook(err)
 	}
-	for _, file := range files {
-		if err := os.Remove(file); err != nil {
-			return errors.WithMessagef(err, "删除文件 %s 失败", file)
+	if len(files) != 0 {
+		opt.deleteTransferFilesHook(files)
+		for _, file := range files {
+			if err := os.Remove(file); err != nil {
+				if err = opt.deleteTransferFileErrorHook(file, err); err != nil {
+					return err
+				}
+			}
 		}
+		opt.deleteTransferFilesSuccessHook(files)
 	}
 	if err := t.transferFiles.Del(ctx, DeleteFileTransferredReq{
 		NewFile: file,
@@ -892,6 +1006,39 @@ func (t *Transfer) DeleteTransferFile(ctx context.Context, file string) error {
 		log.Warnf(ctx, "删除转移缓存失败: %v", err)
 	}
 	return nil
+}
+
+type deleteTransferFilesOptions struct {
+	findBaseFileErrorHook          func(err error) error
+	deleteTransferFilesHook        func(files []string)
+	deleteTransferFileErrorHook    func(file string, err error) error
+	deleteTransferFilesSuccessHook func(files []string)
+}
+
+type deleteTransferFileOption func(*deleteTransferFilesOptions)
+
+func withFindBaseFileErrorHook(hook func(err error) error) deleteTransferFileOption {
+	return func(options *deleteTransferFilesOptions) {
+		options.findBaseFileErrorHook = hook
+	}
+}
+
+func withDeleteTransferFilesHook(hook func(files []string)) deleteTransferFileOption {
+	return func(options *deleteTransferFilesOptions) {
+		options.deleteTransferFilesHook = hook
+	}
+}
+
+func withDeleteTransferFileErrorHook(hook func(file string, err error) error) deleteTransferFileOption {
+	return func(options *deleteTransferFilesOptions) {
+		options.deleteTransferFileErrorHook = hook
+	}
+}
+
+func withDeleteTransferFilesSuccessHook(hook func(files []string)) deleteTransferFileOption {
+	return func(options *deleteTransferFilesOptions) {
+		options.deleteTransferFilesSuccessHook = hook
+	}
 }
 
 func (t *Transfer) GetTransferFile(ctx context.Context, filePath string) (string, error) {

@@ -36,9 +36,8 @@ func (fe *FontEmbedder) EmbedFonts(
 		return "", fmt.Errorf("读取原始字幕文件失败: %w", err)
 	}
 
-	ext := filepath.Ext(filePath)
 	// 生成嵌入的字体内容
-	fontEmbedContent, err := fe.generateFontEmbedContent(fonts, ext)
+	fontEmbedContent, err := fe.generateFontEmbedContent(fonts)
 	if err != nil {
 		return "", fmt.Errorf("生成字体嵌入内容失败: %w", err)
 	}
@@ -76,7 +75,7 @@ func (fe *FontEmbedder) readOriginalFile(filePath string) ([]string, error) {
 }
 
 // generateFontEmbedContent 生成字体嵌入内容
-func (fe *FontEmbedder) generateFontEmbedContent(fonts map[Font][]byte, ext string) ([]string, error) {
+func (fe *FontEmbedder) generateFontEmbedContent(fonts map[Font][]byte) ([]string, error) {
 	var content []string
 
 	// 添加 [Fonts] 节标题
@@ -93,7 +92,7 @@ func (fe *FontEmbedder) generateFontEmbedContent(fonts map[Font][]byte, ext stri
 	for _, font := range names {
 		data := fonts[font]
 		// 生成字体文件名
-		fontFileName := fe.generateFontFileName(font, ext)
+		fontFileName := fe.generateFontFileName(font, data)
 
 		// 添加字体声明行
 		fontDeclareLine := fmt.Sprintf("fontname: %s", fontFileName)
@@ -112,10 +111,8 @@ func (fe *FontEmbedder) generateFontEmbedContent(fonts map[Font][]byte, ext stri
 	return content, nil
 }
 
-// generateFontFileName 生成SSA格式的字体文件名
-// 格式：原字体名_样式标识_编码.ttf
-// 例如：chaucer_B0.ttf, comic_0.ttf
-func (fe *FontEmbedder) generateFontFileName(font Font, ext string) string {
+// generateFontFileName 生成 SSA 格式的嵌入字体文件名（仅作为字幕内标识使用）。
+func (fe *FontEmbedder) generateFontFileName(font Font, data []byte) string {
 	// 生成样式标识
 	var styleSuffix string
 	if font.BoldWeight >= WeightBold {
@@ -125,13 +122,20 @@ func (fe *FontEmbedder) generateFontFileName(font Font, ext string) string {
 		styleSuffix += "I"
 	}
 
-	// 编码标识（通常为0，表示默认编码）
 	encodingSuffix := "0"
+	ext := fe.detectFontExt(data)
+	return fmt.Sprintf("%s_%s%s.%s", font.FontName, styleSuffix, encodingSuffix, ext)
+}
 
-	// 组合文件名
-	fileName := fmt.Sprintf("%s_%s%s%s", font.FontName, styleSuffix, encodingSuffix, ext)
-
-	return fileName
+func (fe *FontEmbedder) detectFontExt(data []byte) string {
+	// HarfBuzz 子集化输出通常保持轮廓类型：TrueType 为 0x00010000，CFF/OpenType 为 "OTTO"。
+	if len(data) >= 4 {
+		if string(data[:4]) == "OTTO" {
+			return "otf"
+		}
+		// 0x00010000 或 "true" / "typ1" 都按 TrueType 处理
+	}
+	return "ttf"
 }
 
 // uuencodeFontData 将字体数据转换为uuencoding格式
@@ -247,12 +251,4 @@ func (fe *FontEmbedder) writeToFile(filePath string, content []string) error {
 	}
 
 	return writer.Flush()
-}
-
-// min 返回两个整数中的较小值
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
