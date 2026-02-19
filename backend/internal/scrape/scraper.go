@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/beevik/etree"
 	"github.com/pkg/errors"
 
-	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
@@ -31,9 +31,10 @@ type Dependency struct {
 
 type Repository interface {
 	Add(ctx context.Context, task MetadataCheckTask) error
+	Get(ctx context.Context, id uint) (MetadataCheckTask, error)
 	List(ctx context.Context) ([]MetadataCheckTask, error)
 	Delete(ctx context.Context, filePath string) error
-	UpdateImageChecked(ctx context.Context, filePath string) error
+	UpdateStatuses(ctx context.Context, filePath string, statuses []ScrapeStatus) error
 	Clean(ctx context.Context) error
 }
 
@@ -85,22 +86,46 @@ func (s *Scraper) AddMetadataFillTask(ctx context.Context, req AddMetadataFillTa
 		return nil
 	}
 
-	// 仅处理 TV 类型
-	if req.DownloadType != downloader.DownloadTypeTV {
-		log.Infof(ctx, "跳过非TV类型的元数据填充任务: %s", req.FilePath)
-		return nil
-	}
-
 	task := MetadataCheckTask{
-		TMDBID:       req.TMDBID,
-		FilePath:     req.FilePath,
-		DownloadType: req.DownloadType,
+		TMDBID:      req.TMDBID,
+		FilePath:    req.FilePath,
+		BangumiName: req.BangumiName,
+		PosterURL:   req.PosterURL,
+		Season:      req.Season,
+		Episode:     req.Episode,
+		Statuses:    []ScrapeStatus{ScrapeStatusPending},
 	}
 
 	if err := s.repo.Add(ctx, task); err != nil {
 		return errors.WithMessage(err, "添加元数据填充任务失败")
 	}
 
+	return nil
+}
+
+func (s *Scraper) ListTasks(ctx context.Context) ([]MetadataCheckTask, error) {
+	return s.repo.List(ctx)
+}
+
+func (s *Scraper) TriggerScrape(ctx context.Context, id uint) error {
+	task, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	return s.processTask(ctx, task)
+}
+
+func (s *Scraper) TriggerScrapeAll(ctx context.Context) error {
+	tasks, err := s.repo.List(ctx)
+	if err != nil {
+		return errors.WithMessage(err, "获取任务列表失败")
+	}
+
+	for _, task := range tasks {
+		if err := s.processTask(ctx, task); err != nil {
+			log.Errorf(ctx, "处理元数据填充任务失败(FilePath=%s): %v", task.FilePath, err)
+		}
+	}
 	return nil
 }
 
@@ -159,14 +184,17 @@ func (s *Scraper) processTask(ctx context.Context, task MetadataCheckTask) error
 	if err != nil {
 		return errors.WithMessage(err, "获取 TMDB 单集元数据失败")
 	}
-
+	imageAlreadyChecked := !slices.Contains(task.Statuses, ScrapeStatusMissingImage) && !slices.Contains(task.Statuses, ScrapeStatusPending) 
 	// 5. 如果需要更新，则更新 NFO
-	if s.nfoNeedUpdate(nfoData, episodeDetails, task) {
-		allUpdated, err := s.updateNFO(ctx, nfoPath, nfoData, episodeDetails, task)
+	if s.nfoNeedUpdate(nfoData, episodeDetails, imageAlreadyChecked) {
+		allUpdated, err := s.updateNFO(ctx, nfoPath, nfoData, episodeDetails, imageAlreadyChecked)
 		if err != nil {
 			return errors.WithMessage(err, "更新 NFO 文件失败")
 		}
 		if !allUpdated {
+			if err := s.repo.UpdateStatuses(ctx, task.FilePath, s.nfoStatus(nfoData, episodeDetails)); err != nil {
+				return errors.WithMessage(err, "更新任务状态失败")
+			}
 			return nil
 		}
 	}
@@ -237,24 +265,39 @@ func (s *Scraper) parseNFO(path string) (*nfoData, error) {
 }
 
 // nfoNeedUpdate 检查元数据是否需要更新
-func (s *Scraper) nfoNeedUpdate(nfo *nfoData, details meta.EpisodeDetails, task MetadataCheckTask) bool {
-	needUpdate := false
+func (s *Scraper) nfoNeedUpdate(nfo *nfoData, details meta.EpisodeDetails, imageAlreadyChecked bool) bool {
 	if utils.EpisodeNameInvalid(nfo.title) {
-		needUpdate = true
+		return true
 	}
-	if nfo.plot == "" {
-		needUpdate = true
+	if s.nfoPlotInvalid(nfo, details) {
+		return true
 	}
-	if details.StillPath != "" && !task.ImageChecked {
-		needUpdate = true
+	if details.StillPath != "" && !imageAlreadyChecked {
+		return true
 	}
-
-	return needUpdate
+	return false
 }
 
+func (s *Scraper) nfoPlotInvalid(nfo *nfoData, details meta.EpisodeDetails) bool {
+	return nfo.plot == "" || details.Overview == "" || (details.Overview != "" && nfo.plot != details.Overview)
+}
+
+func (s *Scraper) nfoStatus(nfo *nfoData, details meta.EpisodeDetails) []ScrapeStatus {
+	var statuses []ScrapeStatus
+	if utils.EpisodeNameInvalid(details.Name) {
+		statuses = append(statuses, ScrapeStatusMissingTitle)
+	}
+	if details.Overview == "" {
+		statuses = append(statuses, ScrapeStatusMissingPlot)
+	}
+	if details.StillPath == "" || nfo.posterPath == "" {
+		statuses = append(statuses, ScrapeStatusMissingImage)
+	}
+	return statuses
+}
 
 // updateNFO 更新 NFO 文件
-func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, details meta.EpisodeDetails, task MetadataCheckTask) (allUpdated bool, err error) {
+func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, details meta.EpisodeDetails, imageAlreadyChecked bool) (allUpdated bool, err error) {
 	nfoUpdated := false
 	var (
 		titleUpdated bool
@@ -286,7 +329,7 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 	}
 
 	// 更新图片（仅在未检查过时执行）
-	if !task.ImageChecked && details.StillPath != "" && nfo.posterPath != "" {
+	if !imageAlreadyChecked && details.StillPath != "" && nfo.posterPath != "" {
 		// 下载图片并比对
 		if err := s.checkAndReplaceImage(ctx, nfo.posterPath, details.StillPath); err != nil {
 			log.Warnf(ctx, "更新图片失败: %v", err)
@@ -294,9 +337,6 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 		}
 
 		imageUpdated = true
-		if err := s.repo.UpdateImageChecked(ctx, task.FilePath); err != nil {
-			log.Warnf(ctx, "更新图片检查状态失败: %v", err)
-		}
 	}
 
 	// 写回 NFO 文件
@@ -305,7 +345,7 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 			return false, errors.WithMessage(err, "写入 NFO 文件失败")
 		}
 	}
-	if titleUpdated && plotUpdated && (imageUpdated || task.ImageChecked) {
+	if titleUpdated && plotUpdated && (imageUpdated || imageAlreadyChecked) {
 		return true, nil
 	}
 
@@ -313,7 +353,6 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 }
 
 // checkAndReplaceImage 下载图片、比对 MD5 并在需要时替换（一次性操作）
-// 返回是否进行了替换
 func (s *Scraper) checkAndReplaceImage(ctx context.Context, currentPosterPath, posterPath string) error {
 	// 下载 TMDB 图片（只下载一次）
 	newImageData, err := s.downloadImage(ctx, posterPath)
@@ -337,7 +376,6 @@ func (s *Scraper) checkAndReplaceImage(ctx context.Context, currentPosterPath, p
 
 	// 如果需要替换
 	if needReplace {
-		// 写入新文件
 		return os.WriteFile(currentPosterPath, newImageData, 0644)
 	}
 

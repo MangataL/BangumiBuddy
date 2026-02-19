@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,9 @@ import {
   HybridTooltipTrigger,
 } from "@/components/common/tooltip";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
+import { Info, ListTodo } from "lucide-react";
 import type { ScraperConfig } from "@/api/config";
+import { ScraperTaskListDialog } from "./scraper-task-list-dialog";
 
 interface ScraperConfigProps {
   scraperConfig: ScraperConfig;
@@ -22,6 +24,8 @@ export function ScraperConfigComponent({
   setScraperConfig,
   loading,
 }: ScraperConfigProps) {
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -71,50 +75,74 @@ export function ScraperConfigComponent({
 
         {/* 检查时间间隔配置 - 只在启用时显示 */}
         {scraperConfig.enable && (
-          <div className="space-y-2 pl-4 border-l-2 border-primary/20">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="check-interval">检查时间间隔（小时）</Label>
-              <TooltipProvider>
-                <HybridTooltip>
-                  <HybridTooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 rounded-full"
-                    >
-                      <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
-                  </HybridTooltipTrigger>
-                  <HybridTooltipContent>
-                    <p>
-                      设置检查元数据的时间间隔，单位为小时。
-                      <br />
-                      建议设置为24小时（即1天）
-                    </p>
-                  </HybridTooltipContent>
-                </HybridTooltip>
-              </TooltipProvider>
+          <div className="space-y-4 pl-4 border-l-2 border-primary/20">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="check-interval">检查时间间隔（小时）</Label>
+                <TooltipProvider>
+                  <HybridTooltip>
+                    <HybridTooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 rounded-full"
+                      >
+                        <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    </HybridTooltipTrigger>
+                    <HybridTooltipContent>
+                      <p>
+                        设置检查元数据的时间间隔，单位为小时。
+                        <br />
+                        建议设置为24小时（即1天）
+                      </p>
+                    </HybridTooltipContent>
+                  </HybridTooltip>
+                </TooltipProvider>
+              </div>
+              <Input
+                id="check-interval"
+                type="number"
+                min="1"
+                value={scraperConfig.checkInterval}
+                onChange={(e) => {
+                  const hours = parseInt(e.target.value, 10);
+                  if (!isNaN(hours) && hours > 0) {
+                    setScraperConfig((prev) => ({
+                      ...prev,
+                      checkInterval: hours,
+                    }));
+                  }
+                }}
+                disabled={loading}
+                className="w-full"
+              />
             </div>
-            <Input
-              id="check-interval"
-              type="number"
-              min="1"
-              value={scraperConfig.checkInterval}
-              onChange={(e) => {
-                const hours = parseInt(e.target.value, 10);
-                if (!isNaN(hours) && hours > 0) {
-                  setScraperConfig((prev) => ({
-                    ...prev,
-                    checkInterval: hours,
-                  }));
-                }
-              }}
-              disabled={loading}
-              className="w-full"
-            />
+
+            {/* 查看待刮削任务按钮 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Label>待刮削任务</Label>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg flex items-center gap-1.5"
+                onClick={() => setTaskDialogOpen(true)}
+                disabled={loading}
+              >
+                <ListTodo/>
+              </Button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* 刮削任务列表弹窗 */}
+      <ScraperTaskListDialog
+        open={taskDialogOpen}
+        onOpenChange={setTaskDialogOpen}
+      />
     </div>
   );
 }

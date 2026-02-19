@@ -227,6 +227,7 @@ func main() {
 		Magnet:           magnetService,
 		Parser:           metaParser,
 		SubtitleOperator: subtitleOperator,
+		Scraper:          scraper,
 	})
 	r.POST("/apis/v1/token", router.Token)
 	apisRouter := r.Group("/apis/v1", router.CheckToken)
@@ -293,6 +294,11 @@ func main() {
 	apisRouter.GET("/meta/movies", router.SearchMovies)
 	apisRouter.GET("/meta/tv/:id", router.GetTVMeta)
 	apisRouter.GET("/meta/movie/:id", router.GetMovieMeta)
+
+	// 注册刮削任务相关路由
+	apisRouter.GET("/scraper/tasks", router.ListScraperTasks)
+	apisRouter.POST("/scraper/tasks/scrape", router.TriggerScrapeAll)
+	apisRouter.POST("/scraper/tasks/:id/scrape", router.TriggerScrapeTask)
 
 	// 注册工具相关路由
 	apisRouter.GET("/utils/dirs", router.ListDirs)

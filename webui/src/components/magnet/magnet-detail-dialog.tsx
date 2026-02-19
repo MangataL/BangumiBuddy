@@ -852,6 +852,10 @@ export function MagnetDetailDialog({
                             • 点击文件的 SxxExx 标签可以修改识别的季度和集数信息
                           </p>
                         )}
+                        <p>
+                          • 点击媒体文件的齿轮图标可以自定义该文件的媒体类型和
+                          TMDB 信息
+                        </p>
                       </div>
                     </HybridTooltipContent>
                   </HybridTooltip>

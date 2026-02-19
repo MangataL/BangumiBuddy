@@ -638,11 +638,12 @@ func TestManager_FindTaskSimilarFiles(t *testing.T) {
 					TaskID: "task-similar",
 					Torrent: Torrent{
 						Files: []TorrentFile{
-							{FileName: "A/Show S01E01.mkv"},
-							{FileName: "A/Show S01E02.mkv"},
-							{FileName: "A/Other S01E01.mkv"},
-							{FileName: "A/Show/Show S01E03.mkv"},
-							{FileName: "B/Show S01E01.mkv"},
+							{FileName: "A/Show S01E01.mkv", Media: true},
+							{FileName: "A/Show S01E02.mkv", Media: true},
+							{FileName: "A/Show S01E03.mkv", Media: false},
+							{FileName: "A/Other S01E01.mkv", Media: true},
+							{FileName: "A/Show/Show S01E03.mkv", Media: true},
+							{FileName: "B/Show S01E01.mkv", Media: true},
 						},
 					},
 				}, nil)
@@ -670,7 +671,7 @@ func TestManager_FindTaskSimilarFiles(t *testing.T) {
 					TaskID: "task-similar",
 					Torrent: Torrent{
 						Files: []TorrentFile{
-							{FileName: "A/Show S01E01.mkv"},
+							{FileName: "A/Show S01E01.mkv", Media: true},
 						},
 					},
 				}, nil)

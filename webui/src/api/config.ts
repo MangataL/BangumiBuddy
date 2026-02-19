@@ -68,6 +68,25 @@ export interface ScraperConfig {
   checkInterval: number; // 检查时间间隔（小时）
 }
 
+// 刮削状态
+export type ScrapeStatus =
+  | "pending"
+  | "missingTitle"
+  | "missingPlot"
+  | "missingImage";
+
+// 刮削任务类型
+export interface ScraperTask {
+  id: number;
+  tmdbID: number;
+  filePath: string;
+  bangumiName: string;
+  posterURL: string;
+  season: number;
+  episode: number;
+  statuses: ScrapeStatus[];
+}
+
 // 字体库状态类型
 export interface FontMetaSetStats {
   total: number; // 字体总数
@@ -190,4 +209,12 @@ export const configAPI = {
     http.get("/config/scraper") as Promise<ScraperConfig>,
   setScraperConfig: (config: ScraperConfig): Promise<void> =>
     http.put("/config/scraper", config) as Promise<void>,
+
+  // 刮削任务
+  listScraperTasks: (): Promise<ScraperTask[]> =>
+    http.get("/scraper/tasks") as Promise<ScraperTask[]>,
+  triggerScrapeTask: (id: number): Promise<void> =>
+    http.post(`/scraper/tasks/${id}/scrape`) as Promise<void>,
+  triggerScrapeAll: (): Promise<void> =>
+    http.post("/scraper/tasks/scrape") as Promise<void>,
 };

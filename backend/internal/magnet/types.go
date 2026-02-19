@@ -23,12 +23,21 @@ type Torrent struct {
 
 // TorrentFile 种子文件
 type TorrentFile struct {
-	FileName string `json:"fileName"`
-	Season   int    `json:"season"`
-	Episode  int    `json:"episode"`
-	Media    bool   `json:"media"`
-	Download bool   `json:"download"`
-	LinkFile string `json:"linkFile"`
+	FileName string           `json:"fileName"`
+	Season   int              `json:"season"`
+	Episode  int              `json:"episode"`
+	Media    bool             `json:"media"`
+	Download bool             `json:"download"`
+	LinkFile string           `json:"linkFile"`
+	Meta     *TorrentFileMeta `json:"meta,omitempty"` // 文件级别元数据，为空时使用任务级别
+}
+
+// TorrentFileMeta 文件级别元数据
+type TorrentFileMeta struct {
+	MediaType   downloader.DownloadType `json:"mediaType"` // tv 或 movie
+	ChineseName string                  `json:"chineseName"`
+	Year        string                  `json:"year"`
+	TMDBID      int                     `json:"tmdbID"`
 }
 
 // AddTaskReq 添加下载任务请求

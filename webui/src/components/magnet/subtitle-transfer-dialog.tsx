@@ -106,6 +106,10 @@ export function SubtitleTransferDialog({
     [previewItems]
   );
   const selectablePreviewCount = selectablePreviewEntries.length;
+  const downloadedTorrentFiles = useMemo(
+    () => torrentFiles.filter((file) => file.download),
+    [torrentFiles]
+  );
 
   // 加载默认路径
   useEffect(() => {
@@ -285,7 +289,7 @@ export function SubtitleTransferDialog({
               选择目标（目录或媒体文件）
             </Label>
             <TorrentDirectoryTree
-              files={torrentFiles}
+              files={downloadedTorrentFiles}
               selectedPath={selectedTargetDir || ""}
               onSelect={setSelectedTargetDir}
               className="flex-1"
@@ -294,8 +298,9 @@ export function SubtitleTransferDialog({
               <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    {torrentFiles.find((f) => f.fileName === selectedTargetDir)
-                      ?.media ? (
+                    {downloadedTorrentFiles.find(
+                      (f) => f.fileName === selectedTargetDir
+                    )?.media ? (
                       <Video className="w-4 h-4 text-purple-600 flex-shrink-0" />
                     ) : (
                       <FolderOpen className="w-4 h-4 text-purple-600 flex-shrink-0" />
@@ -321,7 +326,7 @@ export function SubtitleTransferDialog({
         <div className="grid grid-cols-2 gap-6 h-full min-h-0">
           <div className="flex flex-col h-full min-h-0">
             <Label className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <FolderOpen className="w-4 h-4 text-blue-500" />
+              <FolderOpen className="w-4 h-4 text-primary" />
               1. 选择源字幕 (目录或具体文件)
             </Label>
             <SourceDirectorySelector
@@ -337,7 +342,7 @@ export function SubtitleTransferDialog({
               2. 选择目标位置 (目录或媒体文件)
             </Label>
             <TorrentDirectoryTree
-              files={torrentFiles}
+              files={downloadedTorrentFiles}
               selectedPath={selectedTargetDir || ""}
               onSelect={setSelectedTargetDir}
               className="flex-1"
@@ -346,8 +351,9 @@ export function SubtitleTransferDialog({
               <div className="mt-3 p-3 rounded-xl bg-purple-500/5 border border-purple-500/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
-                    {torrentFiles.find((f) => f.fileName === selectedTargetDir)
-                      ?.media ? (
+                    {downloadedTorrentFiles.find(
+                      (f) => f.fileName === selectedTargetDir
+                    )?.media ? (
                       <Video className="w-4 h-4 text-purple-600 flex-shrink-0" />
                     ) : (
                       <FolderOpen className="w-4 h-4 text-purple-600 flex-shrink-0" />
@@ -383,9 +389,9 @@ export function SubtitleTransferDialog({
       <div className="flex items-center justify-between mb-4 px-1">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-green-500/10">
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <CheckCircle2 className="w-4 h-4 text-primary" />
           </div>
-          <h3 className="font-semibold text-base">转移预览与确认</h3>
+          <h3 className="font-semibold">转移预览与确认</h3>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
@@ -439,8 +445,8 @@ export function SubtitleTransferDialog({
                 res.error
                   ? "bg-red-500/5 border-red-500/20 shadow-sm"
                   : confirmedFiles[path]
-                  ? "bg-white dark:bg-zinc-900 border-blue-500/30 shadow-sm"
-                  : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 opacity-70 shadow-none"
+                    ? "bg-white dark:bg-zinc-900 border-blue-500/30 shadow-sm"
+                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 opacity-70 shadow-none"
               )}
             >
               <div className="flex flex-col items-center gap-3">
@@ -514,26 +520,26 @@ export function SubtitleTransferDialog({
                     >
                       {!res.error && res.newFileName
                         ? (() => {
-                            const mediaBase = res.mediaFileName
-                              ? getFileStem(res.mediaFileName)
-                              : "";
-                            if (
-                              mediaBase &&
-                              res.newFileName.startsWith(mediaBase)
-                            ) {
-                              return (
-                                <>
-                                  <span className="text-blue-600 dark:text-blue-400">
-                                    {mediaBase}
-                                  </span>
-                                  <span className="text-zinc-400 dark:text-zinc-500 font-normal">
-                                    {res.newFileName.slice(mediaBase.length)}
-                                  </span>
-                                </>
-                              );
-                            }
-                            return res.newFileName;
-                          })()
+                          const mediaBase = res.mediaFileName
+                            ? getFileStem(res.mediaFileName)
+                            : "";
+                          if (
+                            mediaBase &&
+                            res.newFileName.startsWith(mediaBase)
+                          ) {
+                            return (
+                              <>
+                                <span className="text-blue-600 dark:text-blue-400">
+                                  {mediaBase}
+                                </span>
+                                <span className="text-zinc-400 dark:text-zinc-500 font-normal">
+                                  {res.newFileName.slice(mediaBase.length)}
+                                </span>
+                              </>
+                            );
+                          }
+                          return res.newFileName;
+                        })()
                         : "无法匹配"}
                     </div>
                   </div>
@@ -580,9 +586,11 @@ export function SubtitleTransferDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <div className="p-2 rounded-xl bg-blue-500/10">
-              <FileText className="w-5 h-5 text-blue-600" />
+              <FileText className={
+                isMobile ? "w-4 h-4 text-primary" : "w-5 h-5 text-primary"
+              } />
             </div>
-            字幕转移助手
+            <span className="anime-gradient-text">字幕转移助手</span>
           </DialogTitle>
           <DialogDescription>
             {view === "selection"
@@ -723,7 +731,7 @@ export function SubtitleTransferDialog({
                   selectedTargetDir === null ||
                   loadingPreview
                 }
-                className="bg-blue-600 hover:bg-blue-700 rounded-xl px-8"
+                className="rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
               >
                 {loadingPreview ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -740,7 +748,7 @@ export function SubtitleTransferDialog({
                 onClick={() => setView("selection")}
                 className="rounded-xl"
               >
-                <ChevronLeft className="w-4 h-4 mr-2" />
+                <ChevronLeft className="w-4 h-4" />
                 返回修改
               </Button>
               <Button
@@ -748,7 +756,7 @@ export function SubtitleTransferDialog({
                 disabled={
                   transferring || Object.values(confirmedFiles).every((v) => !v)
                 }
-                className="bg-green-600 hover:bg-green-700 rounded-xl px-8"
+                className="rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
               >
                 {transferring ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

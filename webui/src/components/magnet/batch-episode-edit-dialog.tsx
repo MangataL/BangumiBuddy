@@ -88,8 +88,8 @@ export function BatchEpisodeEditDialog({
       <DialogContent className="flex flex-col rounded-xl border-primary/20 bg-card/95 backdrop-blur-md overflow-hidden w-[92vw] max-w-[92vw] h-[80vh] max-h-[80vh] p-4 sm:max-w-2xl sm:h-auto sm:max-h-[90vh] sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileVideo className="w-5 h-5 text-blue-600" />
-            批量编辑相似文件
+            <FileVideo className="w-5 h-5 text-primary" />
+            <span className="anime-gradient-text">批量编辑相似文件</span>
           </DialogTitle>
           <DialogDescription>
             系统已自动识别出任务中相似的视频文件，你可以统一设置它们的季度并应用集数偏移。

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -208,7 +209,7 @@ func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
 			return err
 		}
 		if err := w.transfer.DeleteTransferFile(ctx, transferFile); err != nil {
-			return err
+			return fmt.Errorf("删除转移文件失败: %w", err)
 		}
 	}
 	if req.DeleteOriginFiles {
@@ -216,8 +217,8 @@ func (w *Web) DeleteTorrent(ctx context.Context, req DeleteTorrentReq) error {
 			log.Warnf(ctx, "通过下载器删除种子失败，尝试手动清理: %v", err)
 			for _, name := range torrent.FileNames {
 				filePath := filepath.Join(torrent.Path, name)
-				if err := os.Remove(filePath); err != nil {
-					return err
+				if err := os.Remove(filePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("手动清理原始文件失败: %w", err)
 				}
 			}
 			return w.torrentOperator.Delete(ctx, req.Hash)

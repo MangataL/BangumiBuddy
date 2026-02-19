@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/MangataL/BangumiBuddy/internal/scrape"
+	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
 var _ scrape.Repository = &Repository{}
@@ -19,7 +21,8 @@ type Repository struct {
 
 // New 创建存储层实例
 func New(db *gorm.DB) *Repository {
-	db.AutoMigrate(&metadataCheckSchema{})
+	utils.DropUnusedColumns(db, &metadataCheckSchema{})
+	_ = db.AutoMigrate(&metadataCheckSchema{})
 	return &Repository{db: db}
 }
 
@@ -38,6 +41,18 @@ func (r *Repository) Add(ctx context.Context, task scrape.MetadataCheckTask) err
 	}
 
 	return nil
+}
+
+// Get 根据ID获取任务
+func (r *Repository) Get(ctx context.Context, id uint) (scrape.MetadataCheckTask, error) {
+	var model metadataCheckSchema
+	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return scrape.MetadataCheckTask{}, scrape.ErrTaskNotFound
+		}
+		return scrape.MetadataCheckTask{}, fmt.Errorf("获取任务失败: %w", err)
+	}
+	return toTask(model), nil
 }
 
 // List 列出所有待处理任务
@@ -65,13 +80,17 @@ func (r *Repository) Delete(ctx context.Context, filePath string) error {
 	return nil
 }
 
-// UpdateImageChecked 标记图片已检查
-func (r *Repository) UpdateImageChecked(ctx context.Context, filePath string) error {
+// UpdateStatuses 更新任务刮削状态
+func (r *Repository) UpdateStatuses(ctx context.Context, filePath string, statuses []scrape.ScrapeStatus) error {
+	statusesJSON, err := json.Marshal(statuses)
+	if err != nil {
+		return fmt.Errorf("序列化状态失败: %w", err)
+	}
 	result := r.db.WithContext(ctx).Model(&metadataCheckSchema{}).
 		Where("file_path = ?", filePath).
-		Update("image_checked", true)
+		Update("statuses", string(statusesJSON))
 	if result.Error != nil {
-		return fmt.Errorf("更新图片检查状态失败: %w", result.Error)
+		return fmt.Errorf("更新刮削状态失败: %w", result.Error)
 	}
 	return nil
 }

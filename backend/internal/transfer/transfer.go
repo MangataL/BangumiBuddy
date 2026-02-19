@@ -280,9 +280,12 @@ func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloa
 
 	if t.scraper.Enable() {
 		if err := t.scraper.AddMetadataFillTask(ctx, scrape.AddMetadataFillTaskReq{
-			FilePath:     newFilePath,
-			TMDBID:       bangumi.TMDBID,
-			DownloadType: downloader.DownloadTypeTV,
+			FilePath:    newFilePath,
+			TMDBID:      bangumi.TMDBID,
+			BangumiName: bangumi.Name,
+			PosterURL:   bangumi.PosterURL,
+			Season:      bangumi.Season,
+			Episode:     episode,
 		}); err != nil {
 			log.Warnf(ctx, "添加元数据填充任务失败: %v", err)
 		}
@@ -586,21 +589,42 @@ func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloade
 			log.Infof(ctx, "文件 %s 不是待入库文件，跳过转移", fileName)
 			continue
 		}
-		meta := Meta{
-			ChineseName:   task.Meta.ChineseName,
-			Year:          task.Meta.Year,
-			FileName:      fileName,
-			FilePath:      filepath.Join(torrent.Path, fileName),
-			ReleaseGroup:  task.Meta.ReleaseGroup,
-			FontSubsetter: fontSubsetter,
+
+		// 确定文件使用的类型和元数据
+		var downloadType downloader.DownloadType
+		var fileMeta Meta
+		if file.Meta != nil {
+			// 使用文件级别的类型和元数据
+			downloadType = file.Meta.MediaType
+			fileMeta = Meta{
+				ChineseName:   file.Meta.ChineseName,
+				Year:          file.Meta.Year,
+				FileName:      fileName,
+				FilePath:      filepath.Join(torrent.Path, fileName),
+				ReleaseGroup:  task.Meta.ReleaseGroup,
+				FontSubsetter: fontSubsetter,
+			}
+			log.Infof(ctx, "文件 %s 使用自定义元数据: 类型=%s, 中文名=%s", fileName, downloadType, fileMeta.ChineseName)
+		} else {
+			// 使用任务级别的类型和元数据
+			downloadType = task.DownloadType
+			fileMeta = Meta{
+				ChineseName:   task.Meta.ChineseName,
+				Year:          task.Meta.Year,
+				FileName:      fileName,
+				FilePath:      filepath.Join(torrent.Path, fileName),
+				ReleaseGroup:  task.Meta.ReleaseGroup,
+				FontSubsetter: fontSubsetter,
+			}
 		}
+
 		newFileID := fmt.Sprintf("%s-%s", torrent.Hash, fileName)
 		var originFile, newFilePath string
-		switch task.DownloadType {
+		switch downloadType {
 		case downloader.DownloadTypeTV:
-			originFile, newFilePath, err = t.transferForTaskTV(ctx, meta, file, newFileID)
+			originFile, newFilePath, err = t.transferForTaskTV(ctx, fileMeta, file, newFileID)
 		case downloader.DownloadTypeMovie:
-			originFile, newFilePath, err = t.transferForTaskMovie(ctx, meta, newFileID)
+			originFile, newFilePath, err = t.transferForTaskMovie(ctx, fileMeta, newFileID)
 		}
 
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/magnet"
 	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/internal/repository/viper"
+	"github.com/MangataL/BangumiBuddy/internal/scrape"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/internal/transfer"
 	"github.com/MangataL/BangumiBuddy/internal/web"
@@ -22,6 +23,7 @@ type Dependency struct {
 	Magnet           magnet.Interface
 	Parser           meta.Parser
 	SubtitleOperator subtitle.Subsetter
+	Scraper          scrape.Interface
 }
 
 func New(dep Dependency) *Router {
@@ -35,6 +37,7 @@ func New(dep Dependency) *Router {
 		magnet:            dep.Magnet,
 		metaParser:        dep.Parser,
 		subtitleSubsetter: dep.SubtitleOperator,
+		scraper:           dep.Scraper,
 	}
 }
 
@@ -48,4 +51,5 @@ type Router struct {
 	magnet            magnet.Interface
 	metaParser        meta.Parser
 	subtitleSubsetter subtitle.Subsetter
+	scraper           scrape.Interface
 }

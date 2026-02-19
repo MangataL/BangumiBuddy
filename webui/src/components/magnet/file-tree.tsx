@@ -12,15 +12,24 @@ import {
   CloudDownload,
   CloudOff,
   Layers,
+  Film,
+  Tv,
+  Settings2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TorrentFile, type DownloadType } from "@/api/magnet";
+import {
+  TorrentFile,
+  DownloadTypeSet,
+  DownloadTypeLabels,
+  type DownloadType,
+} from "@/api/magnet";
 import { cn } from "@/lib/utils";
 import { useMobile } from "@/hooks/useMobile";
 import { EpisodeEditDialog } from "./episode-edit-dialog";
 import { BatchEpisodeEditDialog } from "./batch-episode-edit-dialog";
+import { FileMetaEditDialog } from "./file-meta-edit-dialog";
 import { SubtitleTransferDialog } from "./subtitle-transfer-dialog";
 import {
   Dialog,
@@ -280,7 +289,11 @@ function TreeNodeComponent({
   const isLibraryFile = hasLinkFile; // 已入库
   const isPendingFile = isMediaFile && !hasLinkFile; // 待入库
 
-  const hasEpisodeInfo = downloadType === "tv" && isMediaFile;
+  // 获取文件实际使用的媒体类型（优先使用文件级别的自定义类型）
+  const fileMediaType = node.file?.meta?.mediaType || downloadType;
+  const hasCustomMeta = !!node.file?.meta;
+
+  const hasEpisodeInfo = fileMediaType === "tv" && isMediaFile;
 
   // 获取文件图标和样式
   const getFileIconAndStyle = (
@@ -313,6 +326,13 @@ function TreeNodeComponent({
   };
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showMetaEditDialog, setShowMetaEditDialog] = useState(false);
+
+  // 处理元数据编辑点击
+  const handleMetaEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMetaEditDialog(true);
+  };
 
   // 格式化季集号码为两位数
   const formatEpisodeNumber = (num: number | undefined): string => {
@@ -446,6 +466,39 @@ function TreeNodeComponent({
                   {node.name}
                 </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  {/* 自定义元数据类型标签 */}
+                  {hasCustomMeta && isMediaFile && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-xs",
+                        !isDownload && "opacity-40",
+                        fileMediaType === DownloadTypeSet.TV
+                          ? "border-blue-500/30 text-blue-700 dark:text-blue-300"
+                          : "border-pink-500/30 text-pink-700 dark:text-pink-300"
+                      )}
+                    >
+                      {fileMediaType === DownloadTypeSet.TV ? (
+                        <Tv className="w-3 h-3 mr-1" />
+                      ) : (
+                        <Film className="w-3 h-3 mr-1" />
+                      )}
+                      {DownloadTypeLabels[fileMediaType]}
+                    </Badge>
+                  )}
+                  {/* 自定义元数据名称标签 */}
+                  {hasCustomMeta && node.file?.meta?.chineseName && isMediaFile && (
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 border-0 max-w-[120px] truncate",
+                        !isDownload && "opacity-40"
+                      )}
+                      title={node.file.meta.chineseName}
+                    >
+                      {node.file.meta.chineseName}
+                    </Badge>
+                  )}
                   {hasEpisodeInfo && (
                     <Badge
                       variant="outline"
@@ -477,6 +530,33 @@ function TreeNodeComponent({
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>批量设置相似文件</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  {/* 自定义元数据编辑按钮 */}
+                  {isMediaFile && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-6 px-1.5 text-xs",
+                              hasCustomMeta
+                                ? "text-violet-600 hover:text-violet-700 hover:bg-violet-500/10"
+                                : "text-muted-foreground hover:text-violet-600 hover:bg-violet-500/10"
+                            )}
+                            onClick={handleMetaEditClick}
+                          >
+                            <Settings2 className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {hasCustomMeta
+                            ? "编辑自定义元数据"
+                            : "自定义文件元数据"}
+                        </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   )}
@@ -523,6 +603,17 @@ function TreeNodeComponent({
           triggerFile={node.file}
           allFiles={allFiles}
           onSave={onFilesChange}
+        />
+      )}
+
+      {/* 文件元数据编辑弹窗 */}
+      {node.file && (
+        <FileMetaEditDialog
+          open={showMetaEditDialog}
+          onOpenChange={setShowMetaEditDialog}
+          file={node.file}
+          taskDownloadType={downloadType}
+          onSave={onFileChange}
         />
       )}
 
@@ -587,6 +678,41 @@ function TreeNodeComponent({
                   </div>
                 </div>
               )}
+
+              {/* 自定义元数据信息 */}
+              {hasCustomMeta && node.file.meta && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Settings2 className="w-4 h-4 text-violet-600" />
+                    <span className="text-sm font-medium text-violet-600">
+                      自定义元数据：
+                    </span>
+                  </div>
+                  <div className="pl-6 flex gap-2 flex-wrap">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-xs",
+                        fileMediaType === DownloadTypeSet.TV
+                          ? "border-blue-500/30 text-blue-700 dark:text-blue-300"
+                          : "border-pink-500/30 text-pink-700 dark:text-pink-300"
+                      )}
+                    >
+                      {DownloadTypeLabels[fileMediaType]}
+                    </Badge>
+                    {node.file.meta.chineseName && (
+                      <Badge variant="outline" className="text-xs">
+                        {node.file.meta.chineseName}
+                      </Badge>
+                    )}
+                    {node.file.meta.tmdbID > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        TMDB: {node.file.meta.tmdbID}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -633,13 +759,34 @@ export function FileTree({
     (f) => f.media && !f.linkFile && f.download
   ).length;
 
-  // 按季度统计媒体文件总数
-  const seasonStats = useMemo(() => {
-    if (downloadType !== "tv") return [];
+  // 获取文件的实际媒体类型
+  const getFileMediaType = (f: TorrentFile): DownloadType =>
+    f.meta?.mediaType || downloadType;
 
-    const stats: Record<number, number> = {};
+  // 检测是否存在混合类型（有文件自定义了不同的类型）
+  const typeStats = useMemo(() => {
+    const stats: Record<string, number> = {};
     files.forEach((f) => {
       if (f.media && f.download) {
+        const type = getFileMediaType(f);
+        stats[type] = (stats[type] || 0) + 1;
+      }
+    });
+    return stats;
+  }, [files, downloadType]);
+
+  const hasMixedTypes = Object.keys(typeStats).length > 1;
+
+  // 统计自定义元数据的文件数
+  const customMetaCount = useMemo(() => {
+    return files.filter((f) => f.meta && f.media && f.download).length;
+  }, [files]);
+
+  // 按季度统计媒体文件总数（仅统计 TV 类型的文件）
+  const seasonStats = useMemo(() => {
+    const stats: Record<number, number> = {};
+    files.forEach((f) => {
+      if (f.media && f.download && getFileMediaType(f) === "tv") {
         stats[f.season] = (stats[f.season] || 0) + 1;
       }
     });
@@ -680,6 +827,39 @@ export function FileTree({
             {!isMobile && `已入库${mediaLabel}: `}
             {libraryFilesCount}
           </Badge>
+          {/* 混合类型统计 */}
+          {hasMixedTypes &&
+            Object.entries(typeStats).map(([type, count]) => (
+              <Badge
+                key={type}
+                variant="secondary"
+                className={cn(
+                  "border-0 flex items-center gap-1.5",
+                  type === DownloadTypeSet.TV
+                    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                    : "bg-pink-500/10 text-pink-700 dark:text-pink-300"
+                )}
+              >
+                {type === DownloadTypeSet.TV ? (
+                  <Tv className="w-3 h-3" />
+                ) : (
+                  <Film className="w-3 h-3" />
+                )}
+                {!isMobile && `${DownloadTypeLabels[type as DownloadType]}: `}
+                {count}
+              </Badge>
+            ))}
+          {/* 自定义元数据数量 */}
+          {customMetaCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="bg-violet-500/10 text-violet-700 dark:text-violet-300 border-0 flex items-center gap-1.5"
+            >
+              <Settings2 className="w-3 h-3" />
+              {!isMobile && "自定义: "}
+              {customMetaCount}
+            </Badge>
+          )}
           {seasonStats.map(({ season, count }) => (
             <Badge
               key={season}

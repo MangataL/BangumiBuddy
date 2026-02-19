@@ -302,10 +302,10 @@ func (m *Manager) initTask(ctx context.Context, task Task) (Task, error) {
 			bf, err := m.bfParser.Parse(ctx, fileName)
 			if err != nil {
 				log.Errorf(ctx, "解析文件名 %s 获取季数和集数失败: %v", fileName, err)
-				continue
+			} else {
+				file.Season = bf.Season
+				file.Episode = bf.Episode
 			}
-			file.Season = bf.Season
-			file.Episode = bf.Episode
 		}
 
 		torrentFiles = append(torrentFiles, file)
@@ -545,6 +545,38 @@ func (m *Manager) UpdateTask(ctx context.Context, req UpdateTaskReq) error {
 			ChineseName: meta.ChineseName,
 			Year:        meta.Year,
 			TMDBID:      req.TMDBID,
+		}
+	}
+
+	// 处理文件级别的元数据
+	for i := range req.Torrent.Files {
+		file := &req.Torrent.Files[i]
+		if file.Meta == nil {
+			continue
+		}
+		if file.Meta.TMDBID == 0 || (file.Meta.MediaType != downloader.DownloadTypeMovie && file.Meta.MediaType != downloader.DownloadTypeTV) {
+			return errs.NewBadRequest("文件级别元数据不能为空")
+		}
+		// 获取文件原有元数据（如果有）
+		var oldTMDBID int
+		for _, oldFile := range task.Torrent.Files {
+			if oldFile.FileName == file.FileName && oldFile.Meta != nil {
+				oldTMDBID = oldFile.Meta.TMDBID
+				break
+			}
+		}
+		// 如果 TMDBID 变化了或之前没有元数据，重新获取
+		if file.Meta.TMDBID != oldTMDBID {
+			meta, err := m.parseMetaByID(ctx, file.Meta.TMDBID, file.Meta.MediaType)
+			if err != nil {
+				return fmt.Errorf("解析文件 %s 元数据失败: %w", file.FileName, err)
+			}
+			file.Meta = &TorrentFileMeta{
+				MediaType:   file.Meta.MediaType,
+				ChineseName: meta.ChineseName,
+				Year:        meta.Year,
+				TMDBID:      file.Meta.TMDBID,
+			}
 		}
 	}
 
@@ -832,6 +864,9 @@ func (m *Manager) FindTaskSimilarFiles(ctx context.Context, taskID, filePath str
 		}
 		if filepath.Clean(file.FileName) == filePath {
 			result = append(result, file.FileName)
+			continue
+		}
+		if !file.Media {
 			continue
 		}
 		bf, _ := m.bfParser.Parse(ctx, file.FileName, bangumifile.IgnoreValidateEpisode())

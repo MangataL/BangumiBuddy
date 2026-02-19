@@ -71,8 +71,8 @@ export function EpisodeEditDialog({
       <DialogContent className="rounded-xl border-primary/20 bg-card/95 backdrop-blur-md w-[92vw] max-w-[92vw] p-4 sm:max-w-md sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileVideo className="w-5 h-5 text-green-600" />
-            编辑季集信息
+            <FileVideo className="w-5 h-5 text-primary" />
+            <span className="anime-gradient-text">编辑季集信息</span>
           </DialogTitle>
           <DialogDescription>
             为文件设置正确的季集信息，这将影响后续的文件整理和入库操作。
@@ -83,8 +83,8 @@ export function EpisodeEditDialog({
           {/* 文件信息展示 */}
           <div className="p-4 rounded-lg bg-muted/50 border">
             <div className="flex items-start gap-3">
-              <div className="p-2 rounded-md bg-green-500/10 flex-shrink-0">
-                <FileVideo className="w-4 h-4 text-green-600" />
+              <div className="p-2 rounded-md bg-primary/10 flex-shrink-0">
+                <FileVideo className="w-4 h-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium break-all leading-tight">
@@ -93,7 +93,7 @@ export function EpisodeEditDialog({
                 <div className="mt-2 flex items-center gap-2">
                   <Badge
                     variant="outline"
-                    className="text-xs border-green-500/30 text-green-700 dark:text-green-300"
+                    className="bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20 px-1.5 py-0 text-xs"
                   >
                     当前: S{formatEpisodeNumber(file.season || 0)}E
                     {formatEpisodeNumber(file.episode || 0)}
@@ -158,12 +158,12 @@ export function EpisodeEditDialog({
             </div>
 
             {/* 预览 */}
-            <div className="p-3 rounded-lg bg-gradient-to-r from-green-500/5 to-blue-500/5 border border-green-500/20">
+            <div className="p-3 rounded-lg bg-gradient-to-r from-primary/5 to-blue-500/5 border border-primary/20">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">预览效果:</span>
                 <Badge
                   variant="outline"
-                  className="text-sm border-green-500/30 text-green-700 dark:text-green-300 bg-green-500/10"
+                  className="text-sm border-primary/30 text-primary bg-primary/10"
                 >
                   S{formatEpisodeNumber(season)}E{formatEpisodeNumber(episode)}
                 </Badge>
@@ -173,12 +173,12 @@ export function EpisodeEditDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleCancel}>
+          <Button variant="outline" onClick={handleCancel} className="rounded-xl">
             取消
           </Button>
           <Button
             onClick={handleSave}
-            className="bg-green-600 hover:bg-green-700"
+            className="rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
           >
             保存设置
           </Button>

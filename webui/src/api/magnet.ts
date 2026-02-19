@@ -14,6 +14,13 @@ export const DownloadTypeLabels = {
   [DownloadTypeSet.Movie]: "剧场版",
 } as const;
 
+export interface TorrentFileMeta {
+  mediaType: DownloadType;
+  chineseName: string;
+  year: string;
+  tmdbID: number;
+}
+
 export interface TorrentFile {
   fileName: string;
   season: number;
@@ -21,6 +28,7 @@ export interface TorrentFile {
   media: boolean;
   download: boolean;
   linkFile: string;
+  meta?: TorrentFileMeta;
 }
 
 export interface Torrent {

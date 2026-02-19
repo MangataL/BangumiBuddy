@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { Trash2, ArrowUpFromLine, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,6 +60,7 @@ export function MagnetTaskList({
   pauseRefresh = false,
   openTaskID,
 }: MagnetTaskListProps) {
+  const location = useLocation();
   const { toast } = useToast();
   const isMobile = useMobile();
   const [tasks, setTasks] = useState<DownloadTask[]>([]);
@@ -74,10 +76,20 @@ export function MagnetTaskList({
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedTaskID, setSelectedTaskID] = useState<string | null>(null);
   const [refreshInterval, setRefreshInterval] = useState<number>(10000);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isPageVisible, setIsPageVisible] = useState(() => !document.hidden);
 
   // 添加定时器引用
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isUpdatingRef = useRef(false);
+  const shouldAutoRefreshRef = useRef(false);
+
+  const isDownloadTabActive = location.pathname.startsWith("/download");
+  const shouldAutoRefresh =
+    isDownloadTabActive &&
+    isPageVisible &&
+    !pauseRefresh &&
+    !showDetailDialog &&
+    !showDeleteDialog;
 
   // 清理定时器的函数
   const clearRefreshTimer = () => {
@@ -90,8 +102,14 @@ export function MagnetTaskList({
   // 启动定时器的函数
   const startRefreshTimer = (interval?: number) => {
     clearRefreshTimer();
+    if (!shouldAutoRefreshRef.current) {
+      return;
+    }
     const actualInterval = interval ?? refreshInterval;
     refreshTimerRef.current = setInterval(() => {
+      if (!shouldAutoRefreshRef.current) {
+        return;
+      }
       updateTasks();
     }, actualInterval);
   };
@@ -108,6 +126,11 @@ export function MagnetTaskList({
 
   // 更新刷新间隔
   const updateRefreshInterval = (tasks: DownloadTask[]) => {
+    if (!shouldAutoRefreshRef.current) {
+      clearRefreshTimer();
+      return;
+    }
+
     const needsRefresh = hasTasksNeedingRefresh(tasks);
 
     if (!needsRefresh) {
@@ -164,10 +187,10 @@ export function MagnetTaskList({
 
   // 修改 updateTasks 用于定时刷新
   const updateTasks = async () => {
-    if (isUpdating) return;
+    if (!shouldAutoRefreshRef.current || isUpdatingRef.current) return;
 
     try {
-      setIsUpdating(true);
+      isUpdatingRef.current = true;
       const response = await magnetAPI.listTasks({
         page: currentPage,
         page_size: pageSize,
@@ -207,7 +230,7 @@ export function MagnetTaskList({
     } catch (error) {
       console.error("Failed to update tasks:", error);
     } finally {
-      setIsUpdating(false);
+      isUpdatingRef.current = false;
     }
   };
 
@@ -269,6 +292,24 @@ export function MagnetTaskList({
     return () => clearRefreshTimer();
   }, []);
 
+  // 页面不可见时暂停刷新
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(!document.hidden);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  // 同步自动刷新条件到 ref，保证定时器回调拿到最新状态
+  useEffect(() => {
+    shouldAutoRefreshRef.current = shouldAutoRefresh;
+    if (!shouldAutoRefresh) {
+      clearRefreshTimer();
+    }
+  }, [shouldAutoRefresh]);
+
   // 启动自动刷新定时器
   useEffect(() => {
     clearRefreshTimer();
@@ -285,21 +326,16 @@ export function MagnetTaskList({
     }
   }, [refresh, fetchTasks]);
 
-  // 监听 pauseRefresh、对话框状态变化，控制定时器
+  // 监听刷新条件变化，控制定时器
   useEffect(() => {
-    // 当添加对话框、详情对话框或删除对话框打开时，暂停定时器
-    const shouldPause = pauseRefresh || showDetailDialog || showDeleteDialog;
-
-    if (shouldPause) {
-      // 暂停时停止定时器
+    if (!shouldAutoRefresh) {
       clearRefreshTimer();
     } else {
-      // 恢复时根据当前任务状态决定是否启动定时器
       if (tasks.length > 0) {
         updateRefreshInterval(tasks);
       }
     }
-  }, [pauseRefresh, showDetailDialog, showDeleteDialog]);
+  }, [shouldAutoRefresh, tasks]);
 
   // 监听 openTaskID 变化，自动打开任务详情
   useEffect(() => {

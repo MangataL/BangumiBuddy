@@ -8,12 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { subscriptionAPI, CalendarItem } from "@/api/subscription";
 import { toast } from "@/components/ui/use-toast";
 import { getWeekDayText, getSortedWeekDays } from "@/utils/time";
@@ -185,10 +179,10 @@ export function SubscriptionCalendarDialog({
                     ))}
                     {(!calendarData[weekday] ||
                       calendarData[weekday].length === 0) && (
-                      <div className="flex justify-center items-center h-24 text-muted-foreground text-sm">
-                        暂无更新
-                      </div>
-                    )}
+                        <div className="flex justify-center items-center h-24 text-muted-foreground text-sm">
+                          暂无更新
+                        </div>
+                      )}
                   </div>
                 </div>
               ))}

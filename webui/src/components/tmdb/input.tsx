@@ -221,8 +221,10 @@ function SearchDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="w-[95dvw] sm:max-w-3xl max-h-[90dvh] flex flex-col rounded-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl anime-gradient-text">
-            搜索{type === "tv" ? "番剧" : "剧场版"}
+          <DialogTitle className="text-xl">
+            <span className="anime-gradient-text">
+              搜索{type === "tv" ? "番剧" : "剧场版"}
+            </span>
           </DialogTitle>
           <DialogDescription>
             输入{type === "tv" ? "番剧" : "剧场版"}名称进行搜索
