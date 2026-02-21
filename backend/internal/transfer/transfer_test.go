@@ -4,10 +4,14 @@ import (
 	"archive/zip"
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
+	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/creasty/defaults"
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -512,6 +516,71 @@ func TestTransfer_getFontPath(t *testing.T) {
 					t.Logf("临时目录 %s 在清理后可能仍然存在", gotPath)
 				}
 			}
+		})
+	}
+}
+
+func TestTransfer_checkPriority(t *testing.T) {
+	type args struct {
+		newFilePriority newFilePriority
+	}
+	testCases := []struct {
+		name string
+		args args
+	}{
+	{
+			name: "when new file has higher priority then keep nfo only",
+			args: args{
+				newFilePriority: newFilePriority{
+					newFileID: "new-file-id",
+					fileName:  "new-file.mkv",
+					priority:  2,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			basePath := filepath.Join(tempDir, "episode")
+			oldMediaFile := basePath + ".mkv"
+			oldSubtitleFile := basePath + ".ass"
+			oldNFOFile := basePath + ".nfo"
+			require.NoError(t, os.WriteFile(oldMediaFile, []byte("video"), 0644))
+			require.NoError(t, os.WriteFile(oldSubtitleFile, []byte("subtitle"), 0644))
+			require.NoError(t, os.WriteFile(oldNFOFile, []byte("nfo"), 0644))
+
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			mockSubscriber := subscriber.NewMockInterface(ctrl)
+			mockSubscriber.EXPECT().Get(gomock.Any(), "sub-1").Return(subscriber.Bangumi{Priority: 1}, nil)
+
+			mockTransferRepo := NewMockTransferFilesRepo(ctrl)
+			mockTransferRepo.EXPECT().Get(gomock.Any(), GetFileTransferredReq{
+				NewFileID: tc.args.newFilePriority.newFileID,
+			}).Return(FileTransferred{
+					SubscriptionID: "sub-1",
+					NewFile:        oldMediaFile,
+					NewFileID:      tc.args.newFilePriority.newFileID,
+			}, nil)
+			mockTransferRepo.EXPECT().Del(gomock.Any(), DeleteFileTransferredReq{
+				NewFile: oldMediaFile,
+			}).Return(nil)
+
+			transfer := &Transfer{
+				subscriber:    mockSubscriber,
+				transferFiles: mockTransferRepo,
+			}
+
+			shouldTransfer, err := transfer.checkPriority(context.Background(), tc.args.newFilePriority)
+
+			require.NoError(t, err)
+			assert.True(t, shouldTransfer)
+			assert.NoFileExists(t, oldMediaFile)
+			assert.NoFileExists(t, oldSubtitleFile)
+			assert.FileExists(t, oldNFOFile)
 		})
 	}
 }

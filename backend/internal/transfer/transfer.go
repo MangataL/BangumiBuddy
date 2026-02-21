@@ -26,6 +26,8 @@ import (
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
 
+//go:generate mockgen -destination transfer_mock.go -source $GOFILE -package $GOPACKAGE
+
 var _ Interface = (*Transfer)(nil)
 
 func NewTransfer(dep Dependency) *Transfer {
@@ -342,6 +344,7 @@ func (t *Transfer) checkPriority(ctx context.Context, newFilePriority newFilePri
 		return true, nil
 	}
 	_ = t.deleteTransferFiles(ctx, transferred.NewFile,
+		withIgnoreNFOFile(),
 		withFindBaseFileErrorHook(func(err error) error {
 			log.Warnf(ctx, "删除低优先级文件时查找文件出错: %v", err)
 			return nil
@@ -1013,6 +1016,11 @@ func (t *Transfer) deleteTransferFiles(ctx context.Context, file string, options
 	if err != nil {
 		return opt.findBaseFileErrorHook(err)
 	}
+	if opt.ignoreNFOFile {
+		files = lo.Filter(files, func(file string, _ int) bool {
+			return !strings.EqualFold(filepath.Ext(file), ".nfo")
+		})
+	}
 	if len(files) != 0 {
 		opt.deleteTransferFilesHook(files)
 		for _, file := range files {
@@ -1037,6 +1045,7 @@ type deleteTransferFilesOptions struct {
 	deleteTransferFilesHook        func(files []string)
 	deleteTransferFileErrorHook    func(file string, err error) error
 	deleteTransferFilesSuccessHook func(files []string)
+	ignoreNFOFile                  bool
 }
 
 type deleteTransferFileOption func(*deleteTransferFilesOptions)
@@ -1062,6 +1071,12 @@ func withDeleteTransferFileErrorHook(hook func(file string, err error) error) de
 func withDeleteTransferFilesSuccessHook(hook func(files []string)) deleteTransferFileOption {
 	return func(options *deleteTransferFilesOptions) {
 		options.deleteTransferFilesSuccessHook = hook
+	}
+}
+
+func withIgnoreNFOFile() deleteTransferFileOption {
+	return func(options *deleteTransferFilesOptions) {
+		options.ignoreNFOFile = true
 	}
 }
 
