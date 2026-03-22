@@ -193,6 +193,36 @@ func Test_parseNFO_NoArtOrPosterField(t *testing.T) {
 	}
 }
 
+func TestPosterExtFromStillPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		stillPath string
+		want      string
+	}{
+		{
+			name:      "普通图片链接",
+			stillPath: "https://image.test/episode.webp",
+			want:      ".webp",
+		},
+		{
+			name:      "带查询参数的图片链接",
+			stillPath: "https://image.test/episode.jpeg?token=1",
+			want:      ".jpeg",
+		},
+		{
+			name:      "本地路径",
+			stillPath: "/tmp/episode.png",
+			want:      ".png",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, posterExtFromStillPath(tt.stillPath))
+		})
+	}
+}
+
 func TestScraper_AddAndListTasks(t *testing.T) {
 	ctx := context.Background()
 	repo := setupScrapeTestRepository(t)
@@ -426,15 +456,16 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		initialStatuses  []ScrapeStatus
-		createMediaFile  bool
-		createNFOFile    bool
-		nfo              nfoFixture
-		details          meta.EpisodeDetails
-		expectParserCall int
-		expectTaskCount  int
-		expectStatuses   []ScrapeStatus
+		name                  string
+		initialStatuses       []ScrapeStatus
+		createMediaFile       bool
+		createNFOFile         bool
+		nfo                   nfoFixture
+		details               meta.EpisodeDetails
+		expectParserCall      int
+		expectTaskCount       int
+		expectStatuses        []ScrapeStatus
+		expectGeneratedPoster bool
 	}{
 		{
 			name:             "媒体文件不存在时删除任务",
@@ -496,7 +527,7 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 			expectStatuses:   []ScrapeStatus{ScrapeStatusMissingPlot},
 		},
 		{
-			name:            "缺少海报时录入missingImage",
+			name:            "缺少海报时自动补充poster路径",
 			initialStatuses: []ScrapeStatus{ScrapeStatusPending},
 			createMediaFile: true,
 			createNFOFile:   true,
@@ -510,14 +541,14 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 			details: meta.EpisodeDetails{
 				Name:      "标题",
 				Overview:  "剧情",
-				StillPath: "https://image.test/episode.jpg",
+				StillPath: "https://image.test/episode.webp",
 			},
-			expectParserCall: 1,
-			expectTaskCount:  1,
-			expectStatuses:   []ScrapeStatus{ScrapeStatusMissingImage},
+			expectParserCall:      1,
+			expectTaskCount:       0,
+			expectGeneratedPoster: true,
 		},
 		{
-			name:            "缺少海报时录入missingImage(nfo没有art字段)",
+			name:            "缺少海报时自动补充poster路径(nfo没有art字段)",
 			initialStatuses: []ScrapeStatus{ScrapeStatusPending},
 			createMediaFile: true,
 			createNFOFile:   true,
@@ -532,14 +563,14 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 			details: meta.EpisodeDetails{
 				Name:      "标题",
 				Overview:  "剧情",
-				StillPath: "https://image.test/episode.jpg",
+				StillPath: "https://image.test/episode.png",
 			},
-			expectParserCall: 1,
-			expectTaskCount:  1,
-			expectStatuses:   []ScrapeStatus{ScrapeStatusMissingImage},
+			expectParserCall:      1,
+			expectTaskCount:       0,
+			expectGeneratedPoster: true,
 		},
 		{
-			name:            "缺少海报时录入missingImage(art没有poster字段)",
+			name:            "缺少海报时自动补充poster路径(art没有poster字段)",
 			initialStatuses: []ScrapeStatus{ScrapeStatusPending},
 			createMediaFile: true,
 			createNFOFile:   true,
@@ -554,11 +585,11 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 			details: meta.EpisodeDetails{
 				Name:      "标题",
 				Overview:  "剧情",
-				StillPath: "https://image.test/episode.jpg",
+				StillPath: "https://image.test/episode.jpeg?token=1",
 			},
-			expectParserCall: 1,
-			expectTaskCount:  1,
-			expectStatuses:   []ScrapeStatus{ScrapeStatusMissingImage},
+			expectParserCall:      1,
+			expectTaskCount:       0,
+			expectGeneratedPoster: true,
 		},
 		{
 			name:            "全部都更新时删除任务",
@@ -651,6 +682,21 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 			require.Len(t, tasks, tt.expectTaskCount)
 			if tt.expectTaskCount == 1 {
 				assert.Equal(t, tt.expectStatuses, tasks[0].Statuses)
+			}
+			if tt.expectGeneratedPoster {
+				nfoData, err := scraper.parseNFO(nfoPath)
+				require.NoError(t, err)
+
+				expectedPosterPath := strings.TrimSuffix(nfoPath, filepath.Ext(nfoPath)) + "-thumb" + posterExtFromStillPath(tt.details.StillPath)
+				assert.Equal(t, expectedPosterPath, nfoData.posterPath)
+
+				imageData, err := os.ReadFile(expectedPosterPath)
+				require.NoError(t, err)
+				assert.Equal(t, "fake-image", string(imageData))
+
+				nfoContent, err := os.ReadFile(nfoPath)
+				require.NoError(t, err)
+				assert.Contains(t, string(nfoContent), fmt.Sprintf("  <art>\n    <poster>%s</poster>\n  </art>", expectedPosterPath))
 			}
 		})
 	}

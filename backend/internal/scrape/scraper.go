@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -184,7 +186,7 @@ func (s *Scraper) processTask(ctx context.Context, task MetadataCheckTask) error
 	if err != nil {
 		return errors.WithMessage(err, "获取 TMDB 单集元数据失败")
 	}
-	imageAlreadyChecked := !slices.Contains(task.Statuses, ScrapeStatusMissingImage) && !slices.Contains(task.Statuses, ScrapeStatusPending) 
+	imageAlreadyChecked := !slices.Contains(task.Statuses, ScrapeStatusMissingImage) && !slices.Contains(task.Statuses, ScrapeStatusPending)
 	// 5. 如果需要更新，则更新 NFO
 	if s.nfoNeedUpdate(nfoData, episodeDetails, imageAlreadyChecked) {
 		allUpdated, err := s.updateNFO(ctx, nfoPath, nfoData, episodeDetails, imageAlreadyChecked)
@@ -296,6 +298,36 @@ func (s *Scraper) nfoStatus(nfo *nfoData, details meta.EpisodeDetails) []ScrapeS
 	return statuses
 }
 
+func posterExtFromStillPath(stillPath string) string {
+	parsedURL, err := url.Parse(stillPath)
+	if err == nil && parsedURL.Path != "" {
+		if ext := path.Ext(parsedURL.Path); ext != "" {
+			return ext
+		}
+	}
+	return filepath.Ext(stillPath)
+}
+
+func ensurePosterPath(root *etree.Element, nfoPath string, nfo *nfoData, stillPath string) bool {
+	if nfo.posterPath != "" {
+		return false
+	}
+
+	posterPath := strings.TrimSuffix(nfoPath, filepath.Ext(nfoPath)) + "-thumb" + posterExtFromStillPath(stillPath)
+	artEl := root.SelectElement("art")
+	if artEl == nil {
+		artEl = root.CreateElement("art")
+	}
+
+	posterEl := artEl.SelectElement("poster")
+	if posterEl == nil {
+		posterEl = artEl.CreateElement("poster")
+	}
+	posterEl.SetText(posterPath)
+	nfo.posterPath = posterPath
+	return true
+}
+
 // updateNFO 更新 NFO 文件
 func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, details meta.EpisodeDetails, imageAlreadyChecked bool) (allUpdated bool, err error) {
 	nfoUpdated := false
@@ -329,7 +361,11 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 	}
 
 	// 更新图片（仅在未检查过时执行）
-	if !imageAlreadyChecked && details.StillPath != "" && nfo.posterPath != "" {
+	if !imageAlreadyChecked && details.StillPath != "" {
+		if ensurePosterPath(root, path, nfo, details.StillPath) {
+			nfoUpdated = true
+		}
+
 		// 下载图片并比对
 		if err := s.checkAndReplaceImage(ctx, nfo.posterPath, details.StillPath); err != nil {
 			log.Warnf(ctx, "更新图片失败: %v", err)
@@ -341,6 +377,7 @@ func (s *Scraper) updateNFO(ctx context.Context, path string, nfo *nfoData, deta
 
 	// 写回 NFO 文件
 	if nfoUpdated {
+		nfo.doc.Indent(2)
 		if err := nfo.doc.WriteToFile(path); err != nil {
 			return false, errors.WithMessage(err, "写入 NFO 文件失败")
 		}

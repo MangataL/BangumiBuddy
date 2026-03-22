@@ -121,7 +121,7 @@ export function ChangeAccountDialog({
           <span>修改账号</span>
         </DropdownMenuItem>
       </DialogTrigger>
-      <DialogContent className="rounded-xl border-primary/20 bg-card/95 backdrop-blur-md sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] max-h-[calc(100svh-1.5rem)] overflow-y-auto rounded-xl border-primary/20 bg-card/95 p-4 backdrop-blur-md sm:w-full sm:max-w-md sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-xl anime-gradient-text flex items-center gap-2">
             <Lock className="h-5 w-5" />
