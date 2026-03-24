@@ -8,9 +8,11 @@
 
 一站式番剧订阅、下载、整理、通知解决方案
 
-[功能特性](#核心功能) | [快速开始](#快速开始) | [详细功能说明](https://github.com/MangataL/BangumiBuddy/wiki/BangumiBuddy功能说明)
+[功能特性](#核心功能) | [快速开始](#快速开始) | [详细功能说明](./doc/详细功能说明.md)
 
 </div>
+
+![image](./doc/image/首页.png)
 
 ---
 
@@ -25,7 +27,7 @@ BangumiBuddy 是一个自动化的番剧管理工具，通过 Mikan Project RSS 
 ### 📺 番剧订阅自动化
 
 - 基于 Mikan Project RSS 的自动订阅
-- 支持正则表达式过滤规则（包含/排除），并支持手动勾选 rss 订阅项处理/未处理
+- 支持正则表达式过滤规则（包含/排除），并支持跳过下载与重复下载
 - 支持订阅多字幕组并设置媒体库优先级覆盖
 - 自动集数识别与偏移设置
 - 订阅日历视图，一目了然播出时间
@@ -38,16 +40,16 @@ BangumiBuddy 是一个自动化的番剧管理工具，通过 Mikan Project RSS 
 ### 📁 媒体库自动整理
 
 - 支持硬链接和软链接两种转移模式实现保种
-- 可自定义媒体库命名格式（番剧/剧场版）
+- 可自定义媒体库命名格式（番剧/剧场版），方便播放器刮削元数据
 - 自动转移字幕和音频文件
 - 字幕文件扩展重命名（简繁体命名适配不同媒体软件）
-- ASS 字幕字体自动子集化
+- ASS 字幕自动子集化
 - 媒体库 nfo 元数据支持自动补全信息——用于媒体文件入库时 TMDB 元数据不全从而后续需要手动刷新的场景
 
 ### 🎯 磁力任务管理
 
 - 手动添加磁力链接下载，用于 BD 资源/剧场版下载
-- 灵活的文件选择和入库管理
+- 灵活的文件选择和入库管理，简单资源自动识别，复杂资源手动界面调整，不再需要在文件系统中手动重命名
 - 支持一键转移并重命名其他地方下载的字幕到资源保存目录
 - 资源本身自带字体时会自动识别并用作当次子集化的字体库
 
@@ -55,7 +57,7 @@ BangumiBuddy 是一个自动化的番剧管理工具，通过 Mikan Project RSS 
 
 - 集成 TMDB（The Movie Database）
 - 自动获取海报、背景图、简介等信息
-- 支持电视剧和电影元数据搜索
+- 支持番剧和剧场版元数据搜索
 
 ### 🔔 多平台通知
 
@@ -81,9 +83,26 @@ BangumiBuddy 是一个自动化的番剧管理工具，通过 Mikan Project RSS 
 
 ## 快速开始
 
+### 使用 Docker 命令部署
+
+```bash
+docker run -d \
+  --name bangumi-buddy \
+  --restart unless-stopped \
+  -e TZ=Asia/Shanghai \
+  -p 6937:6937 \
+  -v ./config:/config \
+  -v ./data:/data \
+  -v /path/to/download:/download \
+  -v /path/to/media:/media \
+  mangatal/bangumi-buddy:latest
+```
+
+请将 `/path/to/download` 和 `/path/to/media` 替换为你实际的下载目录和媒体库目录。各挂载路径的详细说明见下方 [路径挂载说明](#路径挂载说明)。
+
 ### 使用 Docker Compose 部署
 
-1. **创建 `docker-compose.yml` 文件**
+#### 1. 创建 `docker-compose.yml` 文件
 
 ```yaml
 version: "3"
@@ -105,13 +124,13 @@ services:
       - ./xxx/fonts:/data/fonts # 字体库目录，用于字幕的子集化，可选配置，也可以直接复用/data的挂载点
 ```
 
-2. **启动容器**
+#### 2. 启动容器
 
 ```bash
 docker-compose up -d
 ```
 
-3. **访问 Web 界面**
+#### 3. 访问 Web 界面
 
 打开浏览器访问 `http://localhost:6937`
 
@@ -144,8 +163,6 @@ docker-compose up -d
 - **qBittorrent 地址**: `http://your-qbittorrent-host:8080`
 - **用户名**: qBittorrent 的用户名
 - **密码**: qBittorrent 的密码
-
-更多配置说明请查看 [部署指南](docs/wiki/部署指南.md)
 
 ## 使用流程
 
