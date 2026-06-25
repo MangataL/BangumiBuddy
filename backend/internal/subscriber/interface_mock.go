@@ -122,6 +122,20 @@ func (mr *MockInterfaceMockRecorder) HandleBangumiSubscription(ctx, subscription
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBangumiSubscription", reflect.TypeOf((*MockInterface)(nil).HandleBangumiSubscription), ctx, subscriptionID)
 }
 
+// HandleEpisodeTransferred mocks base method.
+func (m *MockInterface) HandleEpisodeTransferred(ctx context.Context, subscriptionID string, episode int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleEpisodeTransferred", ctx, subscriptionID, episode)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleEpisodeTransferred indicates an expected call of HandleEpisodeTransferred.
+func (mr *MockInterfaceMockRecorder) HandleEpisodeTransferred(ctx, subscriptionID, episode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleEpisodeTransferred", reflect.TypeOf((*MockInterface)(nil).HandleEpisodeTransferred), ctx, subscriptionID, episode)
+}
+
 // List mocks base method.
 func (m *MockInterface) List(ctx context.Context, req ListBangumiReq) ([]Bangumi, error) {
 	m.ctrl.T.Helper()

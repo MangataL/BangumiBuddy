@@ -24,6 +24,8 @@ import (
 
 var _ Interface = (*Subscriber)(nil)
 
+const episodeTotalNumCacheTTL = time.Hour
+
 // NewSubscriber 创建订阅器
 func NewSubscriber(dep Dependency) *Subscriber {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -69,6 +71,7 @@ type Repository interface {
 	Get(ctx context.Context, rssLink string) (Bangumi, error)
 	Delete(ctx context.Context, id string) error
 	UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error
+	UpdateEpisodeTotalNum(ctx context.Context, subscriptionID string, episodeTotalNum int) error
 	ApplyLastAirEpisodeOffset(ctx context.Context, subscriptionID string, episodeOffset int) error
 	StopSubscription(ctx context.Context, id string) error
 }
@@ -440,6 +443,46 @@ func (s *Subscriber) isAlreadyDownloaded(ctx context.Context, subscriptionID str
 // UpdateLastAirEpisode 更新番剧的最新集数
 func (s *Subscriber) UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error {
 	return s.repo.UpdateLastAirEpisode(ctx, subscriptionID, episode)
+}
+
+func (s *Subscriber) HandleEpisodeTransferred(ctx context.Context, subscriptionID string, episode int) error {
+	if subscriptionID == "" {
+		return errs.NewBadRequest("订阅ID不能为空")
+	}
+	bangumi, err := s.repo.Get(ctx, subscriptionID)
+	if err != nil {
+		return errors.WithMessage(err, "获取订阅失败")
+	}
+	if err := s.repo.UpdateLastAirEpisode(ctx, subscriptionID, episode); err != nil {
+		return errors.WithMessage(err, "更新最新集数失败")
+	}
+
+	effectiveTotalNum := bangumi.EpisodeTotalNum
+	refreshedTotalNum, err := s.metaParser.GetSeasonEpisodeTotalNum(
+		ctx,
+		bangumi.TMDBID,
+		bangumi.Season,
+		meta.WithCacheTTL(episodeTotalNumCacheTTL),
+	)
+	if err != nil {
+		log.Warnf(ctx, "刷新番剧(%s S%d)总集数失败，使用本地总集数继续判断: %v", bangumi.Name, bangumi.Season, err)
+	} else if refreshedTotalNum <= 0 {
+		log.Warnf(ctx, "刷新番剧(%s S%d)总集数为空，使用本地总集数继续判断", bangumi.Name, bangumi.Season)
+	} else if refreshedTotalNum != effectiveTotalNum {
+		if err := s.repo.UpdateEpisodeTotalNum(ctx, subscriptionID, refreshedTotalNum); err != nil {
+			return errors.WithMessage(err, "更新总集数失败")
+		}
+		effectiveTotalNum = refreshedTotalNum
+	}
+
+	if !s.config.AutoStop || effectiveTotalNum <= 0 || episode < effectiveTotalNum {
+		return nil
+	}
+	log.Infof(ctx, "番剧(%s S%d)订阅已更新完毕(更新至%d集)，自动停止订阅", bangumi.Name, bangumi.Season, episode)
+	if err := s.repo.StopSubscription(ctx, subscriptionID); err != nil {
+		return errors.WithMessage(err, "停止订阅失败")
+	}
+	return nil
 }
 
 // GetRSSMatch 获取RSS匹配

@@ -27,6 +27,8 @@ type Interface interface {
 	DeleteSubscription(ctx context.Context, id string) error
 	// UpdateLastAirEpisode 更新番剧的最新集数
 	UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error
+	// HandleEpisodeTransferred 处理订阅单集转移完成后的订阅状态
+	HandleEpisodeTransferred(ctx context.Context, subscriptionID string, episode int) error
 	// GetRSSMatch 获取RSS匹配
 	GetRSSMatch(ctx context.Context, subscriptionID string) ([]RSSMatch, error)
 	// PreviewRSSMatch 预览RSS匹配

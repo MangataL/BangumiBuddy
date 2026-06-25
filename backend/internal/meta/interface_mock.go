@@ -49,6 +49,26 @@ func (mr *MockParserMockRecorder) GetEpisodeDetails(ctx, tmdbID, season, episode
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpisodeDetails", reflect.TypeOf((*MockParser)(nil).GetEpisodeDetails), ctx, tmdbID, season, episode)
 }
 
+// GetSeasonEpisodeTotalNum mocks base method.
+func (m *MockParser) GetSeasonEpisodeTotalNum(ctx context.Context, tmdbID, season int, opts ...MetaOption) (int, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, tmdbID, season}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetSeasonEpisodeTotalNum", varargs...)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSeasonEpisodeTotalNum indicates an expected call of GetSeasonEpisodeTotalNum.
+func (mr *MockParserMockRecorder) GetSeasonEpisodeTotalNum(ctx, tmdbID, season interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, tmdbID, season}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSeasonEpisodeTotalNum", reflect.TypeOf((*MockParser)(nil).GetSeasonEpisodeTotalNum), varargs...)
+}
+
 // ParseMovie mocks base method.
 func (m *MockParser) ParseMovie(ctx context.Context, id int) (Meta, error) {
 	m.ctrl.T.Helper()

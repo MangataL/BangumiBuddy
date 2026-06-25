@@ -133,6 +133,13 @@ func (r *Repository) UpdateLastAirEpisode(ctx context.Context, subscriptionID st
 	return r.db.WithContext(ctx).Model(&bangumiSchema{}).Where("subscription_id = ? AND last_air_episode < ?", subscriptionID, episode).Update("last_air_episode", episode).Error
 }
 
+// UpdateEpisodeTotalNum 更新番剧总集数
+func (r *Repository) UpdateEpisodeTotalNum(ctx context.Context, subscriptionID string, episodeTotalNum int) error {
+	return r.db.WithContext(ctx).Model(&bangumiSchema{}).
+		Where("subscription_id = ?", subscriptionID).
+		Update("episode_total_num", episodeTotalNum).Error
+}
+
 // ApplyLastAirEpisodeOffset 应用集数偏移
 func (r *Repository) ApplyLastAirEpisodeOffset(ctx context.Context, subscriptionID string, episodeOffset int) error {
 	return r.db.WithContext(ctx).Model(&bangumiSchema{}).Where("subscription_id = ?", subscriptionID).Update("last_air_episode", gorm.Expr("last_air_episode + ?", episodeOffset)).Error

@@ -25,10 +25,11 @@ type Config struct {
 
 var ErrTMDBTokenNotSet = errors.New("请先设置TMDB Token")
 
-func NewParser(config Config) *Client {
-	return &Client{
+func NewParser(config Config) *cacheAdapter {
+	client := &Client{
 		client: newTMDBClient(config),
 	}
+	return newCacheAdapter(client)
 }
 
 func newTMDBClient(config Config) *tmdb.Client {
@@ -142,6 +143,24 @@ func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
 		Overview:        tv.Overview,
 		Genres:          getGeneres(tv.Genres),
 	}, nil
+}
+
+func (t *Client) GetSeasonEpisodeTotalNum(
+	ctx context.Context,
+	tmdbID, season int,
+	opts ...meta.MetaOption,
+) (int, error) {
+	if t.client == nil {
+		return 0, ErrTMDBTokenNotSet
+	}
+	tv, err := t.client.GetTVDetails(tmdbID, map[string]string{
+		"language": "zh",
+	})
+	if err != nil {
+		return 0, err
+	}
+	log.Debugf(ctx, "获取tmdb季总集数: tmdbID=%d season=%d tv=%+v", tmdbID, season, tv)
+	return getSeasonEpisodeTotalNum(tv, season), nil
 }
 
 func getSeason(tv *tmdb.TVDetails) int {

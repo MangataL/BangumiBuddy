@@ -158,6 +158,20 @@ func (mr *MockRepositoryMockRecorder) StopSubscription(ctx, id interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopSubscription", reflect.TypeOf((*MockRepository)(nil).StopSubscription), ctx, id)
 }
 
+// UpdateEpisodeTotalNum mocks base method.
+func (m *MockRepository) UpdateEpisodeTotalNum(ctx context.Context, subscriptionID string, episodeTotalNum int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateEpisodeTotalNum", ctx, subscriptionID, episodeTotalNum)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateEpisodeTotalNum indicates an expected call of UpdateEpisodeTotalNum.
+func (mr *MockRepositoryMockRecorder) UpdateEpisodeTotalNum(ctx, subscriptionID, episodeTotalNum interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateEpisodeTotalNum", reflect.TypeOf((*MockRepository)(nil).UpdateEpisodeTotalNum), ctx, subscriptionID, episodeTotalNum)
+}
+
 // UpdateLastAirEpisode mocks base method.
 func (m *MockRepository) UpdateLastAirEpisode(ctx context.Context, subscriptionID string, episode int) error {
 	m.ctrl.T.Helper()

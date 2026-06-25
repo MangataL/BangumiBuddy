@@ -8,8 +8,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	tmdb "github.com/cyruzin/golang-tmdb"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/MangataL/BangumiBuddy/internal/meta"
@@ -138,6 +140,102 @@ func TestClient_Parse(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+func TestClient_GetSeasonEpisodeTotalNum(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rsp := `{"id":1,"name":"test","seasons":[{"season_number":1,"episode_count":12},{"season_number":2,"episode_count":13}]}`
+		_, _ = w.Write([]byte(rsp))
+	}))
+	defer ts.Close()
+	certPool := x509.NewCertPool()
+	certPool.AddCert(ts.Certificate())
+	customTransport := &CustomRoundTripper{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs: certPool,
+			},
+		},
+		NewURL: ts.URL[len("https://"):],
+	}
+	httpClient := http.Client{
+		Transport: customTransport,
+	}
+	c, _ := tmdb.Init("test")
+	c.SetClientConfig(httpClient)
+	p := &Client{client: c}
+
+	got, err := p.GetSeasonEpisodeTotalNum(context.Background(), 1, 2)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 13, got)
+}
+
+func Test_cacheAdapter_GetSeasonEpisodeTotalNum(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name      string
+		opts      []meta.MetaOption
+		fake      func(t *testing.T) *meta.MockParser
+		wantFirst int
+		wantNext  int
+	}{
+		{
+			name: "when call option ttl is positive then caches season total",
+			opts: []meta.MetaOption{
+				meta.WithCacheTTL(time.Hour),
+			},
+			fake: func(t *testing.T) *meta.MockParser {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				parser := meta.NewMockParser(ctrl)
+				parser.EXPECT().GetSeasonEpisodeTotalNum(ctx, 95231, 2, gomock.Any()).Return(13, nil).Times(1)
+				return parser
+			},
+			wantFirst: 13,
+			wantNext:  13,
+		},
+		{
+			name: "when call option is absent then does not cache",
+			fake: func(t *testing.T) *meta.MockParser {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				parser := meta.NewMockParser(ctrl)
+				gomock.InOrder(
+					parser.EXPECT().GetSeasonEpisodeTotalNum(ctx, 95231, 2).Return(13, nil),
+					parser.EXPECT().GetSeasonEpisodeTotalNum(ctx, 95231, 2).Return(14, nil),
+				)
+				return parser
+			},
+			wantFirst: 13,
+			wantNext:  14,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := newCacheAdapter(reloadableTestParser{Parser: tc.fake(t)})
+
+			gotFirst, err := adapter.GetSeasonEpisodeTotalNum(ctx, 95231, 2, tc.opts...)
+			assert.NoError(t, err)
+			gotNext, err := adapter.GetSeasonEpisodeTotalNum(ctx, 95231, 2, tc.opts...)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tc.wantFirst, gotFirst)
+			assert.Equal(t, tc.wantNext, gotNext)
+		})
+	}
+}
+
+type reloadableTestParser struct {
+	meta.Parser
+}
+
+func (reloadableTestParser) Reload(config interface{}) error {
+	return nil
 }
 
 // CustomRoundTripper 是一个自定义的 RoundTripper，它将所有请求转发到另一个地址

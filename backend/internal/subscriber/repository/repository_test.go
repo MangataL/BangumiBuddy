@@ -117,6 +117,51 @@ func TestRepository_List(t *testing.T) {
 	assert.Len(t, got, 3)
 }
 
+func TestRepository_UpdateEpisodeTotalNum(t *testing.T) {
+	testCases := []struct {
+		name      string
+		oldTotal  int
+		newTotal  int
+		wantTotal int
+	}{
+		{
+			name:      "when new total is greater then overwrites",
+			oldTotal:  12,
+			newTotal:  13,
+			wantTotal: 13,
+		},
+		{
+			name:      "when new total is less then overwrites",
+			oldTotal:  13,
+			newTotal:  12,
+			wantTotal: 12,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			repo := New(db)
+			ctx := context.Background()
+			bangumi := subscriber.Bangumi{
+				SubscriptionID:  "sub-1",
+				Name:            "测试番剧",
+				RSSLink:         "https://example.com/rss",
+				Active:          true,
+				EpisodeTotalNum: tc.oldTotal,
+			}
+			require.NoError(t, repo.Save(ctx, bangumi))
+
+			err := repo.UpdateEpisodeTotalNum(ctx, bangumi.SubscriptionID, tc.newTotal)
+
+			require.NoError(t, err)
+			got, err := repo.Get(ctx, bangumi.SubscriptionID)
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantTotal, got.EpisodeTotalNum)
+		})
+	}
+}
+
 func TestRepository_RSSRecord(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewRepository(db)

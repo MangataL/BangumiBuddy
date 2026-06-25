@@ -265,19 +265,8 @@ func (t *Transfer) transferFileForSubscribe(ctx context.Context, torrent downloa
 	if !transferd {
 		return nil
 	}
-	if err := t.subscriber.UpdateLastAirEpisode(ctx, torrent.SubscriptionID, episode); err != nil {
+	if err := t.subscriber.HandleEpisodeTransferred(ctx, torrent.SubscriptionID, episode); err != nil {
 		log.Warnf(ctx, "更新订阅信息失败: %v", err)
-	}
-
-	if !t.subscriber.AutoStopSubscription(ctx, torrent.SubscriptionID) {
-		return nil
-	}
-
-	if episode == bangumi.EpisodeTotalNum {
-		log.Infof(ctx, "番剧(%s S%s)订阅已更新完毕(更新至%s集)，自动停止订阅", bangumi.Name, utils.FormatNumber(bangumi.Season), utils.FormatNumber(episode))
-		if err := t.subscriber.StopSubscription(ctx, torrent.SubscriptionID); err != nil {
-			log.Warnf(ctx, "停止订阅(%s)失败: %v", torrent.SubscriptionID, err)
-		}
 	}
 
 	if t.scraper.Enable() {
