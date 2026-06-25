@@ -151,6 +151,42 @@ func newImageOKHTTPClient() *http.Client {
 	}
 }
 
+func TestScraper_checkAndReplaceImage_ReplacesViaRenameAndBumpsMTime(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	currentPosterPath := filepath.Join(tempDir, "poster.jpg")
+	oldImageData := []byte("old-image")
+	oldModTime := time.Unix(1700000000, 0)
+
+	require.NoError(t, os.WriteFile(currentPosterPath, oldImageData, 0644))
+	require.NoError(t, os.Chtimes(currentPosterPath, oldModTime, oldModTime))
+
+	oldPoster, err := os.Open(currentPosterPath)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, oldPoster.Close())
+	})
+
+	scraper := &Scraper{client: newImageOKHTTPClient()}
+
+	err = scraper.checkAndReplaceImage(ctx, currentPosterPath, "https://image.test/episode.jpg")
+
+	require.NoError(t, err)
+	newImageData, err := os.ReadFile(currentPosterPath)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("fake-image"), newImageData)
+
+	_, err = oldPoster.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+	oldHandleData, err := io.ReadAll(oldPoster)
+	require.NoError(t, err)
+	assert.Equal(t, oldImageData, oldHandleData)
+
+	stat, err := os.Stat(currentPosterPath)
+	require.NoError(t, err)
+	assert.False(t, stat.ModTime().Before(oldModTime.Add(time.Second)))
+}
+
 func TestFileExists(t *testing.T) {
 	assert.True(t, fileExists("scraper.go"))
 	assert.False(t, fileExists("nonexistent_file.txt"))

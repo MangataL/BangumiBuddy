@@ -402,8 +402,10 @@ func (s *Scraper) checkAndReplaceImage(ctx context.Context, currentPosterPath, p
 
 	// 读取当前图片并计算 MD5
 	var currentMD5 [16]byte
+	var currentModTime time.Time
 	needReplace := true
-	if fileExists(currentPosterPath) {
+	if stat, err := os.Stat(currentPosterPath); err == nil {
+		currentModTime = stat.ModTime()
 		currentImageData, err := os.ReadFile(currentPosterPath)
 		if err == nil {
 			currentMD5 = md5.Sum(currentImageData)
@@ -413,9 +415,64 @@ func (s *Scraper) checkAndReplaceImage(ctx context.Context, currentPosterPath, p
 
 	// 如果需要替换
 	if needReplace {
-		return os.WriteFile(currentPosterPath, newImageData, 0644)
+		minModTime := time.Time{}
+		if !currentModTime.IsZero() {
+			minModTime = currentModTime.Add(time.Second)
+		}
+		return replaceFileAtomically(currentPosterPath, newImageData, 0644, minModTime)
 	}
 
+	return nil
+}
+
+func replaceFileAtomically(path string, data []byte, mode os.FileMode, minModTime time.Time) error {
+	dir := filepath.Dir(path)
+	tempFile, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+
+	tempPath := tempFile.Name()
+	removeTempFile := true
+	defer func() {
+		if removeTempFile {
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	n, err := tempFile.Write(data)
+	if err != nil {
+		_ = tempFile.Close()
+		return err
+	}
+	if n != len(data) {
+		_ = tempFile.Close()
+		return io.ErrShortWrite
+	}
+	if err := tempFile.Chmod(mode); err != nil {
+		_ = tempFile.Close()
+		return err
+	}
+	if err := tempFile.Sync(); err != nil {
+		_ = tempFile.Close()
+		return err
+	}
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+
+	modTime := time.Now()
+	if modTime.Before(minModTime) {
+		modTime = minModTime
+	}
+	if err := os.Chtimes(tempPath, modTime, modTime); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+
+	removeTempFile = false
 	return nil
 }
 
