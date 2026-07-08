@@ -3,7 +3,9 @@ package adapter
 import (
 	"context"
 	"errors"
+	"sync"
 
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	"github.com/MangataL/BangumiBuddy/internal/notice"
 	"github.com/MangataL/BangumiBuddy/internal/notice/bark"
 	"github.com/MangataL/BangumiBuddy/internal/notice/email"
@@ -11,8 +13,10 @@ import (
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 )
 
-func NewAdapter(config Config) *Adapter {
-	adapter := &Adapter{}
+func NewAdapter(config Config, provider network.HTTPClientProvider) *Adapter {
+	adapter := &Adapter{
+		network: provider,
+	}
 	if err := adapter.Reload(&config); err != nil {
 		log.Errorf(context.Background(), "初始化消息通知器失败: %v", err)
 		adapter.notifier = &notice.Empty{}
@@ -21,8 +25,10 @@ func NewAdapter(config Config) *Adapter {
 }
 
 type Adapter struct {
+	mu       sync.RWMutex
 	notifier notice.Notifier
 	config   Config
+	network  network.HTTPClientProvider
 }
 
 type Config struct {
@@ -47,72 +53,87 @@ func (a *Adapter) Reload(config interface{}) error {
 	if !ok {
 		return errors.New("配置类型错误")
 	}
-	a.config = *cfg
+	notifier := notice.Notifier(&notice.Empty{})
 	switch cfg.Type {
 	case "telegram":
-		a.notifier = telegram.NewTelegramNotifier(cfg.Telegram)
+		notifier = telegram.NewTelegramNotifier(cfg.Telegram, a.network)
 	case "email":
-		a.notifier = email.NewEmailNotifier(cfg.Email)
+		notifier = email.NewEmailNotifier(cfg.Email)
 	case "bark":
-		a.notifier = bark.NewBarkNotifier(cfg.Bark)
-	default:
-		a.notifier = &notice.Empty{}
+		notifier = bark.NewBarkNotifier(cfg.Bark)
 	}
+	a.mu.Lock()
+	a.config = *cfg
+	a.notifier = notifier
+	a.mu.Unlock()
 	return nil
 }
 
 // NoticeDownloaded implements notice.Notifier.
 func (a *Adapter) NoticeDownloaded(ctx context.Context, req notice.NoticeDownloadedReq) error {
-	if !a.config.Enabled {
+	config, notifier := a.snapshot()
+	if !config.Enabled {
 		return nil
 	}
-	if req.Failed && (a.config.NoticePoints.Error == nil || !*a.config.NoticePoints.Error) {
+	if req.Failed && (config.NoticePoints.Error == nil || !*config.NoticePoints.Error) {
 		return nil
 	}
-	if !req.Failed && (a.config.NoticePoints.Downloaded == nil || !*a.config.NoticePoints.Downloaded) {
+	if !req.Failed && (config.NoticePoints.Downloaded == nil || !*config.NoticePoints.Downloaded) {
 		return nil
 	}
-	return a.notifier.NoticeDownloaded(ctx, req)
+	return notifier.NoticeDownloaded(ctx, req)
 }
 
 // NoticeSubscriptionUpdated implements notice.Notifier.
 func (a *Adapter) NoticeSubscriptionUpdated(ctx context.Context, req notice.NoticeSubscriptionUpdatedReq) error {
-	if !a.config.Enabled {
+	config, notifier := a.snapshot()
+	if !config.Enabled {
 		return nil
 	}
-	if req.Error != nil && (a.config.NoticePoints.Error == nil || !*a.config.NoticePoints.Error) {
+	if req.Error != nil && (config.NoticePoints.Error == nil || !*config.NoticePoints.Error) {
 		return nil
 	}
-	if req.Error == nil && (a.config.NoticePoints.SubscriptionUpdated == nil || !*a.config.NoticePoints.SubscriptionUpdated) {
+	if req.Error == nil && (config.NoticePoints.SubscriptionUpdated == nil || !*config.NoticePoints.SubscriptionUpdated) {
 		return nil
 	}
-	return a.notifier.NoticeSubscriptionUpdated(ctx, req)
+	return notifier.NoticeSubscriptionUpdated(ctx, req)
 }
 
 // NoticeSubscriptionTransferred implements notice.Notifier.
 func (a *Adapter) NoticeSubscriptionTransferred(ctx context.Context, req notice.NoticeSubscriptionTransferredReq) error {
-	if !a.config.Enabled {
+	config, notifier := a.snapshot()
+	if !config.Enabled {
 		return nil
 	}
-	if req.Error != nil && (a.config.NoticePoints.Error == nil || !*a.config.NoticePoints.Error) {
+	if req.Error != nil && (config.NoticePoints.Error == nil || !*config.NoticePoints.Error) {
 		return nil
 	}
-	if req.Error == nil && (a.config.NoticePoints.Transferred == nil || !*a.config.NoticePoints.Transferred) {
+	if req.Error == nil && (config.NoticePoints.Transferred == nil || !*config.NoticePoints.Transferred) {
 		return nil
 	}
-	return a.notifier.NoticeSubscriptionTransferred(ctx, req)
+	return notifier.NoticeSubscriptionTransferred(ctx, req)
 }
 
 // NoticeTaskTransferred implements notice.Notifier.
 func (a *Adapter) NoticeTaskTransferred(ctx context.Context, req notice.NoticeTaskTransferredReq) error {
-	if !a.config.Enabled {
+	config, notifier := a.snapshot()
+	if !config.Enabled {
 		return nil
 	}
-	if req.Error != nil && (a.config.NoticePoints.Error == nil || !*a.config.NoticePoints.Error) {
+	if req.Error != nil && (config.NoticePoints.Error == nil || !*config.NoticePoints.Error) {
 		return nil
 	}
-	if req.Error == nil && (a.config.NoticePoints.Transferred == nil || !*a.config.NoticePoints.Transferred) {
+	if req.Error == nil && (config.NoticePoints.Transferred == nil || !*config.NoticePoints.Transferred) {
 		return nil
 	}
-	return a.notifier.NoticeTaskTransferred(ctx, req)
+	return notifier.NoticeTaskTransferred(ctx, req)
+}
+
+func (a *Adapter) snapshot() (Config, notice.Notifier) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.notifier == nil {
+		return a.config, &notice.Empty{}
+	}
+	return a.config, a.notifier
 }

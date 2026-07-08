@@ -33,6 +33,7 @@ import {
   CheckCircle,
   Bell,
   Settings,
+  Network,
   AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
@@ -42,6 +43,8 @@ import {
   type DownloadManagerConfig,
   type TMDBConfig,
   type SubscriptionConfig,
+  type DiscoveryConfig,
+  type NetworkConfig,
   type TransferConfig,
   type NoticeConfig,
   type SubtitleOperatorConfig,
@@ -52,6 +55,34 @@ import { Switch } from "@/components/ui/switch";
 import { PasswordInput } from "../common/password-input";
 import { ToolsSettings } from "./tools-settings";
 import { extractErrorMessage } from "@/utils/error";
+
+const mikanHostOptions = [
+  "mikanani.me",
+  "mikanime.tv",
+] as const;
+const customMikanHostOption = "custom";
+type MikanHostSelection =
+  | (typeof mikanHostOptions)[number]
+  | typeof customMikanHostOption;
+
+const getMikanHostPreset = (
+  host: string
+): (typeof mikanHostOptions)[number] | "" => {
+  const trimmed = host.trim();
+  const preset = mikanHostOptions.find((option) => option === trimmed);
+  return preset || "";
+};
+
+const getMikanHostSelection = (host: string): MikanHostSelection => {
+  const preset = getMikanHostPreset(host);
+  return preset || customMikanHostOption;
+};
+
+const hasProxyPortInHost = (host: string) => {
+  const normalized =
+    host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  return normalized.includes(":") && !/^[0-9a-fA-F:]+$/.test(normalized);
+};
 
 export default function SettingsCenter() {
   const { toast } = useToast();
@@ -107,10 +138,30 @@ export default function SettingsCenter() {
       excludeRegs: [],
       autoStop: false,
     });
+  const [discoveryConfig, setDiscoveryConfig] = useState<DiscoveryConfig>({
+    mikanHost: "mikanani.me",
+  });
+  const [mikanHostSelection, setMikanHostSelection] =
+    useState<MikanHostSelection>("mikanani.me");
+
+  // 网络配置状态
+  const [networkConfig, setNetworkConfig] = useState<NetworkConfig>({
+    proxyEnabled: false,
+    proxyType: "http",
+    proxyHost: "",
+    proxyPort: 0,
+  });
 
   // 订阅设置表单验证
   const [subscriptionErrors, setSubscriptionErrors] = useState({
     rssCheckInterval: "",
+  });
+
+  // 网络设置表单验证
+  const [networkErrors, setNetworkErrors] = useState({
+    mikanHost: "",
+    proxyHost: "",
+    proxyPort: "",
   });
 
   // 文件转移配置状态
@@ -258,6 +309,17 @@ export default function SettingsCenter() {
     return !error;
   };
 
+  const validateMikanHost = (value: string) => {
+    let error = "";
+    if (!value.trim()) error = "请填写蜜柑计划域名";
+    else if (/^https?:\/\//i.test(value))
+      error = "只填写域名，不要包含 http:// 或 https://";
+    else if (/[/?#]/.test(value))
+      error = "只填写域名，不要包含路径或参数";
+    setNetworkErrors((prev) => ({ ...prev, mikanHost: error }));
+    return !error;
+  };
+
   // 更新订阅配置并验证
   const updateSubscriptionConfig = (
     field: keyof SubscriptionConfig,
@@ -270,6 +332,71 @@ export default function SettingsCenter() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const updateDiscoveryConfig = (
+    field: keyof DiscoveryConfig,
+    value: string
+  ) => {
+    const nextValue = field === "mikanHost" ? value.trim() : value;
+    validateMikanHost(nextValue);
+    setDiscoveryConfig((prev) => ({
+      ...prev,
+      [field]: nextValue,
+    }));
+  };
+
+  const updateMikanHostSelection = (value: string) => {
+    const selection = value as MikanHostSelection;
+    setMikanHostSelection(selection);
+    if (selection === customMikanHostOption) {
+      if (getMikanHostPreset(discoveryConfig.mikanHost)) {
+        updateDiscoveryConfig("mikanHost", "");
+      }
+      return;
+    }
+    updateDiscoveryConfig("mikanHost", selection);
+  };
+
+  // 验证网络设置表单字段
+  const validateNetworkField = (
+    field: keyof typeof networkErrors,
+    value: string | number,
+    config: NetworkConfig = networkConfig
+  ) => {
+    let error = "";
+    if (config.proxyEnabled && field === "proxyHost") {
+      const host = String(value).trim();
+      if (!host) error = "请填写代理 IP / Host";
+      else if (
+        host.includes("://") ||
+        /[/\\?#]/.test(host) ||
+        /\s/.test(host) ||
+        hasProxyPortInHost(host)
+      )
+        error = "代理 IP / Host 不需要填写协议、路径或端口";
+    }
+    if (config.proxyEnabled && field === "proxyPort") {
+      const port = Number(value);
+      if (!Number.isInteger(port) || port < 1 || port > 65535)
+        error = "端口号必须在 1-65535 之间";
+    }
+    setNetworkErrors((prev) => ({ ...prev, [field]: error }));
+    return !error;
+  };
+
+  const validateNetworkConfig = (config: NetworkConfig = networkConfig) => {
+    const hostOK = validateNetworkField("proxyHost", config.proxyHost, config);
+    const portOK = validateNetworkField("proxyPort", config.proxyPort, config);
+    return hostOK && portOK;
+  };
+
+  const updateNetworkConfig = (field: keyof NetworkConfig, value: any) => {
+    setNetworkConfig((prev) => {
+      const next = { ...prev, [field]: value };
+      validateNetworkConfig(next);
+      return next;
+    });
   };
 
   // 验证元数据设置表单字段
@@ -443,6 +570,10 @@ export default function SettingsCenter() {
     return Object.values(subscriptionErrors).some((error) => error !== "");
   };
 
+  const hasNetworkErrors = () => {
+    return Object.values(networkErrors).some((error) => error !== "");
+  };
+
   const hasTransferErrors = () => {
     return Object.values(transferErrors).some((error) => error !== "");
   };
@@ -492,12 +623,22 @@ export default function SettingsCenter() {
   // 加载配置函数
   const loadConfigs = async () => {
     try {
-      const [downloader, manager, tmdb, subscription, transfer, notice] =
-        await Promise.all([
+      const [
+        downloader,
+        manager,
+        tmdb,
+        subscription,
+        discovery,
+        network,
+        transfer,
+        notice,
+      ] = await Promise.all([
           configAPI.getDownloaderConfig(),
           configAPI.getDownloadManagerConfig(),
           configAPI.getTMDBConfig(),
           configAPI.getSubscriptionConfig(),
+          configAPI.getDiscoveryConfig(),
+          configAPI.getNetworkConfig(),
           configAPI.getTransferConfig(),
           configAPI.getNoticeConfig(),
         ]);
@@ -506,6 +647,9 @@ export default function SettingsCenter() {
       setDownloadManagerConfig(manager);
       setTmdbConfig(tmdb);
       setSubscriptionConfig(subscription);
+      setDiscoveryConfig(discovery);
+      setMikanHostSelection(getMikanHostSelection(discovery.mikanHost));
+      setNetworkConfig(network);
       setTransferConfig(transfer);
       setNoticeConfig(notice);
 
@@ -515,6 +659,8 @@ export default function SettingsCenter() {
         manager,
         tmdb,
         subscription,
+        discovery,
+        network,
         transfer,
         notice
       );
@@ -534,6 +680,8 @@ export default function SettingsCenter() {
     manager: DownloadManagerConfig,
     tmdb: TMDBConfig,
     subscription: SubscriptionConfig,
+    discovery: DiscoveryConfig,
+    network: NetworkConfig,
     transfer: TransferConfig,
     notice: NoticeConfig
   ) => {
@@ -552,6 +700,8 @@ export default function SettingsCenter() {
       "rssCheckInterval",
       subscription.rssCheckInterval
     );
+    validateMikanHost(discovery.mikanHost);
+    validateNetworkConfig(network);
 
     // 验证文件转移设置
     validateTransferField("interval", transfer.interval);
@@ -667,6 +817,19 @@ export default function SettingsCenter() {
           const newSubscriptionConfig = await configAPI.getSubscriptionConfig();
           setSubscriptionConfig(newSubscriptionConfig);
           break;
+        case "network":
+          if (!validateMikanHost(discoveryConfig.mikanHost)) return;
+          if (!validateNetworkConfig()) return;
+          await configAPI.setDiscoveryConfig(discoveryConfig);
+          await configAPI.setNetworkConfig(networkConfig);
+          const newDiscoveryConfig = await configAPI.getDiscoveryConfig();
+          const newNetworkConfig = await configAPI.getNetworkConfig();
+          setDiscoveryConfig(newDiscoveryConfig);
+          setMikanHostSelection(
+            getMikanHostSelection(newDiscoveryConfig.mikanHost)
+          );
+          setNetworkConfig(newNetworkConfig);
+          break;
         case "transfer":
           await configAPI.setTransferConfig(transferConfig);
           const newTransferConfig = await configAPI.getTransferConfig();
@@ -688,6 +851,8 @@ export default function SettingsCenter() {
             ? "元数据"
             : tab === "subscription"
             ? "订阅"
+            : tab === "network"
+            ? "网络"
             : tab === "transfer"
             ? "文件转移"
             : "通知"
@@ -758,7 +923,7 @@ export default function SettingsCenter() {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-6 rounded-xl p-1">
+        <TabsList className="grid w-full grid-cols-7 rounded-xl p-1">
           <TabsTrigger
             value="download"
             className="flex items-center gap-2 rounded-xl"
@@ -779,6 +944,13 @@ export default function SettingsCenter() {
           >
             <Tv className="icon-button" />
             <span className="hidden sm:inline">订阅设置</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="network"
+            className="flex items-center gap-2 rounded-xl"
+          >
+            <Network className="icon-button" />
+            <span className="hidden sm:inline">网络设置</span>
           </TabsTrigger>
           <TabsTrigger
             value="transfer"
@@ -1172,6 +1344,180 @@ export default function SettingsCenter() {
                 disabled={hasSubscriptionErrors()}
               >
                 保存订阅设置
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="network">
+          <Card className="border-primary/10 rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-primary/5 to-blue-500/5">
+              <CardTitle className="text-xl anime-gradient-text">
+                网络设置
+              </CardTitle>
+              <CardDescription>配置外部服务地址与代理</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 p-6">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">外部服务地址</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="mikan-host">蜜柑计划域名</Label>
+                    <TooltipProvider>
+                      <HybridTooltip>
+                        <HybridTooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 rounded-full"
+                          >
+                            <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </HybridTooltipTrigger>
+                        <HybridTooltipContent>
+                          <p>
+                            默认使用 mikanani.me；网络环境需要时可切换为
+                            mikanime.tv，也可以填写自定义域名。
+                          </p>
+                        </HybridTooltipContent>
+                      </HybridTooltip>
+                    </TooltipProvider>
+                  </div>
+                  <div className="space-y-3">
+                    <Select
+                      value={mikanHostSelection}
+                      onValueChange={updateMikanHostSelection}
+                    >
+                      <SelectTrigger
+                        aria-label="选择蜜柑计划域名"
+                        className="rounded-xl"
+                      >
+                        <SelectValue placeholder="选择蜜柑计划域名" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {mikanHostOptions.map((host) => (
+                          <SelectItem key={host} value={host}>
+                            {host}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value={customMikanHostOption}>
+                          自定义
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {mikanHostSelection === customMikanHostOption && (
+                      <Input
+                        id="mikan-host"
+                        placeholder="example.com"
+                        value={discoveryConfig.mikanHost}
+                        onChange={(e) =>
+                          updateDiscoveryConfig("mikanHost", e.target.value)
+                        }
+                        className={`rounded-xl placeholder-gray-400 ${
+                          networkErrors.mikanHost ? "border-destructive" : ""
+                        }`}
+                      />
+                    )}
+                  </div>
+                  {networkErrors.mikanHost && (
+                    <span className="text-sm text-destructive">
+                      {networkErrors.mikanHost}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">代理设置</h3>
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-primary/10 p-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="proxy-enabled">启用代理</Label>
+                    <p className="text-sm text-muted-foreground">
+                      开启后，后台访问蜜柑、TMDB 和 Telegram 通知时会使用代理。
+                    </p>
+                  </div>
+                  <Switch
+                    id="proxy-enabled"
+                    checked={networkConfig.proxyEnabled}
+                    onCheckedChange={(checked) =>
+                      updateNetworkConfig("proxyEnabled", checked)
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+                  <div className="space-y-2">
+                    <Label htmlFor="proxy-type">代理类型</Label>
+                    <Select
+                      value={networkConfig.proxyType}
+                      onValueChange={(value: "http" | "socks5") =>
+                        updateNetworkConfig("proxyType", value)
+                      }
+                    >
+                      <SelectTrigger id="proxy-type" className="rounded-xl">
+                        <SelectValue placeholder="选择代理类型" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="http">HTTP</SelectItem>
+                        <SelectItem value="socks5">SOCKS5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+                    <div className="space-y-2">
+                      <Label htmlFor="proxy-host">代理 IP / Host</Label>
+                      <Input
+                        id="proxy-host"
+                        value={networkConfig.proxyHost}
+                        onChange={(e) =>
+                          updateNetworkConfig("proxyHost", e.target.value)
+                        }
+                        className={`rounded-xl placeholder-gray-400 ${
+                          networkErrors.proxyHost ? "border-destructive" : ""
+                        }`}
+                      />
+                      {networkErrors.proxyHost && (
+                        <span className="text-sm text-destructive">
+                          {networkErrors.proxyHost}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="proxy-port">端口号</Label>
+                      <Input
+                        id="proxy-port"
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={networkConfig.proxyPort || ""}
+                        onChange={(e) =>
+                          updateNetworkConfig(
+                            "proxyPort",
+                            e.target.value === "" ? 0 : Number(e.target.value)
+                          )
+                        }
+                        className={`rounded-xl placeholder-gray-400 ${
+                          networkErrors.proxyPort ? "border-destructive" : ""
+                        }`}
+                      />
+                      {networkErrors.proxyPort && (
+                        <span className="text-sm text-destructive">
+                          {networkErrors.proxyPort}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                className="w-full rounded-xl bg-gradient-to-r from-primary to-blue-500 anime-button"
+                onClick={() => handleSaveSettings("network")}
+                disabled={hasNetworkErrors()}
+              >
+                保存网络设置
               </Button>
             </CardContent>
           </Card>

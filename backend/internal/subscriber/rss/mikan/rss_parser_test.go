@@ -80,7 +80,9 @@ func TestParser_Parse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			url, clo := tc.stub(t)
 			defer clo()
-			p := NewParser(anito.NewParser())
+			p := NewParser(anito.NewParser(), staticHTTPClientProvider{
+				client: &http.Client{Timeout: 30 * time.Second},
+			})
 
 			rss, err := p.Parse(context.Background(), url)
 			t.Log(err)
@@ -89,6 +91,37 @@ func TestParser_Parse(t *testing.T) {
 			assert.Equal(t, tc.want, rss)
 		})
 	}
+}
+
+func TestNewParserInitializesHTTPClientOnce(t *testing.T) {
+	provider := &countingHTTPClientProvider{client: &http.Client{Timeout: time.Second}}
+	rssParser := NewParser(anito.NewParser(), provider)
+	p := rssParser.(*parser)
+
+	first := p.feedParser().Client
+	second := p.feedParser().Client
+
+	require.Same(t, provider.client, first)
+	require.Same(t, first, second)
+	assert.Equal(t, 1, provider.calls)
+}
+
+type staticHTTPClientProvider struct {
+	client *http.Client
+}
+
+func (p staticHTTPClientProvider) HTTPClient(time.Duration) *http.Client {
+	return p.client
+}
+
+type countingHTTPClientProvider struct {
+	client *http.Client
+	calls  int
+}
+
+func (p *countingHTTPClientProvider) HTTPClient(time.Duration) *http.Client {
+	p.calls++
+	return p.client
 }
 
 func stubParse(name string) func(t *testing.T) (url string, clo func()) {

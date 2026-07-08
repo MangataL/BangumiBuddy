@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -11,25 +12,26 @@ import (
 	"github.com/mmcdole/gofeed"
 	"github.com/pkg/errors"
 
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 	"github.com/MangataL/BangumiBuddy/pkg/bangumifile"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 )
 
-func NewParser(bfParser bangumifile.Parser) subscriber.RSSParser {
+func NewParser(bfParser bangumifile.Parser, provider network.HTTPClientProvider) subscriber.RSSParser {
 	return &parser{
-		fp:       gofeed.NewParser(),
 		bfParser: bfParser,
+		client:   newHTTPClient(provider),
 	}
 }
 
 type parser struct {
-	fp       *gofeed.Parser
 	bfParser bangumifile.Parser
+	client   *http.Client
 }
 
 func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error) {
-	feed, err := p.fp.ParseURLWithContext(link, ctx)
+	feed, err := p.feedParser().ParseURLWithContext(link, ctx)
 	if err != nil {
 		return subscriber.RSS{}, errors.WithMessage(err, "解析RSS失败")
 	}
@@ -40,6 +42,16 @@ func (p *parser) Parse(ctx context.Context, link string) (subscriber.RSS, error)
 		ReleaseGroup: rg,
 		Items:        items,
 	}, nil
+}
+
+func (p *parser) feedParser() *gofeed.Parser {
+	fp := gofeed.NewParser()
+	fp.Client = p.client
+	return fp
+}
+
+func newHTTPClient(provider network.HTTPClientProvider) *http.Client {
+	return provider.HTTPClient(30 * time.Second)
 }
 
 func (p *parser) parseReleaseGroup(ctx context.Context, items []subscriber.RSSItem) string {

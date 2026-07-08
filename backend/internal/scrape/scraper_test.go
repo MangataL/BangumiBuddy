@@ -32,6 +32,14 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type staticHTTPClientProvider struct {
+	client *http.Client
+}
+
+func (p staticHTTPClientProvider) HTTPClient(timeout time.Duration) *http.Client {
+	return p.client
+}
+
 func setupScrapeTestRepository(t *testing.T) *memoryRepo {
 	t.Helper()
 
@@ -167,7 +175,7 @@ func TestScraper_checkAndReplaceImage_ReplacesViaRenameAndBumpsMTime(t *testing.
 		require.NoError(t, oldPoster.Close())
 	})
 
-	scraper := &Scraper{client: newImageOKHTTPClient()}
+	scraper := &Scraper{network: staticHTTPClientProvider{client: newImageOKHTTPClient()}}
 
 	err = scraper.checkAndReplaceImage(ctx, currentPosterPath, "https://image.test/episode.jpg")
 
@@ -666,7 +674,7 @@ func TestScraper_ProcessTask_RecordAndReadResultByPath(t *testing.T) {
 				config:     Config{Enable: true},
 				repo:       repo,
 				metaParser: parser,
-				client:     newImageOKHTTPClient(),
+				network:    staticHTTPClientProvider{client: newImageOKHTTPClient()},
 			}
 
 			tempDir := t.TempDir()

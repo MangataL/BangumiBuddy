@@ -2,6 +2,7 @@ package gin
 
 import (
 	"github.com/MangataL/BangumiBuddy/internal/auth"
+	"github.com/MangataL/BangumiBuddy/internal/discovery"
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	"github.com/MangataL/BangumiBuddy/internal/magnet"
 	"github.com/MangataL/BangumiBuddy/internal/meta"
@@ -18,6 +19,7 @@ type Dependency struct {
 	TorrentOperator  downloader.TorrentOperator
 	ConfigRepo       *viper.Repo
 	Subscriber       subscriber.Interface
+	Discovery        discovery.Interface
 	Web              web.Interface
 	Transfer         transfer.Interface
 	Magnet           magnet.Interface
@@ -32,6 +34,7 @@ func New(dep Dependency) *Router {
 		torrentOperator:   dep.TorrentOperator,
 		repo:              dep.ConfigRepo,
 		subscriber:        dep.Subscriber,
+		discovery:         dep.Discovery,
 		web:               dep.Web,
 		transfer:          dep.Transfer,
 		magnet:            dep.Magnet,
@@ -46,6 +49,7 @@ type Router struct {
 	torrentOperator   downloader.TorrentOperator
 	repo              *viper.Repo
 	subscriber        subscriber.Interface
+	discovery         discovery.Interface
 	web               web.Interface
 	transfer          transfer.Interface
 	magnet            magnet.Interface

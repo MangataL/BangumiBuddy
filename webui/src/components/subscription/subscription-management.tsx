@@ -3,6 +3,7 @@ import type React from "react";
 import { cn } from "@/lib/utils";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Calendar,
@@ -28,6 +29,7 @@ import { extractErrorMessage } from "@/utils/error";
 
 export default function SubscriptionManagement() {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
   const [recentUpdatesDialogOpen, setRecentUpdatesDialogOpen] = useState(false);
@@ -80,6 +82,19 @@ export default function SubscriptionManagement() {
   useEffect(() => {
     fetchBangumis();
   }, [fetchBangumis]);
+
+  useEffect(() => {
+    const subscriptionID = searchParams.get("subscriptionID");
+    if (!subscriptionID || bangumis.length === 0) return;
+    const bangumi = bangumis.find((item) =>
+      item.releaseGroups.some((group) => group.subscriptionID === subscriptionID)
+    );
+    if (!bangumi) return;
+    setSelectedBangumi(bangumi);
+    setSelectedSubscriptionID(subscriptionID);
+    setDetailDialogOpen(true);
+    setSearchParams({}, { replace: true });
+  }, [bangumis, searchParams, setSearchParams]);
 
   const handleBangumiClick = (bangumi: BangumiBase) => {
     if (bangumi.releaseGroups.length > 0) {

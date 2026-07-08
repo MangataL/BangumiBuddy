@@ -41,4 +41,4 @@ func (r *Router) checkQBittorrentConnection(config qbittorrent.Config) error {
 		return fmt.Errorf("qbittorrent 登录失败，请检查配置的账号密码是否正确: %w", err)
 	}
 	return nil
-}	
+}

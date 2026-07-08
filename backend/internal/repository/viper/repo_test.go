@@ -1,7 +1,10 @@
 package viper
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +15,14 @@ type TestConfig struct {
 	Name    string `mapstructure:"name"`
 	AgeNum  int    `mapstructure:"age_num"`
 	Enabled bool   `mapstructure:"enabled"`
+}
+
+type failingReloadable struct {
+	err error
+}
+
+func (r failingReloadable) Reload(config interface{}) error {
+	return r.err
 }
 
 func TestRepo_SetAndGetComponentConfig(t *testing.T) {
@@ -67,4 +78,51 @@ func TestRepo_SetAndGetComponentConfig(t *testing.T) {
 	assert.Equal(t, updatedConfig.Name, readUpdatedConfig.Name)
 	assert.Equal(t, updatedConfig.AgeNum, readUpdatedConfig.AgeNum)
 	assert.Equal(t, updatedConfig.Enabled, readUpdatedConfig.Enabled)
+}
+
+func TestRepo_SetComponentConfig_RollbackWhenReloadFails(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("{}"), 0644))
+
+	repo, err := NewRepo(tmpFile)
+	require.NoError(t, err)
+
+	oldConfig := &TestConfig{Name: "old", AgeNum: 18, Enabled: true}
+	require.NoError(t, repo.SetComponentConfig("test_component", oldConfig))
+	repo.RegisterReloadable("test_component", failingReloadable{err: errors.New("reload failed")})
+
+	newConfig := &TestConfig{Name: "new", AgeNum: 20, Enabled: false}
+	err = repo.SetComponentConfig("test_component", newConfig)
+	require.Error(t, err)
+
+	var readConfig TestConfig
+	require.NoError(t, repo.GetComponentConfig("test_component", &readConfig))
+	assert.Equal(t, *oldConfig, readConfig)
+
+	reloadedRepo, err := NewRepo(tmpFile)
+	require.NoError(t, err)
+	var diskConfig TestConfig
+	require.NoError(t, reloadedRepo.GetComponentConfig("test_component", &diskConfig))
+	assert.Equal(t, *oldConfig, diskConfig)
+}
+
+func TestRepo_SetComponentConfig_ConcurrentAccess(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("{}"), 0644))
+
+	repo, err := NewRepo(tmpFile)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			config := &TestConfig{Name: "name", AgeNum: index, Enabled: index%2 == 0}
+			require.NoError(t, repo.SetComponentConfig("test_component", config))
+			var readConfig TestConfig
+			require.NoError(t, repo.GetComponentConfig("test_component", &readConfig))
+		}(i)
+	}
+	wg.Wait()
 }

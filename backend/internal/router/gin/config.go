@@ -5,9 +5,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/MangataL/BangumiBuddy/internal/discovery"
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	downloadadapter "github.com/MangataL/BangumiBuddy/internal/downloader/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/meta/tmdb"
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/scrape"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
@@ -113,6 +115,58 @@ func (r *Router) SetSubscriberConfig(ctx *gin.Context) {
 		return
 	}
 	if err := r.repo.SetSubscriberConfig(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.Status(http.StatusOK)
+}
+
+// GetDiscoveryConfig 获取发现源配置
+// GET /apis/v1/config/discovery
+func (r *Router) GetDiscoveryConfig(ctx *gin.Context) {
+	config, err := r.repo.GetDiscoveryConfig()
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, config)
+}
+
+// SetDiscoveryConfig 设置发现源配置
+// PUT /apis/v1/config/discovery
+func (r *Router) SetDiscoveryConfig(ctx *gin.Context) {
+	var config discovery.Config
+	if err := ctx.ShouldBindJSON(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	if err := r.repo.SetDiscoveryConfig(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.Status(http.StatusOK)
+}
+
+// GetNetworkConfig 获取网络配置
+// GET /apis/v1/config/network
+func (r *Router) GetNetworkConfig(ctx *gin.Context) {
+	config, err := r.repo.GetNetworkConfig()
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, config)
+}
+
+// SetNetworkConfig 设置网络配置
+// PUT /apis/v1/config/network
+func (r *Router) SetNetworkConfig(ctx *gin.Context) {
+	var config network.Config
+	if err := ctx.ShouldBindJSON(&config); err != nil {
+		writeError(ctx, err)
+		return
+	}
+	if err := r.repo.SetNetworkConfig(&config); err != nil {
 		writeError(ctx, err)
 		return
 	}

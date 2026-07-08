@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/MangataL/BangumiBuddy/internal/notice"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
@@ -87,7 +88,6 @@ func (n *notifier) sendNotification(title, body string) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	// 发送HTTP请求
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("发送Bark通知失败: %w", err)
@@ -101,6 +101,11 @@ func (n *notifier) sendNotification(title, body string) error {
 
 	return nil
 }
+
+var (
+	client = &http.Client{Timeout: 30 * time.Second}
+)
+
 
 // NoticeSubscriptionUpdated 实现Notifier接口，通知订阅更新状态
 func (n *notifier) NoticeSubscriptionUpdated(ctx context.Context, req notice.NoticeSubscriptionUpdatedReq) error {

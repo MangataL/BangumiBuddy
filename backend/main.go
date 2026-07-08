@@ -31,11 +31,13 @@ import (
 	"github.com/MangataL/BangumiBuddy/internal/auth"
 	"github.com/MangataL/BangumiBuddy/internal/auth/crypto/pbkdf2"
 	"github.com/MangataL/BangumiBuddy/internal/auth/token/jwt"
+	discoverymikan "github.com/MangataL/BangumiBuddy/internal/discovery/mikan"
 	"github.com/MangataL/BangumiBuddy/internal/downloader"
 	downloadadapter "github.com/MangataL/BangumiBuddy/internal/downloader/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/magnet"
 	magnetrepo "github.com/MangataL/BangumiBuddy/internal/magnet/repository"
 	"github.com/MangataL/BangumiBuddy/internal/meta/tmdb"
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	noticeadapter "github.com/MangataL/BangumiBuddy/internal/notice/adapter"
 	"github.com/MangataL/BangumiBuddy/internal/repository/viper"
 	ginrouter "github.com/MangataL/BangumiBuddy/internal/router/gin"
@@ -106,20 +108,29 @@ func main() {
 		TokenOperator: jwt.NewTokenOperator(),
 	})
 	bfParser := anito.NewParser()
+	networkConfig, err := conf.GetNetworkConfig()
+	if err != nil {
+		log.Fatalf(ctx, "get network config failed %s", err)
+	}
+	networkManager, err := network.NewManager(networkConfig)
+	if err != nil {
+		log.Fatalf(ctx, "init network manager failed %s", err)
+	}
+	conf.RegisterReloadable(viper.ComponentNameNetwork, networkManager)
 
-	rssParser := mikan.NewParser(bfParser)
+	rssParser := mikan.NewParser(bfParser, networkManager)
 	tmdbConfig, err := conf.GetTMDBConfig()
 	if err != nil {
 		log.Fatalf(ctx, "get tmdb config failed %s", err)
 	}
-	metaParser := tmdb.NewParser(tmdbConfig)
+	metaParser := tmdb.NewParser(tmdbConfig, networkManager)
 	conf.RegisterReloadable(viper.ComponentNameTMDB, metaParser)
 
 	noticeConfig, err := conf.GetNoticeConfig()
 	if err != nil {
 		log.Fatalf(ctx, "get notice config failed %s", err)
 	}
-	noticeAdapter := noticeadapter.NewAdapter(noticeConfig)
+	noticeAdapter := noticeadapter.NewAdapter(noticeConfig, networkManager)
 	conf.RegisterReloadable(viper.ComponentNameNotice, noticeAdapter)
 
 	downloaderConfig, err := conf.GetDownloaderConfig()
@@ -159,6 +170,12 @@ func main() {
 	}
 	subscriber := subscriber.NewSubscriber(subscriberDep)
 	conf.RegisterReloadable(viper.ComponentNameSubscriber, subscriber)
+	discoveryConfig, err := conf.GetDiscoveryConfig()
+	if err != nil {
+		log.Fatalf(ctx, "get discovery config failed %s", err)
+	}
+	discoveryService := discoverymikan.New(discoveryConfig, subscriber, networkManager)
+	conf.RegisterReloadable(viper.ComponentNameDiscovery, discoveryService)
 
 	magnetService := magnet.New(magnet.Dependency{
 		Downloader:        downloadManager,
@@ -184,6 +201,7 @@ func main() {
 		Config:     scraperConfig,
 		Repository: scraperepo.New(db),
 		MetaParser: metaParser,
+		Network:    networkManager,
 	})
 	conf.RegisterReloadable(viper.ComponentNameScraper, scraper)
 
@@ -222,6 +240,7 @@ func main() {
 		TorrentOperator:  torrentOperator,
 		ConfigRepo:       conf,
 		Subscriber:       subscriber,
+		Discovery:        discoveryService,
 		Web:              webService,
 		Transfer:         transfer,
 		Magnet:           magnetService,
@@ -242,6 +261,10 @@ func main() {
 	apisRouter.PUT("/config/download/downloader", router.SetDownloaderConfig)
 	apisRouter.GET("/config/subscriber", router.GetSubscriberConfig)
 	apisRouter.PUT("/config/subscriber", router.SetSubscriberConfig)
+	apisRouter.GET("/config/discovery", router.GetDiscoveryConfig)
+	apisRouter.PUT("/config/discovery", router.SetDiscoveryConfig)
+	apisRouter.GET("/config/network", router.GetNetworkConfig)
+	apisRouter.PUT("/config/network", router.SetNetworkConfig)
 	apisRouter.GET("/config/transfer", router.GetTransferConfig)
 	apisRouter.PUT("/config/transfer", router.SetTransferConfig)
 	apisRouter.GET("/config/notice", router.GetNoticeConfig)
@@ -265,6 +288,13 @@ func main() {
 	apisRouter.POST("/bangumis/:id/download", router.HandleBangumiSubscription)
 	apisRouter.GET("/bangumis/:id/torrents", router.GetBangumiTorrents)
 	apisRouter.GET("/bangumis/calendar", router.GetSubscriptionCalendar)
+
+	// 注册发现相关路由
+	apisRouter.GET("/discovery/mikan/bangumis", router.ListDiscoveryBangumis)
+	apisRouter.GET("/discovery/mikan/search", router.SearchDiscovery)
+	apisRouter.POST("/discovery/mikan/bangumis/release-groups/batch", router.BatchDiscoveryReleaseGroups)
+	apisRouter.GET("/discovery/mikan/bangumis/:id", router.GetDiscoveryBangumi)
+	apisRouter.POST("/discovery/mikan/rss/parse", router.ParseDiscoveryCandidateRSS)
 
 	// 注册torrent相关路由
 	apisRouter.DELETE("/torrents/:hash", router.DeleteTorrent)

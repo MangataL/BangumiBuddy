@@ -6,6 +6,7 @@ import Logs from "@/pages/logs";
 import Login from "@/pages/login";
 import { ProtectedRoute } from "@/components/protected-route";
 import Magnet from "@/pages/magnet";
+import Discovery from "@/pages/discovery";
 
 export default function AppRoutes() {
   return (
@@ -21,6 +22,7 @@ export default function AppRoutes() {
         }
       >
         <Route path="/" element={<Home />} />
+        <Route path="/discover" element={<Discovery />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/logs" element={<Logs />} />
         <Route path="/download" element={<Magnet />} />

@@ -9,3 +9,9 @@ test
 docker-compose.yml
 CLAUDE.md
 .claude
+.pnpm-store
+.codegraph
+.agents
+docs/
+CONTEXT.md
+AGENTS.md

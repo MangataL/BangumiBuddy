@@ -3,9 +3,12 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	"github.com/MangataL/BangumiBuddy/internal/notice"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
 
@@ -14,9 +17,10 @@ import (
 
 // notifier 实现notice.Notifier接口，通过Telegram机器人发送通知
 type notifier struct {
-	bot *tgbotapi.BotAPI
-	mu  sync.Mutex
-	cfg Config
+	bot     *tgbotapi.BotAPI
+	mu      sync.Mutex
+	cfg     Config
+	network network.HTTPClientProvider
 }
 
 type Config struct {
@@ -25,9 +29,10 @@ type Config struct {
 }
 
 // NewTelegramNotifier 创建新的TelegramNotifier实例
-func NewTelegramNotifier(cfg Config) notice.Notifier {
+func NewTelegramNotifier(cfg Config, provider network.HTTPClientProvider) notice.Notifier {
 	return &notifier{
-		cfg: cfg,
+		cfg:     cfg,
+		network: provider,
 	}
 }
 
@@ -38,7 +43,7 @@ func (t *notifier) init() error {
 		return nil
 	}
 
-	bot, err := tgbotapi.NewBotAPI(t.cfg.Token)
+	bot, err := tgbotapi.NewBotAPIWithClient(t.cfg.Token, tgbotapi.APIEndpoint, t.httpClient())
 	if err != nil {
 		return fmt.Errorf("初始化Telegram机器人失败: %w", err)
 	}
@@ -46,6 +51,13 @@ func (t *notifier) init() error {
 	t.bot = bot
 	t.bot.Debug = true
 	return nil
+}
+
+func (t *notifier) httpClient() *http.Client {
+	if t.network == nil {
+		return &http.Client{Timeout: 30 * time.Second}
+	}
+	return t.network.HTTPClient(30 * time.Second)
 }
 
 // NoticeSubscriptionUpdated 实现Notifier接口，通知订阅更新状态

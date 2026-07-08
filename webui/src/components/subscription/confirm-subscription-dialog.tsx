@@ -58,6 +58,7 @@ interface ConfirmSubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parseRSSRsp: ParseRSSResponse;
+  defaultPriority?: number;
   onSubscribed?: () => void;
 }
 
@@ -73,6 +74,7 @@ export function ConfirmSubscriptionDialog({
   open,
   onOpenChange,
   parseRSSRsp,
+  defaultPriority = 1,
   onSubscribed,
 }: ConfirmSubscriptionDialogProps) {
   const { toast } = useToast();
@@ -89,7 +91,7 @@ export function ConfirmSubscriptionDialog({
     includeRegs: [],
     excludeRegs: [],
     episodeOffset: 0,
-    priority: 1,
+    priority: Math.max(1, defaultPriority),
     episodeLocation: "",
     backdropURL: "",
     posterURL: "",
@@ -108,11 +110,12 @@ export function ConfirmSubscriptionDialog({
         releaseGroup: parseRSSRsp.releaseGroup,
         episodeTotalNum: parseRSSRsp.episodeTotalNum,
         airWeekday: parseRSSRsp.airWeekday,
+        priority: Math.max(1, defaultPriority),
         backdropURL: parseRSSRsp.backdropURL,
         posterURL: parseRSSRsp.posterURL,
       }));
     }
-  }, [open, parseRSSRsp]);
+  }, [defaultPriority, open, parseRSSRsp]);
 
   const [fieldErrors, setFieldErrors] = useState({
     season: "",

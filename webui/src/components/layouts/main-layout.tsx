@@ -12,6 +12,7 @@ import {
   Moon,
   Sun,
   Magnet,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const { toast } = useToast();
   const navigation = [
     { name: "订阅管理", href: "/", icon: Rss },
+    { name: "发现", href: "/discover", icon: Compass },
     { name: "磁力下载", href: "/download", icon: Magnet },
     { name: "设置中心", href: "/settings", icon: Settings },
     { name: "日志", href: "/logs", icon: FileText },
@@ -110,7 +112,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <PageTransition fadeOut={fadeOut}>
-      <div className="flex min-h-screen w-full overflow-hidden">
+      <div className="flex h-screen w-full overflow-hidden">
         {isMobile ? (
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
@@ -136,8 +138,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
           </div>
         )}
 
-        <div className="flex flex-1 flex-col md:ml-64 overflow-hidden">
-          <header className="sticky top-0 z-10 flex h-16 items-center justify-end border-b bg-background/80 backdrop-blur-md px-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:ml-64">
+          <header className="sticky top-0 z-10 flex h-16 flex-none items-center justify-end border-b bg-background/80 px-6 backdrop-blur-md">
             <Button
               variant="ghost"
               size="icon"
@@ -179,7 +181,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
             </DropdownMenu>
           </header>
 
-          <main className="flex-1 p-6 overflow-auto">{children}</main>
+          <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
+            {children}
+          </main>
         </div>
       </div>
     </PageTransition>

@@ -7,28 +7,40 @@ import (
 var _ auth.Config = (*Repo)(nil)
 
 func (r *Repo) GetUsername() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.file.GetString("user.username"), nil
 }
 
 func (r *Repo) SetUsername(username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.file.Set("user.username", username)
 	return r.file.WriteConfig()
 }
 
 func (r *Repo) GetPassword() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.file.GetString("user.password"), nil
 }
 
 func (r *Repo) SetPassword(password string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.file.Set("user.password", password)
 	return r.file.WriteConfig()
 }
 
 func (r *Repo) GetUserToken() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.file.GetString("user.token"), nil
 }
 
 func (r *Repo) SetUserToken(token string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.file.Set("user.token", token)
 	return r.file.WriteConfig()
 }

@@ -30,6 +30,17 @@ export interface SubscriptionConfig {
   autoStop: boolean;
 }
 
+export interface DiscoveryConfig {
+  mikanHost: string;
+}
+
+export interface NetworkConfig {
+  proxyEnabled: boolean;
+  proxyType: "http" | "socks5";
+  proxyHost: string;
+  proxyPort: number;
+}
+
 // 字幕重命名配置类型
 export interface SubtitleRenameConfig {
   enabled: boolean;
@@ -167,6 +178,18 @@ export const configAPI = {
     http.get("/config/subscriber") as Promise<SubscriptionConfig>,
   setSubscriptionConfig: (config: SubscriptionConfig): Promise<void> =>
     http.put("/config/subscriber", config) as Promise<void>,
+
+  // 发现源配置
+  getDiscoveryConfig: (): Promise<DiscoveryConfig> =>
+    http.get("/config/discovery") as Promise<DiscoveryConfig>,
+  setDiscoveryConfig: (config: DiscoveryConfig): Promise<void> =>
+    http.put("/config/discovery", config) as Promise<void>,
+
+  // 网络配置
+  getNetworkConfig: (): Promise<NetworkConfig> =>
+    http.get("/config/network") as Promise<NetworkConfig>,
+  setNetworkConfig: (config: NetworkConfig): Promise<void> =>
+    http.put("/config/network", config) as Promise<void>,
 
   // 文件转移配置
   getTransferConfig: (): Promise<TransferConfig> =>

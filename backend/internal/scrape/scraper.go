@@ -19,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/MangataL/BangumiBuddy/internal/meta"
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
 )
@@ -29,6 +30,7 @@ type Dependency struct {
 	Config
 	Repository Repository
 	MetaParser meta.Parser
+	Network    network.HTTPClientProvider
 }
 
 type Repository interface {
@@ -45,9 +47,9 @@ type Scraper struct {
 	config     Config
 	repo       Repository
 	metaParser meta.Parser
+	network    network.HTTPClientProvider
 	ticker     *time.Ticker
 	stop       func()
-	client     *http.Client
 }
 
 func NewScraper(dep Dependency) *Scraper {
@@ -57,10 +59,8 @@ func NewScraper(dep Dependency) *Scraper {
 		config:     dep.Config,
 		repo:       dep.Repository,
 		metaParser: dep.MetaParser,
+		network:    dep.Network,
 		stop:       cancel,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
 	}
 
 	go scraper.run(ctx)
@@ -483,7 +483,7 @@ func (s *Scraper) downloadImage(ctx context.Context, tmdbImagePath string) ([]by
 		return nil, err
 	}
 
-	resp, err := s.client.Do(req)
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -494,6 +494,17 @@ func (s *Scraper) downloadImage(ctx context.Context, tmdbImagePath string) ([]by
 	}
 
 	return io.ReadAll(resp.Body)
+}
+
+var (
+	defaultClient = &http.Client{Timeout: 30 * time.Second}
+)
+
+func (s *Scraper) httpClient() *http.Client {
+	if s.network == nil {
+		return defaultClient
+	}
+	return s.network.HTTPClient(30 * time.Second)
 }
 
 // fileExists 检查文件是否存在

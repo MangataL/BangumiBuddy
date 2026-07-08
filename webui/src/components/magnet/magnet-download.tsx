@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { RefreshCw, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,7 @@ export default function MagnetDownload() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(false);
   const [openTaskID, setOpenTaskID] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
 
   // 触发刷新
   const handleRefresh = useCallback(() => {
@@ -37,6 +39,12 @@ export default function MagnetDownload() {
     },
     [handleRefresh]
   );
+
+  useEffect(() => {
+    const taskID = searchParams.get("taskID");
+    if (!taskID) return;
+    handleAddSuccess(taskID);
+  }, [handleAddSuccess, searchParams]);
 
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)] hide-scrollbar">

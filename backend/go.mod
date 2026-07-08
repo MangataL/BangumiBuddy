@@ -22,6 +22,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mholt/archives v0.1.5
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/nssteinbrenner/anitogo v1.0.0
@@ -52,7 +53,6 @@ require (
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect

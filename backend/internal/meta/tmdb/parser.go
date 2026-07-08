@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	tmdb "github.com/cyruzin/golang-tmdb"
 	"github.com/liuzl/gocc"
 
 	"github.com/MangataL/BangumiBuddy/internal/meta"
+	"github.com/MangataL/BangumiBuddy/internal/network"
 	"github.com/MangataL/BangumiBuddy/pkg/errs"
 	"github.com/MangataL/BangumiBuddy/pkg/log"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
@@ -25,17 +27,23 @@ type Config struct {
 
 var ErrTMDBTokenNotSet = errors.New("请先设置TMDB Token")
 
-func NewParser(config Config) *cacheAdapter {
+func NewParser(config Config, provider network.HTTPClientProvider) *cacheAdapter {
 	client := &Client{
-		client: newTMDBClient(config),
+		client:  newTMDBClient(config, provider),
+		network: provider,
 	}
 	return newCacheAdapter(client)
 }
 
-func newTMDBClient(config Config) *tmdb.Client {
+func newTMDBClient(config Config, provider network.HTTPClientProvider) *tmdb.Client {
 	c, err := tmdb.InitV4(config.TMDBToken)
 	if err != nil {
 		return nil
+	}
+	if provider != nil {
+		// XXX: tmdb客户端只提供了set方法，这里不想每次获取client时都走一次set方法，就只在初始化时set一次
+		// 		实际上，持有的是HTTP Transport是指针，可以动态加载
+		c.SetClientConfig(*provider.HTTPClient(30 * time.Second))
 	}
 	c.SetClientAutoRetry()
 	if config.AlternateURL {
@@ -45,7 +53,16 @@ func newTMDBClient(config Config) *tmdb.Client {
 }
 
 type Client struct {
-	client *tmdb.Client
+	mu      sync.RWMutex
+	client  *tmdb.Client
+	network network.HTTPClientProvider
+}
+
+
+func (t *Client) currentClient() *tmdb.Client {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.client
 }
 
 // SearchMovie implements meta.Parser.
@@ -61,10 +78,11 @@ func (t *Client) SearchMovie(ctx context.Context, name string) (meta.Meta, error
 }
 
 func (t *Client) SearchMovies(ctx context.Context, name string) ([]meta.Meta, error) {
-	if t.client == nil {
+	client := t.currentClient()
+	if client == nil {
 		return nil, ErrTMDBTokenNotSet
 	}
-	movies, err := t.client.GetSearchMovies(name, map[string]string{
+	movies, err := client.GetSearchMovies(name, map[string]string{
 		"language": "zh",
 		"page":     "1",
 	})
@@ -99,10 +117,11 @@ func (t *Client) SearchMovies(ctx context.Context, name string) ([]meta.Meta, er
 }
 
 func (t *Client) ParseMovie(ctx context.Context, id int) (meta.Meta, error) {
-	if t.client == nil {
+	client := t.currentClient()
+	if client == nil {
 		return meta.Meta{}, ErrTMDBTokenNotSet
 	}
-	movie, err := t.client.GetMovieDetails(id, map[string]string{
+	movie, err := client.GetMovieDetails(id, map[string]string{
 		"language": "zh",
 	})
 	if err != nil {
@@ -120,10 +139,11 @@ func (t *Client) ParseMovie(ctx context.Context, id int) (meta.Meta, error) {
 }
 
 func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
-	if t.client == nil {
+	client := t.currentClient()
+	if client == nil {
 		return meta.Meta{}, ErrTMDBTokenNotSet
 	}
-	tv, err := t.client.GetTVDetails(id, map[string]string{
+	tv, err := client.GetTVDetails(id, map[string]string{
 		"language": "zh",
 	})
 	if err != nil {
@@ -150,10 +170,11 @@ func (t *Client) GetSeasonEpisodeTotalNum(
 	tmdbID, season int,
 	opts ...meta.MetaOption,
 ) (int, error) {
-	if t.client == nil {
+	client := t.currentClient()
+	if client == nil {
 		return 0, ErrTMDBTokenNotSet
 	}
-	tv, err := t.client.GetTVDetails(tmdbID, map[string]string{
+	tv, err := client.GetTVDetails(tmdbID, map[string]string{
 		"language": "zh",
 	})
 	if err != nil {
@@ -222,10 +243,11 @@ func getGeneres(generes []struct {
 }
 
 func (t *Client) SearchTVs(ctx context.Context, name string) ([]meta.Meta, error) {
-	if t.client == nil {
+	client := t.currentClient()
+	if client == nil {
 		return nil, ErrTMDBTokenNotSet
 	}
-	tvs, err := t.client.GetSearchTVShow(name, map[string]string{
+	tvs, err := client.GetSearchTVShow(name, map[string]string{
 		"language": "zh",
 		"page":     "1",
 	})
@@ -284,7 +306,9 @@ func (c *Client) Reload(config interface{}) error {
 	if !ok {
 		return errors.New("配置类型错误")
 	}
-	c.client = newTMDBClient(*cfg)
+	c.mu.Lock()
+	c.client = newTMDBClient(*cfg, c.network)
+	c.mu.Unlock()
 	return nil
 }
 
@@ -338,10 +362,11 @@ var languagePriorities = []languagePriority{
 
 // getEpisodeDetailsWithLanguage 根据指定语言获取单集元数据
 func (t *Client) getEpisodeDetailsWithLanguage(ctx context.Context, tmdbID, season, episode int, language languagePriority) (meta.EpisodeDetails, error) {
-	if t.client == nil {
+	client := t.currentClient()
+	if client == nil {
 		return meta.EpisodeDetails{}, ErrTMDBTokenNotSet
 	}
-	episodeDetails, err := t.client.GetTVEpisodeDetails(tmdbID, season, episode, map[string]string{
+	episodeDetails, err := client.GetTVEpisodeDetails(tmdbID, season, episode, map[string]string{
 		"language": language.Language,
 	})
 	if err != nil {
