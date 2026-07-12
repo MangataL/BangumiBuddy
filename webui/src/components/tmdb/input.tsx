@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ interface TMDBInputProps {
   placeholder?: string; // 占位符
   className?: string; // 自定义样式
   error?: string; // 错误提示
+  initialSearchName?: string; // 打开搜索弹窗时预填的名称
 }
 
 export function TMDBInput({
@@ -40,6 +41,7 @@ export function TMDBInput({
   placeholder = "输入 TMDB ID 或点击搜索",
   className,
   error,
+  initialSearchName,
 }: TMDBInputProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -144,6 +146,7 @@ export function TMDBInput({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         type={type}
+        initialSearchName={initialSearchName}
         onSelect={(tmdbID, meta) => {
           // 搜索选择时，同时更新ID和完整元数据
           if (meta) {
@@ -163,6 +166,7 @@ interface SearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   type: "tv" | "movie";
+  initialSearchName?: string;
   onSelect: (tmdbID: number, meta?: Meta) => void;
 }
 
@@ -170,6 +174,7 @@ function SearchDialog({
   open,
   onOpenChange,
   type,
+  initialSearchName,
   onSelect,
 }: SearchDialogProps) {
   const { toast } = useToast();
@@ -178,9 +183,9 @@ function SearchDialog({
   const [results, setResults] = useState<Meta[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // 执行搜索
-  const handleSearch = async () => {
-    if (!searchName.trim()) {
+  const runSearch = async (name: string) => {
+    const query = name.trim();
+    if (!query) {
       toast({
         title: "请输入搜索名称",
         variant: "destructive",
@@ -193,8 +198,8 @@ function SearchDialog({
     try {
       const data =
         type === "tv"
-          ? await metaAPI.searchTVs(searchName)
-          : await metaAPI.searchMovies(searchName);
+          ? await metaAPI.searchTVs(query)
+          : await metaAPI.searchMovies(query);
       setResults(data);
     } catch (error) {
       const description = extractErrorMessage(error);
@@ -208,6 +213,13 @@ function SearchDialog({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!open) return;
+    setSearchName(initialSearchName?.trim() ?? "");
+    setResults([]);
+    setHasSearched(false);
+  }, [open, initialSearchName]);
 
   // 重置状态
   const handleClose = () => {
@@ -238,7 +250,7 @@ function SearchDialog({
             onChange={(e) => setSearchName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !loading) {
-                handleSearch();
+                void runSearch(searchName);
               }
             }}
             placeholder={`请输入${type === "tv" ? "番剧" : "剧场版"}名称`}
@@ -246,7 +258,7 @@ function SearchDialog({
             autoFocus
           />
           <Button
-            onClick={handleSearch}
+            onClick={() => void runSearch(searchName)}
             disabled={loading}
             className="rounded-xl anime-button bg-gradient-to-r from-primary to-blue-500"
           >

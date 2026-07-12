@@ -19,11 +19,13 @@ import { extractErrorMessage } from "@/utils/error";
 import { BangumiInspector } from "@/pages/discovery/components/bangumi-inspector";
 import { DiscoverySearchWorkspace } from "@/pages/discovery/components/discovery-search-workspace";
 import { DiscoveryToolbar } from "./components/discovery-toolbar";
+import { ManualTMDBParseDialog } from "./components/manual-tmdb-parse-dialog";
 import { ResourceConfirmDialog } from "./components/resource-confirm-dialog";
 import { ScheduleWorkspace } from "./components/schedule-workspace";
 import { useBangumiDetail } from "./hooks/use-bangumi-detail";
 import { useDiscoverySearch } from "./hooks/use-discovery-search";
 import { useSeasonDiscovery } from "./hooks/use-season-discovery";
+import { resolveDiscoveryBangumiName, isTMDBMatchFailure } from "./parse-fallback";
 import { getDefaultSubscriptionPriority } from "./subscription-defaults";
 
 const emptyParseRSS: ParseRSSResponse = {
@@ -38,6 +40,13 @@ const emptyParseRSS: ParseRSSResponse = {
   posterURL: "",
   backdropURL: "",
 };
+
+interface ManualParseContext {
+  bangumiID: string;
+  group: ReleaseGroupCandidate;
+  errorMessage: string;
+  suggestedName: string;
+}
 
 export default function DiscoveryPage() {
   const navigate = useNavigate();
@@ -55,6 +64,8 @@ export default function DiscoveryPage() {
   const [downloadType, setDownloadType] = useState<DownloadType>(
     DownloadTypeSet.TV
   );
+  const [manualParse, setManualParse] = useState<ManualParseContext>();
+  const [manualParseSubmitting, setManualParseSubmitting] = useState(false);
   const candidateRequestIDRef = useRef(0);
   const pendingSubscriptionBangumiIDRef = useRef<string | undefined>(
     undefined
@@ -67,7 +78,8 @@ export default function DiscoveryPage() {
 
   const parseCandidate = async (
     bangumiID: string,
-    group: ReleaseGroupCandidate
+    group: ReleaseGroupCandidate,
+    tmdbID?: number
   ) => {
     const requestID = candidateRequestIDRef.current + 1;
     candidateRequestIDRef.current = requestID;
@@ -76,15 +88,43 @@ export default function DiscoveryPage() {
       const response = await discoveryAPI.parseCandidateRSS({
         mikanBangumiID: bangumiID,
         mikanSubgroupID: group.mikanSubgroupID,
+        tmdbID,
       });
       if (requestID !== candidateRequestIDRef.current) return;
       pendingSubscriptionBangumiIDRef.current = bangumiID;
       setDefaultSubscriptionPriority(getDefaultSubscriptionPriority(group));
       setParseRSSResponse(response);
+      setManualParse(undefined);
       setConfirmOpen(true);
     } catch (error) {
       if (requestID !== candidateRequestIDRef.current) return;
-      showError(toast, "字幕组解析失败", error);
+      const errorMessage = extractErrorMessage(error);
+      if (tmdbID || !isTMDBMatchFailure(errorMessage)) {
+        showError(toast, "字幕组解析失败", error);
+        return;
+      }
+      setManualParse({
+        bangumiID,
+        group,
+        errorMessage,
+        suggestedName: resolveDiscoveryBangumiName({
+          bangumiID,
+          detail: detail.detail,
+          bangumis: seasonDiscovery.bangumis,
+          searchBangumis: search.data.bangumis,
+          errorMessage,
+        }),
+      });
+    }
+  };
+
+  const retryParseWithTMDB = async (tmdbID: number) => {
+    if (!manualParse || manualParseSubmitting) return;
+    setManualParseSubmitting(true);
+    try {
+      await parseCandidate(manualParse.bangumiID, manualParse.group, tmdbID);
+    } finally {
+      setManualParseSubmitting(false);
     }
   };
 
@@ -245,6 +285,18 @@ export default function DiscoveryPage() {
           if (!open && !resourceSubmitting) setResource(undefined);
         }}
         onConfirm={addResource}
+      />
+
+      <ManualTMDBParseDialog
+        open={Boolean(manualParse)}
+        errorMessage={manualParse?.errorMessage ?? ""}
+        suggestedName={manualParse?.suggestedName ?? ""}
+        releaseGroupName={manualParse?.group.name ?? ""}
+        submitting={manualParseSubmitting}
+        onOpenChange={(open) => {
+          if (!open && !manualParseSubmitting) setManualParse(undefined);
+        }}
+        onConfirm={(tmdbID) => void retryParseWithTMDB(tmdbID)}
       />
 
       <ConfirmSubscriptionDialog
