@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/autobrr/go-qbittorrent"
@@ -32,8 +33,9 @@ type Config struct {
 
 // QBittorrent 实现Downloader接口
 type QBittorrent struct {
-	client *qbittorrent.Client
-	login  bool
+	client      *qbittorrent.Client
+	initMu      sync.Mutex
+	initialized bool
 }
 
 // NewQBittorrent 创建一个新的QBittorrent实例
@@ -50,7 +52,10 @@ func NewQBittorrent(config Config) *QBittorrent {
 }
 
 func (q *QBittorrent) init() error {
-	if q.login {
+	q.initMu.Lock()
+	defer q.initMu.Unlock()
+
+	if q.initialized {
 		return nil
 	}
 	if err := q.client.Login(); err != nil {
@@ -65,6 +70,7 @@ func (q *QBittorrent) init() error {
 			return fmt.Errorf("创建标签失败: %w", err)
 		}
 	}
+	q.initialized = true
 	return nil
 }
 
