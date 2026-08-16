@@ -9,7 +9,7 @@ RUN npm install -g pnpm && \
     rm -rf node_modules
 
 # 后端构建
-FROM golang:1.24 AS backend-builder
+FROM golang:1.25 AS backend-builder
 
 # 安装 HarfBuzz / FreeType 开发库和构建工具
 RUN apt-get update && apt-get install -y \
@@ -58,4 +58,4 @@ EXPOSE 6937
 # 创建数据卷
 VOLUME ["/config", "/data"]
 
-CMD ["/app/BangumiBuddy"] 
+CMD ["/app/BangumiBuddy"]

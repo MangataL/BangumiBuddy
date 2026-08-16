@@ -1,8 +1,6 @@
 module github.com/MangataL/BangumiBuddy
 
-go 1.24.1
-
-toolchain go1.24.8
+go 1.25.13
 
 // CGO 依赖说明：
 // 字体子集化功能需要 HarfBuzz 库支持
@@ -14,6 +12,7 @@ toolchain go1.24.8
 
 require (
 	github.com/Tnze/go.num/v2 v2.0.0-20191006170829-cb483d4c9152
+	github.com/beevik/etree v1.6.0
 	github.com/creasty/defaults v1.8.0
 	github.com/cyruzin/golang-tmdb v1.6.3
 	github.com/gin-gonic/gin v1.10.0
@@ -23,17 +22,18 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250
+	github.com/liuzl/gocc v0.0.0-20231231122217-0372e1059ca5
 	github.com/mholt/archives v0.1.5
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.49.1
 	github.com/spf13/viper v1.18.2
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.26.0
-	golang.org/x/crypto v0.37.0
-	golang.org/x/image v0.32.0
-	golang.org/x/sync v0.17.0
+	golang.org/x/crypto v0.54.0
+	golang.org/x/sync v0.22.0
 	gorm.io/gorm v1.25.7
 	k8s.io/apimachinery v0.32.3
 )
@@ -41,9 +41,9 @@ require (
 require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
+	github.com/adamzy/cedar-go v0.0.0-20170805034717-80a9c64b256d // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/avast/retry-go v3.0.0+incompatible // indirect
-	github.com/beevik/etree v1.6.0 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
 	github.com/bodgit/sevenzip v1.6.1 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
@@ -53,12 +53,10 @@ require (
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/icza/backscanner v0.0.0-20241124160932-dff01ac50250 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/liuzl/cedar-go v0.0.0-20170805034717-80a9c64b256d // indirect
 	github.com/liuzl/da v0.0.0-20180704015230-14771aad5b1d // indirect
-	github.com/liuzl/gocc v0.0.0-20231231122217-0372e1059ca5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/mikelolasagasti/xz v1.0.1 // indirect
 	github.com/minio/minlz v1.0.1 // indirect
@@ -72,9 +70,9 @@ require (
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.8.0 // indirect
+	github.com/PuerkitoBio/goquery v1.8.0
 	github.com/andybalholm/cascadia v1.3.1 // indirect
-	github.com/autobrr/go-qbittorrent v1.14.0
+	github.com/autobrr/go-qbittorrent v1.18.0
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -113,14 +111,14 @@ require (
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/text v0.30.0 // indirect
+	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6 // indirect
+	golang.org/x/net v0.57.0
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.40.0
 	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.5.7
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect

@@ -207,7 +207,8 @@ func (q *QBittorrent) AddTorrent(ctx context.Context, torrentLink, savePath, sto
 	if stopCondition != "" {
 		opts["stopCondition"] = stopCondition
 	}
-	return q.client.AddTorrentFromUrlCtx(ctx, torrentLink, opts)
+	_, err := q.client.AddTorrentFromUrlCtx(ctx, torrentLink, opts)
+	return err
 }
 
 func (q *QBittorrent) SetLocation(ctx context.Context, hash, savePath string) error {
