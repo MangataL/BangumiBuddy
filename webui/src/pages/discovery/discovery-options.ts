@@ -30,6 +30,10 @@ export const weekdayOptions: WeekdayOption[] = [
 
 export type ScheduleFilter = "all" | "available" | "subscribed";
 
+export function isMovieBangumi(item: BangumiCandidate) {
+  return item.weekday === 7;
+}
+
 export function getCurrentSeason(date = new Date()): Season {
   const month = date.getMonth() + 1;
   if (month <= 3) return SeasonSet.Winter;

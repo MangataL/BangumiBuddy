@@ -39,7 +39,7 @@ interface DiscoverySearchWorkspaceProps {
   onClear: () => void;
   onRetry: () => void;
   onPageChange: (page: number) => void;
-  onOpenDetail: (id: string) => void;
+  onOpenDetail: (id: string, isMovie: boolean) => void;
   onAddResource: (resource: ResourceCandidate) => void;
 }
 
@@ -215,7 +215,7 @@ function SearchBangumiGrid({
   onOpenDetail,
 }: {
   bangumis: BangumiCandidate[];
-  onOpenDetail: (id: string) => void;
+  onOpenDetail: (id: string, isMovie: boolean) => void;
 }) {
   return (
     <div className={discoveryPosterGridClassName}>

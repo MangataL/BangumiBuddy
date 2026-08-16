@@ -17,7 +17,8 @@ interface BangumiPosterCardProps {
   summary?: ReleaseGroupSummary;
   summaryLoading: boolean;
   summaryError?: string;
-  onOpenDetail: (id: string) => void;
+  isMovie?: boolean;
+  onOpenDetail: (id: string, isMovie: boolean) => void;
   onEnsureSummary: (id: string) => void;
   onAddGroup: (bangumiID: string, group: ReleaseGroupCandidate) => void;
   onViewSubscription: (id: string) => void;
@@ -35,7 +36,7 @@ export function BangumiPosterCard(props: BangumiPosterCardProps) {
       item={props.item}
       muted={noReleaseGroups}
       badge={
-        subscribedCount > 0 ? (
+        !props.isMovie && subscribedCount > 0 ? (
           <span className="absolute left-2.5 top-2.5 z-[2] rounded-md bg-emerald-700/90 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white shadow-sm backdrop-blur-sm dark:bg-emerald-600/90">
             已订阅
           </span>
@@ -43,27 +44,29 @@ export function BangumiPosterCard(props: BangumiPosterCardProps) {
       }
       onOpenDetail={props.onOpenDetail}
     >
-      <div
-        className={cn(
-          "flex items-center",
-          noReleaseGroups && "opacity-70"
-        )}
-      >
-        <ReleaseGroupPicker
-          item={props.item}
-          summary={props.summary}
-          loading={props.summaryLoading}
-          error={props.summaryError}
-          className="-ml-1.5"
-          onEnsureSummary={() =>
-            props.onEnsureSummary(props.item.mikanBangumiID)
-          }
-          onAdd={(group) =>
-            props.onAddGroup(props.item.mikanBangumiID, group)
-          }
-          onViewSubscription={props.onViewSubscription}
-        />
-      </div>
+      {!props.isMovie ? (
+        <div
+          className={cn(
+            "flex items-center",
+            noReleaseGroups && "opacity-70"
+          )}
+        >
+          <ReleaseGroupPicker
+            item={props.item}
+            summary={props.summary}
+            loading={props.summaryLoading}
+            error={props.summaryError}
+            className="-ml-1.5"
+            onEnsureSummary={() =>
+              props.onEnsureSummary(props.item.mikanBangumiID)
+            }
+            onAdd={(group) =>
+              props.onAddGroup(props.item.mikanBangumiID, group)
+            }
+            onViewSubscription={props.onViewSubscription}
+          />
+        </div>
+      ) : null}
     </DiscoveryBangumiCard>
   );
 }

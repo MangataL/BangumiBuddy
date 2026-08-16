@@ -112,7 +112,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <PageTransition fadeOut={fadeOut}>
-      <div className="flex h-screen w-full overflow-hidden">
+      <div className="flex h-screen w-full overflow-hidden supports-[height:100dvh]:h-[100dvh]">
         {isMobile ? (
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
@@ -133,7 +133,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             </SheetContent>
           </Sheet>
         ) : (
-          <div className="hidden w-64 flex-col border-r bg-sidebar text-sidebar-foreground md:flex fixed h-screen z-10">
+          <div className="fixed z-10 hidden h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground supports-[height:100dvh]:h-[100dvh] md:flex">
             <NavLinks />
           </div>
         )}
@@ -181,7 +181,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             </DropdownMenu>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
+          <main className="min-h-0 flex-1 overflow-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
             {children}
           </main>
         </div>

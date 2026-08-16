@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import type {
@@ -39,7 +39,7 @@ interface ScheduleWorkspaceProps {
   onActiveWeekdayChange: (weekday: number) => void;
   onBrowseMovies: () => void;
   onRetry: () => void;
-  onOpenDetail: (id: string) => void;
+  onOpenDetail: (id: string, isMovie: boolean) => void;
   onEnsureSummary: (id: string) => void;
   onAddGroup: (bangumiID: string, group: ReleaseGroupCandidate) => void;
   onViewSubscription: (id: string) => void;
@@ -53,6 +53,7 @@ const filters: { value: ScheduleFilter; label: string }[] = [
 
 export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
   const [filter, setFilter] = useState<ScheduleFilter>("all");
+  const scheduleScrollRef = useRef<HTMLDivElement>(null);
   const groups = useMemo(
     () => groupBangumisByWeekday(props.bangumis),
     [props.bangumis]
@@ -72,11 +73,25 @@ export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
       filterScheduleBangumis(
         props.activeBangumis,
         props.summaries,
-        filter
+        props.activeWeekday === 7 ? "all" : filter
       ),
-    [filter, props.activeBangumis, props.summaries]
+    [filter, props.activeBangumis, props.activeWeekday, props.summaries]
   );
   const isMovie = props.activeWeekday === 7;
+
+  const resetScheduleScroll = () => {
+    scheduleScrollRef.current?.scrollTo({ top: 0 });
+  };
+
+  const changeActiveWeekday = (weekday: number) => {
+    resetScheduleScroll();
+    props.onActiveWeekdayChange(weekday);
+  };
+
+  const browseMovies = () => {
+    resetScheduleScroll();
+    props.onBrowseMovies();
+  };
 
   const shiftWeekday = (direction: -1 | 1) => {
     const next = getAdjacentWeekdayValue(
@@ -84,7 +99,7 @@ export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
       props.activeWeekday,
       direction
     );
-    if (next !== undefined) props.onActiveWeekdayChange(next);
+    if (next !== undefined) changeActiveWeekday(next);
   };
 
   return (
@@ -94,8 +109,8 @@ export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
           activeWeekday={props.activeWeekday}
           currentWeekday={props.currentWeekday}
           counts={counts}
-          onChange={props.onActiveWeekdayChange}
-          onBrowseMovies={props.onBrowseMovies}
+          onChange={changeActiveWeekday}
+          onBrowseMovies={browseMovies}
         />
       </div>
 
@@ -119,27 +134,29 @@ export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
           </div>
 
           <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
-            <div
-              className="flex rounded-lg bg-muted p-0.5 sm:rounded-xl sm:p-1"
-              aria-label="筛选番剧"
-            >
-              {filters.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:rounded-lg sm:px-3 sm:py-1.5",
-                    filter === item.value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                  aria-pressed={filter === item.value}
-                  onClick={() => setFilter(item.value)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            {!isMovie ? (
+              <div
+                className="flex rounded-lg bg-muted p-0.5 sm:rounded-xl sm:p-1"
+                aria-label="筛选番剧"
+              >
+                {filters.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:rounded-lg sm:px-3 sm:py-1.5",
+                      filter === item.value
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    aria-pressed={filter === item.value}
+                    onClick={() => setFilter(item.value)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="flex items-center gap-1.5 sm:gap-1">
               {props.loading && props.bangumis.length > 0 && (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground motion-reduce:animate-none sm:hidden" />
@@ -172,7 +189,10 @@ export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pt-3 sm:pt-5">
+        <div
+          ref={scheduleScrollRef}
+          className="min-h-0 flex-1 overflow-y-auto pt-3 sm:pt-5"
+        >
           {props.loading && props.bangumis.length === 0 ? (
             <PosterGridSkeleton />
           ) : props.error && props.bangumis.length === 0 ? (
@@ -211,6 +231,7 @@ export function ScheduleWorkspace(props: ScheduleWorkspaceProps) {
                   >
                     <BangumiPosterCard
                       item={item}
+                      isMovie={isMovie}
                       summary={props.summaries[item.mikanBangumiID]}
                       summaryLoading={props.summaryLoadingIDs.includes(
                         item.mikanBangumiID

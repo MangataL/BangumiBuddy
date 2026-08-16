@@ -132,6 +132,7 @@ export function useSeasonDiscovery() {
   );
 
   useEffect(() => {
+    if (activeWeekday === 7) return;
     const missingIDs = activeBangumis
       .filter(
         (item) =>
@@ -140,7 +141,7 @@ export function useSeasonDiscovery() {
       )
       .map((item) => item.mikanBangumiID);
     void loadReleaseGroups(missingIDs);
-  }, [activeBangumis, loadReleaseGroups, summaries]);
+  }, [activeBangumis, activeWeekday, loadReleaseGroups, summaries]);
 
   const retryReleaseGroups = useCallback(
     (id: string) => {

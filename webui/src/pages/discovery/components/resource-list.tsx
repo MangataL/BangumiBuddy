@@ -28,7 +28,7 @@ export function ResourceList({
           className="flex flex-col gap-3 py-4 first:pt-0 sm:flex-row sm:items-center"
         >
           <div className="min-w-0 flex-1">
-            <p className="line-clamp-2 text-sm font-medium leading-5">
+            <p className="break-all text-sm font-medium leading-5">
               {resource.title}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

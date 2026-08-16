@@ -9,6 +9,7 @@ import {
   filterScheduleBangumis,
   getCurrentSeason,
   groupBangumisByWeekday,
+  isMovieBangumi,
   weekdayOptions,
 } from "./discovery-options";
 
@@ -62,6 +63,11 @@ describe("discovery view model", () => {
     expect(groups[0].map((item) => item.mikanBangumiID)).toEqual(["3"]);
     expect(groups[7].map((item) => item.mikanBangumiID)).toEqual(["movie"]);
     expect(weekdayOptions.some((item) => item.value === 7)).toBe(false);
+  });
+
+  it("把星期值 7 识别为剧场版", () => {
+    expect(isMovieBangumi(candidate("movie", 7))).toBe(true);
+    expect(isMovieBangumi(candidate("tv", 0))).toBe(false);
   });
 
   it("按可订阅和已订阅状态筛选", () => {

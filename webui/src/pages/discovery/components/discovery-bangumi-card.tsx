@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { BangumiCandidate } from "@/api/discovery";
 import { cn } from "@/lib/utils";
 
+import { isMovieBangumi } from "../discovery-options";
 import { PosterImage } from "./poster-image";
 
 interface DiscoveryBangumiCardProps {
@@ -10,7 +11,7 @@ interface DiscoveryBangumiCardProps {
   muted?: boolean;
   badge?: ReactNode;
   children?: ReactNode;
-  onOpenDetail: (id: string) => void;
+  onOpenDetail: (id: string, isMovie: boolean) => void;
 }
 
 export function DiscoveryBangumiCard({
@@ -20,7 +21,8 @@ export function DiscoveryBangumiCard({
   children,
   onOpenDetail,
 }: DiscoveryBangumiCardProps) {
-  const openDetail = () => onOpenDetail(item.mikanBangumiID);
+  const openDetail = () =>
+    onOpenDetail(item.mikanBangumiID, isMovieBangumi(item));
 
   return (
     <article className="discovery-poster group/card min-w-0">

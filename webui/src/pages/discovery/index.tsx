@@ -66,6 +66,7 @@ export default function DiscoveryPage() {
   );
   const [manualParse, setManualParse] = useState<ManualParseContext>();
   const [manualParseSubmitting, setManualParseSubmitting] = useState(false);
+  const [selectedIsMovie, setSelectedIsMovie] = useState(false);
   const candidateRequestIDRef = useRef(0);
   const pendingSubscriptionBangumiIDRef = useRef<string | undefined>(
     undefined
@@ -199,8 +200,9 @@ export default function DiscoveryPage() {
     void seasonDiscovery.refreshReleaseGroups(targetID);
   };
 
-  const openDetail = (id: string) => {
+  const openDetail = (id: string, isMovie: boolean) => {
     invalidateCandidateRequest();
+    setSelectedIsMovie(isMovie);
     void detail.open(id);
   };
 
@@ -264,6 +266,7 @@ export default function DiscoveryPage() {
         detail={detail.detail}
         loading={detail.loading}
         error={detail.error}
+        isMovie={selectedIsMovie}
         onOpenChange={(open) => {
           if (!open) {
             invalidateCandidateRequest();

@@ -31,6 +31,7 @@ interface BangumiInspectorProps {
   detail?: BangumiDetail;
   loading: boolean;
   error: string;
+  isMovie: boolean;
   onOpenChange: (open: boolean) => void;
   onRetry: () => void;
   onAddGroup: (bangumiID: string, group: ReleaseGroupCandidate) => void;
@@ -48,7 +49,9 @@ export function BangumiInspector(props: BangumiInspectorProps) {
         <SheetHeader className="sr-only">
           <SheetTitle>番剧详情</SheetTitle>
           <SheetDescription>
-            查看番剧概况、订阅字幕组并展开下载组内资源
+            {props.isMovie
+              ? "查看剧场版概况并下载资源"
+              : "查看番剧概况、订阅字幕组并展开下载组内资源"}
           </SheetDescription>
         </SheetHeader>
         {props.loading && (
@@ -67,6 +70,7 @@ export function BangumiInspector(props: BangumiInspectorProps) {
         {!props.loading && props.detail && (
           <InspectorContent
             detail={props.detail}
+            isMovie={props.isMovie}
             onSubscribeGroup={(group) =>
               props.onAddGroup(props.detail!.mikanBangumiID, group)
             }
@@ -81,11 +85,13 @@ export function BangumiInspector(props: BangumiInspectorProps) {
 
 function InspectorContent({
   detail,
+  isMovie,
   onSubscribeGroup,
   onViewSubscription,
   onDownloadResource,
 }: {
   detail: BangumiDetail;
+  isMovie: boolean;
   onSubscribeGroup: (group: ReleaseGroupCandidate) => void;
   onViewSubscription: (id: string) => void;
   onDownloadResource: (resource: ResourceCandidate) => void;
@@ -112,7 +118,10 @@ function InspectorContent({
             <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {detail.airStartDate && <span>{detail.airStartDate} 开播</span>}
               {detail.episodeTotalText && <span>{detail.episodeTotalText}</span>}
-              <span>{detail.releaseGroups.length} 个字幕组</span>
+              <span>
+                {detail.releaseGroups.length} 个
+                {isMovie ? "资源组" : "字幕组"}
+              </span>
             </div>
           </div>
         </div>
@@ -131,7 +140,9 @@ function InspectorContent({
         <section className={detail.overview ? "pt-6" : undefined}>
           <div className="mb-4 flex items-baseline justify-between gap-3">
             <div>
-              <h3 className="text-base font-semibold">字幕组</h3>
+              <h3 className="text-base font-semibold">
+                {isMovie ? "下载资源" : "字幕组"}
+              </h3>
             </div>
             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
               {detail.releaseGroups.length} 个
@@ -164,11 +175,13 @@ function InspectorContent({
                           </span>
                         </span>
                       </AccordionTrigger>
-                      <ReleaseGroupAction
-                        group={group}
-                        onSubscribe={onSubscribeGroup}
-                        onViewSubscription={onViewSubscription}
-                      />
+                      {!isMovie ? (
+                        <ReleaseGroupAction
+                          group={group}
+                          onSubscribe={onSubscribeGroup}
+                          onViewSubscription={onViewSubscription}
+                        />
+                      ) : null}
                     </div>
                     <AccordionContent className="border-t border-border/70 pt-4 motion-reduce:animate-none">
                       <ResourceList
@@ -182,7 +195,7 @@ function InspectorContent({
             </Accordion>
           ) : (
             <p className="rounded-xl bg-muted/60 px-4 py-8 text-center text-sm text-muted-foreground">
-              暂无可订阅字幕组
+              {isMovie ? "暂无可用资源" : "暂无可订阅字幕组"}
             </p>
           )}
         </section>
@@ -237,4 +250,3 @@ function ReleaseGroupAction({
     </span>
   );
 }
-
