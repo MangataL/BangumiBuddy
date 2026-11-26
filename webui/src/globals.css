@@ -278,23 +278,6 @@
   transform: scale(1.1);
 }
 
-/* 详情展开动画 */
-.animate-accordion-down {
-  animation: accordion-down 0.3s ease-out;
-}
-
-@keyframes accordion-down {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* 确保详情卡片有合适的z-index */
 .subscription-detail-card {
   position: relative;

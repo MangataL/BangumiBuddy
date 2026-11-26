@@ -40,6 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 import subscriptionAPI, {
   type Bangumi,
+  type BangumiBase,
   type RSSMatch,
   type TorrentFile,
   ReleaseGroupSubscription,
@@ -94,33 +95,34 @@ export interface SubscriptionInit {
 }
 
 interface SubscriptionDetailDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  bangumi: BangumiBase;
   selectedSubscriptionID: string;
-  releaseGroups: ReleaseGroupSubscription[];
   onClose: () => void;
 }
 
 export function SubscriptionDetailDialog({
-  open,
-  onOpenChange,
+  bangumi,
   selectedSubscriptionID,
-  releaseGroups,
   onClose,
 }: SubscriptionDetailDialogProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("config");
-  const [selectedSubGroup, setSelectedSubGroup] = useState<string | null>(null);
+  const [selectedSubGroup, setSelectedSubGroup] = useState<string | null>(
+    () => bangumi.releaseGroups.find(
+      (group) => group.subscriptionID === selectedSubscriptionID
+    )?.releaseGroup ?? null
+  );
   const [loading, setLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [bangumiDetails, setBangumiDetails] = useState<Bangumi | null>(null);
+  const [loadedBackdrop, setLoadedBackdrop] = useState("");
   const [rssMatches, setRssMatches] = useState<RSSMatch[]>([]);
-  const [subscriptionID, setSubscriptionID] = useState<string>("");
+  const [subscriptionID, setSubscriptionID] = useState(selectedSubscriptionID);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [curReleaseGroups, setCurReleaseGroups] =
-    useState<ReleaseGroupSubscription[]>(releaseGroups);
+    useState(bangumi.releaseGroups);
   const [torrents, setTorrents] = useState<Torrent[]>([]);
   const [refreshInterval, setRefreshInterval] = useState<number>(10000);
   const [showFileDetails, setShowFileDetails] = useState(false);
@@ -284,26 +286,6 @@ export function SubscriptionDetailDialog({
     return () => clearRefreshTimer();
   }, [activeTab, subscriptionID]);
 
-  // 当subscription变化时自动选择字幕组和设置subscriptionID
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (selectedSubscriptionID) {
-      setSubscriptionID(selectedSubscriptionID);
-    }
-    setCurReleaseGroups(releaseGroups);
-    if (releaseGroups && releaseGroups.length > 0) {
-      setSelectedSubGroup(
-        releaseGroups.find(
-          (group) => group.subscriptionID === selectedSubscriptionID
-        )?.releaseGroup as string
-      );
-    } else {
-      setSelectedSubGroup(null);
-    }
-  }, [open]);
-
   // 内部处理字幕组选择
   const handleReleaseGroupClick = (
     groupName: string,
@@ -316,24 +298,6 @@ export function SubscriptionDetailDialog({
     setSelectedSubGroup(groupName);
     setSubscriptionID(subscriptionID);
     setConfigLoaded(false);
-  };
-
-  // 重置状态函数
-  const resetState = () => {
-    clearRefreshTimer();
-    setActiveTab("config");
-    setRssMatches([]);
-    setSubscriptionID("");
-    setSelectedItems([]);
-    setConfigLoaded(false);
-    setTorrents([]);
-  };
-
-  // 增强版onClose处理函数
-  const handleClose = () => {
-    resetState();
-    onClose();
-    onOpenChange(false);
   };
 
   const fetchBangumiDetails = async (subscriptionID: string) => {
@@ -393,7 +357,7 @@ export function SubscriptionDetailDialog({
       season: bangumiDetails.season,
     });
     if (bangumiBases.length === 0) {
-      handleClose();
+      onClose();
       return;
     }
     const bangumiBase = bangumiBases[0];
@@ -854,17 +818,14 @@ export function SubscriptionDetailDialog({
   return (
     <>
       <div
-        className={cn(
-          "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20",
-          !open && "hidden"
-        )}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 motion-safe:ease-out"
         onClick={(e) => {
           e.stopPropagation();
-          handleClose();
+          onClose();
         }}
       >
         <div
-          className="animate-accordion-down shadow-xl subscription-detail-card bg-background rounded-xl scrollbar-hide"
+          className="subscription-detail-card shadow-xl bg-background rounded-xl scrollbar-hide motion-safe:animate-in motion-safe:slide-in-from-top-2.5 motion-safe:duration-300 motion-safe:ease-out"
           style={{
             width: "min(92dvw, 1000px)",
             maxHeight: "92dvh",
@@ -876,23 +837,26 @@ export function SubscriptionDetailDialog({
             {/* 背景图和信息区域 */}
             <div className="relative">
               {/* 背景图 */}
-              <div
-                className="absolute inset-0 bg-cover bg-center"
-                style={{
-                  backgroundImage: `url(${bangumiDetails?.backdropURL})`,
-                  backgroundPosition: "top",
-                  filter: "blur(5px)",
-                  opacity: 0.7,
-                }}
-              />
+              {bangumiDetails?.backdropURL && (
+                <img
+                  key={bangumiDetails.backdropURL}
+                  src={bangumiDetails.backdropURL}
+                  alt=""
+                  onLoad={() => setLoadedBackdrop(bangumiDetails.backdropURL)}
+                  className={cn(
+                    "pointer-events-none absolute inset-0 h-full w-full object-cover object-top blur-[5px] motion-safe:transition-opacity motion-safe:duration-300",
+                    loadedBackdrop === bangumiDetails.backdropURL ? "opacity-70" : "opacity-0"
+                  )}
+                />
+              )}
 
               {/* 内容区域 */}
               <div className="relative flex p-4 md:p-6 pb-6 md:pb-8">
                 {/* 海报 */}
                 <div className="w-[120px] h-[180px] md:w-[180px] md:h-[270px] rounded-lg overflow-hidden shadow-lg mr-4 md:mr-6 flex-shrink-0">
                   <img
-                    src={bangumiDetails?.posterURL}
-                    alt={bangumiDetails?.name}
+                    src={bangumiDetails?.posterURL || bangumi.posterURL || undefined}
+                    alt={bangumiDetails?.name || bangumi.bangumiName}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -903,7 +867,7 @@ export function SubscriptionDetailDialog({
                     {/* 标题和关闭按钮 */}
                     <div className="flex justify-between items-start">
                       <h3 className="text-lg md:text-3xl font-bold text-foreground truncate pr-2">
-                        {bangumiDetails?.name}{" "}
+                        {bangumiDetails?.name || bangumi.bangumiName}{" "}
                         <span className="text-muted-foreground text-sm md:text-base">
                           {bangumiDetails?.year
                             ? `(${bangumiDetails.year})`
@@ -916,7 +880,7 @@ export function SubscriptionDetailDialog({
                         className="rounded-full text-foreground hover:text-foreground hover:bg-muted"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleClose();
+                          onClose();
                         }}
                       >
                         <X className="h-5 w-5" />
