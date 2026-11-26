@@ -18,8 +18,10 @@ export class TokenService {
   static storeTokens(tokens: Tokens, remember: boolean) {
     if (remember) {
       localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
     } else {
       sessionStorage.setItem(SESSION_TOKEN_KEY, JSON.stringify(tokens));
+      localStorage.removeItem(TOKEN_KEY);
     }
   }
 
