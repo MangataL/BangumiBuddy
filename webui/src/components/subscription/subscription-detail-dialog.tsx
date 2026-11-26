@@ -1440,8 +1440,8 @@ export function SubscriptionDetailDialog({
                                       key={index}
                                       className="rounded-xl border p-2 text-sm transition-all duration-200"
                                     >
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex min-w-0 flex-1 items-center gap-2">
                                           <Checkbox
                                             id={`select-${item.guid}`}
                                             checked={selectedItems.includes(
@@ -1463,7 +1463,7 @@ export function SubscriptionDetailDialog({
                                                 <div className="flex-1 flex items-center gap-2 min-w-0">
                                                   <span
                                                     className={cn(
-                                                      "flex w-full max-w-[200px] sm:max-w-[500px]",
+                                                      "min-w-0 flex-1 [overflow-wrap:anywhere]",
                                                       item.processed &&
                                                         "text-muted-foreground"
                                                     )}

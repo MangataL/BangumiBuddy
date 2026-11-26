@@ -136,5 +136,9 @@ export function TruncatedText({ text }: { text: string }) {
     return () => resizeObserver.disconnect();
   }, [text, truncateText, context]);
 
-  return <div ref={containerRef}>{truncatedText}</div>;
+  return (
+    <div ref={containerRef} className="w-full min-w-0">
+      {truncatedText}
+    </div>
+  );
 }
