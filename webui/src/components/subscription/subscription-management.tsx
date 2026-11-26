@@ -33,7 +33,6 @@ export default function SubscriptionManagement() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
   const [recentUpdatesDialogOpen, setRecentUpdatesDialogOpen] = useState(false);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [expandedPoster, setExpandedPoster] = useState<BangumiBase | null>(null);
   const posterPointerType = useRef("");
   const [selectedBangumi, setSelectedBangumi] = useState<BangumiBase | null>(
@@ -94,7 +93,6 @@ export default function SubscriptionManagement() {
     if (!bangumi) return;
     setSelectedBangumi(bangumi);
     setSelectedSubscriptionID(subscriptionID);
-    setDetailDialogOpen(true);
     setSearchParams({}, { replace: true });
   }, [bangumis, searchParams, setSearchParams]);
 
@@ -105,7 +103,6 @@ export default function SubscriptionManagement() {
         setSelectedSubscriptionID(bangumi.releaseGroups[0].subscriptionID);
       }
       setSelectedBangumi(bangumi);
-      setDetailDialogOpen(true);
     } else {
       // 正常不会走到这里，都会有订阅信息
       toast({
@@ -125,11 +122,9 @@ export default function SubscriptionManagement() {
     setExpandedPoster(null);
     setSelectedBangumi(bangumi);
     setSelectedSubscriptionID(releaseGroup.subscriptionID);
-    setDetailDialogOpen(true);
   };
 
   const handleDetailClose = () => {
-    setDetailDialogOpen(false);
     setSelectedBangumi(null);
     setSelectedSubscriptionID("");
     fetchBangumis();
@@ -370,13 +365,14 @@ export default function SubscriptionManagement() {
         </div>
       </div>
 
-      <SubscriptionDetailDialog
-        open={detailDialogOpen}
-        onOpenChange={setDetailDialogOpen}
-        selectedSubscriptionID={selectedSubscriptionID}
-        releaseGroups={selectedBangumi?.releaseGroups || []}
-        onClose={handleDetailClose}
-      />
+      {selectedBangumi && (
+        <SubscriptionDetailDialog
+          key={selectedSubscriptionID}
+          bangumi={selectedBangumi}
+          selectedSubscriptionID={selectedSubscriptionID}
+          onClose={handleDetailClose}
+        />
+      )}
     </div>
   );
 }
