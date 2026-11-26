@@ -58,9 +58,14 @@ func (w *Web) ListBangumis(ctx context.Context, req subscriber.ListBangumiReq) (
 		return nil, err
 	}
 
-	bangumiMap := make(map[string]BangumiBase)
+	type seasonKey struct {
+		name   string
+		season int
+	}
+	bangumiMap := make(map[seasonKey]BangumiBase)
 	for _, bangumi := range bangumis {
-		bangumiBase, ok := bangumiMap[bangumi.Name]
+		key := seasonKey{name: bangumi.Name, season: bangumi.Season}
+		bangumiBase, ok := bangumiMap[key]
 		if !ok {
 			bangumiBase = BangumiBase{
 				BangumiName:   bangumi.Name,
@@ -85,7 +90,7 @@ func (w *Web) ListBangumis(ctx context.Context, req subscriber.ListBangumiReq) (
 			Priority:        bangumi.Priority,
 			Active:          bangumi.Active,
 		})
-		bangumiMap[bangumi.Name] = bangumiBase
+		bangumiMap[key] = bangumiBase
 	}
 
 	bangumiBases := make([]BangumiBase, 0, len(bangumiMap))

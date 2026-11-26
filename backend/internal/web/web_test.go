@@ -8,7 +8,36 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 )
+
+func TestListBangumisGroupsSubscriptionsByNameAndSeason(t *testing.T) {
+	subscriptions := subscriber.NewMockInterface(gomock.NewController(t))
+	req := subscriber.ListBangumiReq{}
+	subscriptions.EXPECT().List(gomock.Any(), req).Return([]subscriber.Bangumi{
+		{Name: "彻夜之歌", Season: 2, PosterURL: "poster-2", ReleaseGroup: "A", SubscriptionID: "s2-a"},
+		{Name: "彻夜之歌", Season: 1, PosterURL: "poster-1", ReleaseGroup: "B", SubscriptionID: "s1-b"},
+		{Name: "另一部番剧", Season: 1, ReleaseGroup: "A", SubscriptionID: "other"},
+		{Name: "彻夜之歌", Season: 1, PosterURL: "poster-1", ReleaseGroup: "A", SubscriptionID: "s1-a"},
+	}, nil)
+
+	got, err := New(Dependency{Subscriber: subscriptions}).ListBangumis(t.Context(), req)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.ElementsMatch(t, []BangumiBase{
+		{BangumiName: "彻夜之歌", Season: 1, PosterURL: "poster-1", ReleaseGroups: []ReleaseGroupSubsription{
+			{ReleaseGroup: "A", SubscriptionID: "s1-a"}, {ReleaseGroup: "B", SubscriptionID: "s1-b"},
+		}},
+		{BangumiName: "彻夜之歌", Season: 2, PosterURL: "poster-2", ReleaseGroups: []ReleaseGroupSubsription{
+			{ReleaseGroup: "A", SubscriptionID: "s2-a"},
+		}},
+		{BangumiName: "另一部番剧", Season: 1, ReleaseGroups: []ReleaseGroupSubsription{
+			{ReleaseGroup: "A", SubscriptionID: "other"},
+		}},
+	}, got)
+}
 
 func TestWeb_ListDirs(t *testing.T) {
 	tempDir := t.TempDir()
