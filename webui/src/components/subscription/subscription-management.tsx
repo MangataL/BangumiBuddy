@@ -2,7 +2,7 @@ import type React from "react";
 
 import { cn } from "@/lib/utils";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Plus,
@@ -34,6 +34,8 @@ export default function SubscriptionManagement() {
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
   const [recentUpdatesDialogOpen, setRecentUpdatesDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [expandedPoster, setExpandedPoster] = useState<BangumiBase | null>(null);
+  const posterPointerType = useRef("");
   const [selectedBangumi, setSelectedBangumi] = useState<BangumiBase | null>(
     null
   );
@@ -98,6 +100,7 @@ export default function SubscriptionManagement() {
 
   const handleBangumiClick = (bangumi: BangumiBase) => {
     if (bangumi.releaseGroups.length > 0) {
+      setExpandedPoster(null);
       if (!selectedSubscriptionID) {
         setSelectedSubscriptionID(bangumi.releaseGroups[0].subscriptionID);
       }
@@ -119,6 +122,7 @@ export default function SubscriptionManagement() {
     e: React.MouseEvent
   ) => {
     e.stopPropagation();
+    setExpandedPoster(null);
     setSelectedBangumi(bangumi);
     setSelectedSubscriptionID(releaseGroup.subscriptionID);
     setDetailDialogOpen(true);
@@ -245,7 +249,8 @@ export default function SubscriptionManagement() {
             >
               <Card
                 className={cn(
-                  "anime-card overflow-hidden border-primary/10 cursor-pointer transition-all duration-300 hover:scale-105 w-full",
+                  "anime-card overflow-hidden border-primary/10 cursor-pointer transition-all duration-300 [@media(hover:hover)]:hover:scale-105 motion-reduce:!transform-none motion-reduce:!transition-none w-full",
+                  expandedPoster === bangumi && "scale-105",
                   selectedBangumi?.bangumiName === bangumi.bangumiName &&
                     selectedBangumi?.season === bangumi.season &&
                     "scale-105 border-primary/30 shadow-lg"
@@ -253,7 +258,24 @@ export default function SubscriptionManagement() {
                 onClick={() => handleBangumiClick(bangumi)}
               >
                 <div className="flex flex-col h-full">
-                  <div className="relative w-full h-[195px] xs:h-[240px] overflow-hidden group">
+                  <div
+                    className="relative w-full h-[195px] xs:h-[240px] overflow-hidden group"
+                    onPointerDown={(event) => {
+                      posterPointerType.current = event.pointerType;
+                    }}
+                    onPointerEnter={(event) => {
+                      if (event.pointerType === "mouse") setExpandedPoster(bangumi);
+                    }}
+                    onPointerLeave={(event) => {
+                      if (event.pointerType === "mouse") setExpandedPoster(null);
+                    }}
+                    onClick={(event) => {
+                      if (!bangumi.releaseGroups.length || expandedPoster === bangumi) return;
+                      if (event.detail > 0 && posterPointerType.current === "mouse") return;
+                      event.stopPropagation();
+                      setExpandedPoster(bangumi);
+                    }}
+                  >
                     <img
                       src={
                         bangumi.posterURL ||
@@ -262,29 +284,25 @@ export default function SubscriptionManagement() {
                       alt={bangumi.bangumiName}
                       style={{ width: "100%", height: "100%" }}
                       className={cn(
-                        "object-cover absolute top-0 left-0 transition-transform duration-500 group-hover:scale-110",
+                        "object-cover absolute top-0 left-0 transition-transform duration-500 motion-reduce:transition-none",
+                        expandedPoster === bangumi && "motion-safe:scale-110",
                         !bangumi.releaseGroups.some((group) => group.active) &&
                           "filter grayscale"
                       )}
                     />
-                    <div className="absolute top-2 right-2 z-20">
-                      <Badge className="rounded-full bg-primary/80 px-2 py-1 text-xs font-bold">
-                        S{bangumi.season}
-                      </Badge>
-                    </div>
-
-                    {!bangumi.releaseGroups.some((group) => group.active) && (
-                      <div className="absolute bottom-2 left-2 z-20">
-                        <Badge
-                          variant="outline"
-                          className="rounded-full bg-background/70 px-2 text-xs"
-                        >
-                          已禁用
-                        </Badge>
-                      </div>
-                    )}
-
-                    <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-center p-4 overflow-y-auto">
+                    <button
+                      type="button"
+                      className="absolute inset-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                      aria-label={`${bangumi.bangumiName} 第 ${bangumi.season} 季字幕组`}
+                      aria-expanded={expandedPoster === bangumi}
+                    />
+                    <div
+                      inert={expandedPoster !== bangumi}
+                      className={cn(
+                        "absolute inset-0 bg-black/70 transition-opacity duration-300 motion-reduce:transition-none flex flex-col justify-center p-4 overflow-y-auto",
+                        expandedPoster === bangumi ? "opacity-100 transform-gpu" : "opacity-0"
+                      )}
+                    >
                       <div className="space-y-2">
                         {bangumi.releaseGroups.map((group, index) => (
                           <button
@@ -311,6 +329,29 @@ export default function SubscriptionManagement() {
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "pointer-events-none absolute inset-0 z-20",
+                        expandedPoster === bangumi && "transform-gpu"
+                      )}
+                    >
+                      <div className="absolute top-2 right-2">
+                        <Badge className="rounded-full bg-primary/80 px-2 py-1 text-xs font-bold">
+                          S{bangumi.season}
+                        </Badge>
+                      </div>
+
+                      {!bangumi.releaseGroups.some((group) => group.active) && (
+                        <div className="absolute bottom-2 left-2">
+                          <Badge
+                            variant="outline"
+                            className="rounded-full bg-background/70 px-2 text-xs"
+                          >
+                            已禁用
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   </div>
 
