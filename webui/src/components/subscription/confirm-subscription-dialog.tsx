@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -27,7 +26,6 @@ import {
   Calendar,
   Hash,
   Users,
-  Type,
   Flag,
   MapPin,
   Clock,
@@ -39,102 +37,115 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
-import { subscriptionAPI, RSSMatch } from "@/api/subscription";
+import {
+  subscriptionAPI,
+  type RSSMatch,
+  type ParseRSSResponse,
+  type SubscribeRequest,
+} from "@/api/subscription";
 import { useToast } from "@/hooks/useToast";
 import { MatchInput } from "../common/match-input";
 import { EpisodePositionInput } from "./episode-position-input";
 import { TMDBInput } from "@/components/tmdb";
-import { getSortedWeekDays, formatDate } from "@/utils/time";
-import { ParseRSSResponse, SubscribeRequest } from "@/api/subscription";
+import { getSortedWeekDays, formatDate, isValidWeekDay } from "@/utils/time";
 import { extractErrorMessage } from "@/utils/error";
-import { Meta } from "@/api/meta";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-
-import { debounce } from "@/utils/debounce";
-import { useCallback, useRef } from "react";
+import { useParseSubscription } from "./use-parse-subscription";
 
 interface ConfirmSubscriptionDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   parseRSSRsp: ParseRSSResponse;
   defaultPriority?: number;
   onSubscribed?: () => void;
 }
 
-// 扩展 SubscribeRequest 类型，添加表单所需的额外字段
-interface BangumiFormState extends SubscribeRequest {
-  name: string;
-  year: string;
-  backdropURL: string;
-  posterURL: string;
+function positiveInteger(value: number) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function regularSeasons(result?: ParseRSSResponse) {
+  return (result?.seasons ?? []).filter((season) =>
+    positiveInteger(season.number)
+  );
+}
+
+function parsedSeasonFields(result: ParseRSSResponse) {
+  const seasons = regularSeasons(result);
+  const validSeason =
+    positiveInteger(result.season) &&
+    (seasons.length === 0 ||
+      seasons.some((season) => season.number === result.season));
+  return {
+    tmdbID: result.tmdbID,
+    season: validSeason ? result.season : 0,
+    episodeTotalNum: validSeason ? result.episodeTotalNum : 0,
+    airWeekday: result.airWeekday ?? 0,
+  };
 }
 
 export function ConfirmSubscriptionDialog({
-  open,
-  onOpenChange,
+  onClose,
   parseRSSRsp,
   defaultPriority = 1,
   onSubscribed,
 }: ConfirmSubscriptionDialogProps) {
   const { toast } = useToast();
-
-  const [bangumiInfo, setBangumiInfo] = useState<BangumiFormState>({
-    name: "",
-    season: 0,
-    year: "",
-    tmdbID: 0,
-    rssLink: "",
-    releaseGroup: "",
-    episodeTotalNum: 0,
-    airWeekday: 0,
+  const [metadata, setMetadata] = useState<ParseRSSResponse | undefined>(
+    parseRSSRsp
+  );
+  const [subscription, setSubscription] = useState<SubscribeRequest>(() => ({
+    ...parsedSeasonFields(parseRSSRsp),
+    rssLink: parseRSSRsp.rssLink,
+    releaseGroup: parseRSSRsp.releaseGroup,
     includeRegs: [],
     excludeRegs: [],
     episodeOffset: 0,
     priority: Math.max(1, defaultPriority),
     episodeLocation: "",
-    backdropURL: "",
-    posterURL: "",
+  }));
+  const [submitting, setSubmitting] = useState(false);
+  const { parse, cancel, loading } = useParseSubscription((result) => {
+    setMetadata(result);
+    setSubscription((prev) => ({ ...prev, ...parsedSeasonFields(result) }));
   });
-
-  // 监听 parseRSSRsp 变化
-  useEffect(() => {
-    if (parseRSSRsp && open) {
-      setBangumiInfo((prev) => ({
-        ...prev,
-        name: parseRSSRsp.name,
-        season: parseRSSRsp.season,
-        year: parseRSSRsp.year,
-        tmdbID: parseRSSRsp.tmdbID,
-        rssLink: parseRSSRsp.rssLink,
-        releaseGroup: parseRSSRsp.releaseGroup,
-        episodeTotalNum: parseRSSRsp.episodeTotalNum,
-        airWeekday: parseRSSRsp.airWeekday,
-        priority: Math.max(1, defaultPriority),
-        backdropURL: parseRSSRsp.backdropURL,
-        posterURL: parseRSSRsp.posterURL,
-      }));
-    }
-  }, [defaultPriority, open, parseRSSRsp]);
-
-  const [fieldErrors, setFieldErrors] = useState({
-    season: "",
-    airWeekday: "",
-    tmdbID: "",
-    releaseGroup: "",
-    episodeTotalNum: "",
-  });
+  const seasons = regularSeasons(metadata);
+  const selectedSeason = seasons.find(
+    (season) => season.number === subscription.season
+  );
+  const posterURL = selectedSeason
+    ? selectedSeason.posterURL
+    : metadata?.posterURL;
+  const year = selectedSeason
+    ? selectedSeason.airDate.slice(0, 4)
+    : metadata?.year;
+  const validSeason =
+    positiveInteger(subscription.season) &&
+    (seasons.length === 0 || Boolean(selectedSeason));
+  const validEpisodes = positiveInteger(subscription.episodeTotalNum);
+  const validGroup = Boolean(subscription.releaseGroup.trim());
+  const validID =
+    positiveInteger(subscription.tmdbID) &&
+    metadata?.tmdbID === subscription.tmdbID;
+  const canSubscribe =
+    validID &&
+    validSeason &&
+    validEpisodes &&
+    validGroup &&
+    Boolean(subscription.rssLink.trim()) &&
+    Number.isSafeInteger(subscription.priority) &&
+    Number.isSafeInteger(subscription.episodeOffset) &&
+    isValidWeekDay(subscription.airWeekday) &&
+    !loading &&
+    !submitting;
 
   const [previewMatches, setPreviewMatches] = useState<RSSMatch[]>([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
-  // 预览函数
-  const preview = async (
-    rssLink: string,
-    includeRegs: string[],
-    excludeRegs: string[]
-  ) => {
+  const previewRequest = useRef(0);
+  const { rssLink, includeRegs, excludeRegs } = subscription;
+  const handlePreview = useCallback(async () => {
     if (!rssLink) return;
+    const request = ++previewRequest.current;
     setIsPreviewLoading(true);
     try {
       const matches = await subscriptionAPI.previewRSSMatch({
@@ -142,162 +153,77 @@ export function ConfirmSubscriptionDialog({
         includeRegs,
         excludeRegs,
       });
-      setPreviewMatches(matches);
+      if (request === previewRequest.current) setPreviewMatches(matches);
+    } catch (error) {
+      if (request === previewRequest.current) {
+        toast({
+          title: "预览失败",
+          description: extractErrorMessage(error),
+          variant: "destructive",
+        });
+      }
+    } finally {
+      if (request === previewRequest.current) setIsPreviewLoading(false);
+    }
+  }, [rssLink, includeRegs, excludeRegs, toast]);
+
+  useEffect(() => {
+    const timer = setTimeout(handlePreview, 500);
+    return () => {
+      clearTimeout(timer);
+      previewRequest.current++;
+    };
+  }, [handlePreview]);
+
+  const handleSubscribe = async () => {
+    if (!canSubscribe) return;
+    setSubmitting(true);
+    try {
+      await subscriptionAPI.subscribe(subscription);
+      onClose();
+      toast({ title: "订阅成功" });
+      onSubscribed?.();
     } catch (error) {
       toast({
-        title: "预览失败",
+        title: "订阅失败",
         description: extractErrorMessage(error),
         variant: "destructive",
       });
     } finally {
-      setIsPreviewLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // 使用 useRef 保存防抖函数，确保每次渲染都使用同一个防抖实例
-  const debouncedPreview = useRef(
-    debounce(
-      (rssLink: string, includeRegs: string[], excludeRegs: string[]) =>
-        preview(rssLink, includeRegs, excludeRegs),
-      500
-    )
-  ).current;
+  function updateSubscription<K extends keyof SubscribeRequest>(
+    field: K,
+    value: SubscribeRequest[K]
+  ) {
+    setSubscription((prev) => ({ ...prev, [field]: value }));
+  }
 
-  // 手动触发预览（不防抖）
-  const handlePreview = () => {
-    preview(
-      bangumiInfo.rssLink,
-      bangumiInfo.includeRegs,
-      bangumiInfo.excludeRegs
-    );
-  };
-
-  // 监听匹配条件变化，自动触发预览
-  useEffect(() => {
-    if (open && bangumiInfo.rssLink) {
-      debouncedPreview(
-        bangumiInfo.rssLink,
-        bangumiInfo.includeRegs,
-        bangumiInfo.excludeRegs
-      );
-    }
-  }, [
-    bangumiInfo.includeRegs,
-    bangumiInfo.excludeRegs,
-    bangumiInfo.rssLink,
-    open,
-  ]);
-
-  const validateField = (field: string, value: any) => {
-    let error = "";
-    switch (field) {
-      case "season":
-        if (!value) error = "请填写季度";
-        break;
-      case "tmdbID":
-        if (!value) error = "请填写TMDB ID";
-        break;
-      case "releaseGroup":
-        if (!value.trim()) error = "请填写字幕组";
-        break;
-      case "episodeTotalNum":
-        if (!value) error = "请填写总集数";
-        break;
-    }
-    setFieldErrors((prev) => ({ ...prev, [field]: error }));
-    return !error;
-  };
-
-  const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      setBangumiInfo({
-        name: "",
-        season: 0,
-        year: "",
-        tmdbID: 0,
-        rssLink: "",
-        releaseGroup: "",
-        episodeTotalNum: 0,
-        airWeekday: 0,
-        includeRegs: [],
-        excludeRegs: [],
-        episodeOffset: 0,
-        priority: 1,
-        episodeLocation: "",
-        backdropURL: "",
-        posterURL: "",
-      });
-    }
-    setFieldErrors({
-      season: "",
-      airWeekday: "",
-      tmdbID: "",
-      releaseGroup: "",
-      episodeTotalNum: "",
-    });
-    onOpenChange(open);
-  };
-
-  const handleSubscribe = async () => {
-    try {
-      // 移除额外的字段，只保留 SubscribeRequest 需要的字段
-      const { name, year, ...subscribeData } = bangumiInfo;
-      await subscriptionAPI.subscribe(subscribeData);
-      handleOpenChange(false);
-      toast({
-        title: "订阅成功",
-        variant: "default",
-      });
-      if (onSubscribed) {
-        onSubscribed();
-      }
-    } catch (error) {
-      const description = extractErrorMessage(error);
-      toast({
-        title: "订阅失败",
-        description: description,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const updateBangumiInfo = (field: keyof BangumiFormState, value: any) => {
-    validateField(field, value);
-    setBangumiInfo((prev) => ({
+  const changeTMDBID = (tmdbID: number) => {
+    cancel();
+    setMetadata(undefined);
+    setSubscription((prev) => ({
       ...prev,
-      [field]: value,
+      tmdbID,
+      season: 0,
+      episodeTotalNum: 0,
+      airWeekday: 0,
     }));
   };
 
-  // 处理TMDB ID变化（仅ID）
-  const handleTMDBIDChange = (tmdbID: number) => {
-    updateBangumiInfo("tmdbID", tmdbID);
-  };
-
-  // 处理TMDB元数据变化（完整信息）
-  const handleTMDBMetaChange = (meta: Meta) => {
-    setBangumiInfo((prev) => ({
-      ...prev,
-      tmdbID: meta.tmdbID,
-      name: meta.chineseName,
-      year: meta.year,
-      season: meta.season,
-      episodeTotalNum: meta.episodeTotalNum,
-      airWeekday: meta.airWeekday || 0,
-      posterURL: meta.posterURL,
-      backdropURL: meta.backdropURL,
-    }));
-
-    // 验证相关字段
-    validateField("tmdbID", meta.tmdbID);
-    validateField("season", meta.season);
-    validateField("episodeTotalNum", meta.episodeTotalNum);
+  const confirmTMDBID = (tmdbID: number) => {
+    changeTMDBID(tmdbID);
+    void parse(rssLink, tmdbID);
   };
 
   return (
     <Dialog
-      open={Boolean(open && parseRSSRsp.name)}
-      onOpenChange={handleOpenChange}
+      open
+      onOpenChange={() => {
+        if (!submitting) onClose();
+      }}
     >
       <DialogContent className="max-w-lg w-[95dvw] max-h-[90dvh] overflow-y-auto rounded-2xl border-primary/20 bg-card/95 backdrop-blur-md sm:max-w-lg scrollbar-hide p-0 [&>button:last-child]:hidden">
         <div className="relative w-full overflow-hidden rounded-t-2xl">
@@ -306,7 +232,7 @@ export function ConfirmSubscriptionDialog({
             className="absolute inset-0 bg-cover bg-center"
             style={{
               backgroundImage: `url(${
-                bangumiInfo.backdropURL || bangumiInfo.posterURL
+                metadata?.backdropURL || posterURL || ""
               })`,
               backgroundPosition: "center",
               filter: "blur(4px) brightness(0.5)",
@@ -330,7 +256,9 @@ export function ConfirmSubscriptionDialog({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-full border border-white/20 bg-black/10 text-white/70 hover:bg-black/30 hover:text-white backdrop-blur-md transition-all -mr-2 -mt-2"
-                onClick={() => handleOpenChange(false)}
+                onClick={onClose}
+                aria-label="关闭订阅确认"
+                disabled={submitting}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -339,11 +267,11 @@ export function ConfirmSubscriptionDialog({
             <div className="flex gap-5 mt-4">
               {/* 海报 */}
               <div className="relative w-28 h-40 flex-shrink-0 rounded-xl bg-card/20 backdrop-blur-sm border-2 border-white/20 overflow-hidden shadow-2xl">
-                {bangumiInfo.posterURL ? (
+                {posterURL ? (
                   <img
-                    src={bangumiInfo.posterURL}
+                    src={posterURL}
                     className="w-full h-full object-cover"
-                    alt={bangumiInfo.name}
+                    alt={metadata?.name ?? ""}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-white/40">
@@ -355,14 +283,14 @@ export function ConfirmSubscriptionDialog({
               {/* 番剧简要信息 */}
               <div className="flex-1 flex flex-col justify-end pb-1">
                 <h3 className="text-2xl font-bold text-white mb-3 line-clamp-2 leading-tight drop-shadow-md">
-                  {bangumiInfo.name}
+                  {metadata?.name ?? ""}
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/20 text-white backdrop-blur-md border border-white/10">
-                    {bangumiInfo.year || "未知年份"}
+                    {year || "未知年份"}
                   </span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/40 text-white backdrop-blur-md border border-white/10">
-                    第 {bangumiInfo.season} 季
+                    {validSeason ? `第 ${subscription.season} 季` : "待选季"}
                   </span>
                 </div>
               </div>
@@ -411,7 +339,7 @@ export function ConfirmSubscriptionDialog({
                     <Tv className="w-4 h-4" /> 番剧名称
                   </Label>
                   <Input
-                    value={bangumiInfo.name}
+                    value={metadata?.name ?? ""}
                     readOnly
                     className="rounded-xl bg-muted/30 border-muted-foreground/10 cursor-default focus-visible:ring-0"
                   />
@@ -425,19 +353,57 @@ export function ConfirmSubscriptionDialog({
                     >
                       <Clock className="w-4 h-4" /> 季度
                     </Label>
-                    <Input
-                      id="season"
-                      type="number"
-                      value={bangumiInfo.season}
-                      onChange={(e) =>
-                        updateBangumiInfo("season", parseInt(e.target.value))
-                      }
-                      className={cn(
-                        "rounded-xl bg-muted/30 border-muted-foreground/10",
-                        fieldErrors.season &&
-                          "border-destructive focus-visible:ring-destructive"
-                      )}
-                    />
+                    {seasons.length > 0 ? (
+                      <Select
+                        value={selectedSeason?.number.toString() ?? ""}
+                        onValueChange={(value) => {
+                          const season = seasons.find(
+                            (item) => item.number === Number(value)
+                          );
+                          if (season) {
+                            setSubscription((prev) => ({
+                              ...prev,
+                              season: season.number,
+                              episodeTotalNum: season.episodeTotalNum,
+                            }));
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          id="season"
+                          aria-invalid={!validSeason}
+                          className="rounded-xl bg-muted/30 border-muted-foreground/10"
+                        >
+                          <SelectValue placeholder="请选择季度" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {seasons.map((season) => (
+                            <SelectItem
+                              key={season.number}
+                              value={String(season.number)}
+                            >
+                              第 {season.number} 季
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="season"
+                        type="number"
+                        min="1"
+                        placeholder={
+                          metadata ? "请输入季号" : "请先确认 TMDB ID"
+                        }
+                        disabled={!metadata}
+                        value={subscription.season || ""}
+                        onChange={(e) =>
+                          updateSubscription("season", Number(e.target.value))
+                        }
+                        aria-invalid={!validSeason}
+                        className="rounded-xl bg-muted/30 border-muted-foreground/10"
+                      />
+                    )}
                   </div>
                   <div className="grid gap-2">
                     <Label
@@ -450,16 +416,20 @@ export function ConfirmSubscriptionDialog({
                       id="episodeTotalNum"
                       type="number"
                       min="1"
-                      value={bangumiInfo.episodeTotalNum}
+                      value={subscription.episodeTotalNum || ""}
+                      disabled={
+                        !metadata || (seasons.length > 0 && !selectedSeason)
+                      }
+                      aria-invalid={!validEpisodes}
                       onChange={(e) =>
-                        updateBangumiInfo(
+                        updateSubscription(
                           "episodeTotalNum",
-                          parseInt(e.target.value)
+                          Number(e.target.value)
                         )
                       }
                       className={cn(
                         "rounded-xl bg-muted/30 border-muted-foreground/10",
-                        fieldErrors.episodeTotalNum &&
+                        !validEpisodes &&
                           "border-destructive focus-visible:ring-destructive"
                       )}
                     />
@@ -475,9 +445,9 @@ export function ConfirmSubscriptionDialog({
                       <Calendar className="w-4 h-4" /> 更新时间
                     </Label>
                     <Select
-                      value={bangumiInfo.airWeekday.toString()}
+                      value={subscription.airWeekday.toString()}
                       onValueChange={(value) =>
-                        updateBangumiInfo("airWeekday", parseInt(value))
+                        updateSubscription("airWeekday", parseInt(value))
                       }
                     >
                       <SelectTrigger
@@ -504,14 +474,14 @@ export function ConfirmSubscriptionDialog({
                     </Label>
                     <Input
                       id="subgroup"
-                      value={bangumiInfo.releaseGroup}
+                      value={subscription.releaseGroup}
                       onChange={(e) =>
-                        updateBangumiInfo("releaseGroup", e.target.value)
+                        updateSubscription("releaseGroup", e.target.value)
                       }
                       placeholder="例如: VCB-Studio"
                       className={cn(
                         "rounded-xl bg-muted/30 border-muted-foreground/10",
-                        fieldErrors.releaseGroup &&
+                        !validGroup &&
                           "border-destructive focus-visible:ring-destructive"
                       )}
                     />
@@ -522,13 +492,18 @@ export function ConfirmSubscriptionDialog({
 
                 <TMDBInput
                   type="tv"
-                  value={bangumiInfo.tmdbID}
-                  onTMDBIDChange={handleTMDBIDChange}
-                  onMetaChange={handleTMDBMetaChange}
+                  value={subscription.tmdbID}
+                  onTMDBIDChange={changeTMDBID}
+                  onConfirmID={confirmTMDBID}
+                  resolving={loading}
                   label="TMDB ID"
                   icon={<Search className="w-4 h-4" />}
                   className="mb-2"
-                  error={fieldErrors.tmdbID}
+                  error={
+                    !metadata && !loading
+                      ? "请确认 TMDB ID 以加载季度"
+                      : undefined
+                  }
                 />
               </div>
             </TabsContent>
@@ -536,19 +511,15 @@ export function ConfirmSubscriptionDialog({
             <TabsContent value="filter" className="space-y-4 mt-0 outline-none">
               <MatchInput
                 label="包含匹配"
-                items={bangumiInfo.includeRegs}
+                items={subscription.includeRegs}
                 placeholder="添加包含匹配条件"
-                onChange={(items) =>
-                  setBangumiInfo((prev) => ({ ...prev, includeRegs: items }))
-                }
+                onChange={(items) => updateSubscription("includeRegs", items)}
               />
               <MatchInput
                 label="排除匹配"
-                items={bangumiInfo.excludeRegs}
+                items={subscription.excludeRegs}
                 placeholder="添加排除匹配条件"
-                onChange={(items) =>
-                  setBangumiInfo((prev) => ({ ...prev, excludeRegs: items }))
-                }
+                onChange={(items) => updateSubscription("excludeRegs", items)}
               />
 
               <div className="space-y-2">
@@ -624,7 +595,7 @@ export function ConfirmSubscriptionDialog({
                         </span>
                       </div>
                     )}
-                    
+
                     {isPreviewLoading && previewMatches.length === 0 && (
                       <div className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-3">
                         <Loader2 className="w-8 h-8 animate-spin text-primary/60" />
@@ -654,9 +625,13 @@ export function ConfirmSubscriptionDialog({
                     <Input
                       id="priority"
                       type="number"
-                      value={bangumiInfo.priority}
+                      value={
+                        Number.isFinite(subscription.priority)
+                          ? subscription.priority
+                          : ""
+                      }
                       onChange={(e) =>
-                        updateBangumiInfo("priority", parseInt(e.target.value))
+                        updateSubscription("priority", e.target.valueAsNumber)
                       }
                       className="rounded-xl bg-muted/30 border-muted-foreground/10"
                     />
@@ -671,11 +646,15 @@ export function ConfirmSubscriptionDialog({
                     <Input
                       id="episodeOffset"
                       type="number"
-                      value={bangumiInfo.episodeOffset}
+                      value={
+                        Number.isFinite(subscription.episodeOffset)
+                          ? subscription.episodeOffset
+                          : ""
+                      }
                       onChange={(e) =>
-                        updateBangumiInfo(
+                        updateSubscription(
                           "episodeOffset",
-                          parseInt(e.target.value)
+                          e.target.valueAsNumber
                         )
                       }
                       className="rounded-xl bg-muted/30 border-muted-foreground/10"
@@ -684,9 +663,9 @@ export function ConfirmSubscriptionDialog({
                 </div>
 
                 <EpisodePositionInput
-                  value={bangumiInfo.episodeLocation}
+                  value={subscription.episodeLocation}
                   onChange={(value) =>
-                    updateBangumiInfo("episodeLocation", value)
+                    updateSubscription("episodeLocation", value)
                   }
                   icon={<MapPin className="w-4 h-4" />}
                   inputClassName="bg-muted/30 border-muted-foreground/10"
@@ -699,12 +678,14 @@ export function ConfirmSubscriptionDialog({
         <DialogFooter className="px-6 py-4 bg-muted/30 gap-2 sm:gap-0 border-t border-muted-foreground/5 rounded-b-2xl">
           <Button
             variant="ghost"
-            onClick={() => handleOpenChange(false)}
+            onClick={onClose}
+            disabled={submitting}
             className="rounded-xl hover:bg-muted"
           >
             取消
           </Button>
           <Button
+            disabled={!canSubscribe}
             onClick={handleSubscribe}
             className="rounded-xl px-8 bg-gradient-to-r from-primary to-blue-500 hover:opacity-90 transition-all shadow-md shadow-primary/20"
           >

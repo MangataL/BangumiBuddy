@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/MangataL/BangumiBuddy/internal/discovery"
+	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 )
 
@@ -69,6 +70,7 @@ func (f *fakeSubscriber) ParseRSS(ctx context.Context, req subscriber.ParserRSSR
 	f.req = req
 	return subscriber.ParseRSSRsp{
 		Name:         "哆啦A梦",
+		Seasons:      []meta.Season{{Number: 1, AirDate: "2005-04-15", PosterURL: "s1.jpg"}},
 		TMDBID:       req.TMDBID,
 		RSSLink:      req.RSSLink,
 		ReleaseGroup: "夜莺工作室",
@@ -164,7 +166,12 @@ func TestRouter_ParseDiscoveryCandidateRSS(t *testing.T) {
 		RSSLink: "https://mikanani.me/RSS/Bangumi?bangumiId=681&subgroupid=370",
 		TMDBID:  18692,
 	}, s.req)
-	assert.Contains(t, w.Body.String(), `"releaseGroup":"夜莺工作室"`)
+	var got subscriber.ParseRSSRsp
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "夜莺工作室", got.ReleaseGroup)
+	require.Len(t, got.Seasons, 1)
+	assert.Equal(t, "s1.jpg", got.Seasons[0].PosterURL)
+	assert.NotContains(t, w.Body.String(), "recommendationDate")
 }
 
 func TestRouter_BatchDiscoveryReleaseGroups(t *testing.T) {

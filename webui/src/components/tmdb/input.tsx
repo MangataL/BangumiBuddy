@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Search, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,8 @@ interface TMDBInputProps {
   type: "tv" | "movie"; // 区分番剧或剧场版
   value: number; // TMDB ID 值
   onTMDBIDChange: (tmdbID: number) => void; // 仅TMDB ID变化回调（手动输入时）
+  onConfirmID?: (tmdbID: number) => void; // 由调用方加载所选 ID 的信息
+  resolving?: boolean;
   onMetaChange?: (meta: Meta) => void; // 完整元数据变化回调（确认获取或搜索选择时）
   label?: string; // 可选标签
   icon?: React.ReactNode;
@@ -36,6 +38,8 @@ export function TMDBInput({
   value,
   onTMDBIDChange,
   onMetaChange,
+  onConfirmID,
+  resolving = false,
   label = "TMDB ID",
   icon,
   placeholder = "输入 TMDB ID 或点击搜索",
@@ -47,8 +51,18 @@ export function TMDBInput({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // 处理手动输入TMDB ID
+  const inputId = useId();
+  const lookupRequest = useRef(0);
+  useEffect(() => {
+    setLoading(false);
+    return () => {
+      lookupRequest.current++;
+    };
+  }, [type, value]);
+
   const handleManualInput = (tmdbID: number) => {
+    lookupRequest.current++;
+    setLoading(false);
     onTMDBIDChange(tmdbID);
   };
 
@@ -62,6 +76,11 @@ export function TMDBInput({
       return;
     }
 
+    if (onConfirmID) {
+      onConfirmID(value);
+      return;
+    }
+    const request = ++lookupRequest.current;
     setLoading(true);
     try {
       // 根据类型获取Meta信息
@@ -69,6 +88,8 @@ export function TMDBInput({
         type === "tv"
           ? await metaAPI.getTVMeta(value)
           : await metaAPI.getMovieMeta(value);
+
+      if (request !== lookupRequest.current) return;
 
       // 同时更新ID和完整元数据
       onTMDBIDChange(meta.tmdbID);
@@ -81,6 +102,7 @@ export function TMDBInput({
         variant: "default",
       });
     } catch (error) {
+      if (request !== lookupRequest.current) return;
       const description = extractErrorMessage(error);
       toast({
         title: "获取TMDB信息失败",
@@ -88,25 +110,32 @@ export function TMDBInput({
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      if (request === lookupRequest.current) setLoading(false);
     }
   };
 
   return (
     <div className={cn("grid gap-2", className)}>
       {label && (
-        <Label className="flex items-center gap-2 text-muted-foreground mb-1">
+        <Label
+          htmlFor={inputId}
+          className="flex items-center gap-2 text-muted-foreground mb-1"
+        >
           {icon}
           {label}
         </Label>
       )}
       <div className="flex gap-2">
         <Input
+          id={inputId}
           inputMode="numeric"
           value={value || ""}
           onChange={(e) => {
             const newValue = e.target.value.trim();
-            handleManualInput(newValue ? parseInt(newValue) : 0);
+            const id = Number(newValue);
+            handleManualInput(
+              /^\d+$/.test(newValue) && Number.isSafeInteger(id) ? id : 0
+            );
           }}
           placeholder={placeholder}
           className={cn(
@@ -119,11 +148,11 @@ export function TMDBInput({
           variant="outline"
           size="icon"
           onClick={handleConfirmMeta}
-          disabled={loading || !value}
+          disabled={loading || resolving || !value}
           className="rounded-xl flex-shrink-0"
           title="确认获取TMDB信息"
         >
-          {loading ? (
+          {loading || resolving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Check className="h-4 w-4" />
@@ -142,46 +171,54 @@ export function TMDBInput({
       </div>
       {error && <span className="text-sm text-destructive">{error}</span>}
 
-      <SearchDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        type={type}
-        initialSearchName={initialSearchName}
-        onSelect={(tmdbID, meta) => {
-          // 搜索选择时，同时更新ID和完整元数据
-          if (meta) {
-            onTMDBIDChange(meta.tmdbID);
-            if (onMetaChange) {
-              onMetaChange(meta);
+      {dialogOpen && (
+        <SearchDialog
+          onClose={() => setDialogOpen(false)}
+          type={type}
+          initialSearchName={initialSearchName}
+          onSelect={(meta) => {
+            lookupRequest.current++;
+            setLoading(false);
+            if (onConfirmID) {
+              onConfirmID(meta.tmdbID);
+            } else {
+              onTMDBIDChange(meta.tmdbID);
+              onMetaChange?.(meta);
             }
-          }
-          setDialogOpen(false);
-        }}
-      />
+            setDialogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 interface SearchDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   type: "tv" | "movie";
   initialSearchName?: string;
-  onSelect: (tmdbID: number, meta?: Meta) => void;
+  onSelect: (meta: Meta) => void;
 }
 
 function SearchDialog({
-  open,
-  onOpenChange,
+  onClose,
   type,
   initialSearchName,
   onSelect,
 }: SearchDialogProps) {
   const { toast } = useToast();
-  const [searchName, setSearchName] = useState("");
+  const [searchName, setSearchName] = useState(initialSearchName?.trim() ?? "");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Meta[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+
+  const searchRequest = useRef(0);
+  useEffect(
+    () => () => {
+      searchRequest.current++;
+    },
+    []
+  );
 
   const runSearch = async (name: string) => {
     const query = name.trim();
@@ -193,6 +230,7 @@ function SearchDialog({
       return;
     }
 
+    const request = ++searchRequest.current;
     setLoading(true);
     setHasSearched(true);
     try {
@@ -200,8 +238,9 @@ function SearchDialog({
         type === "tv"
           ? await metaAPI.searchTVs(query)
           : await metaAPI.searchMovies(query);
-      setResults(data);
+      if (request === searchRequest.current) setResults(data);
     } catch (error) {
+      if (request !== searchRequest.current) return;
       const description = extractErrorMessage(error);
       toast({
         title: "搜索失败",
@@ -210,27 +249,12 @@ function SearchDialog({
       });
       setResults([]);
     } finally {
-      setLoading(false);
+      if (request === searchRequest.current) setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (!open) return;
-    setSearchName(initialSearchName?.trim() ?? "");
-    setResults([]);
-    setHasSearched(false);
-  }, [open, initialSearchName]);
-
-  // 重置状态
-  const handleClose = () => {
-    setSearchName("");
-    setResults([]);
-    setHasSearched(false);
-    onOpenChange(false);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open onOpenChange={onClose}>
       <DialogContent className="w-[95dvw] sm:max-w-3xl max-h-[90dvh] flex flex-col rounded-xl">
         <DialogHeader>
           <DialogTitle className="text-xl">
@@ -247,7 +271,13 @@ function SearchDialog({
         <div className="flex gap-2">
           <Input
             value={searchName}
-            onChange={(e) => setSearchName(e.target.value)}
+            onChange={(e) => {
+              searchRequest.current++;
+              setLoading(false);
+              setHasSearched(false);
+              setResults([]);
+              setSearchName(e.target.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !loading) {
                 void runSearch(searchName);
@@ -296,7 +326,7 @@ function SearchDialog({
                     key={meta.tmdbID}
                     meta={meta}
                     type={type}
-                    onSelect={() => onSelect(meta.tmdbID, meta)}
+                    onSelect={() => onSelect(meta)}
                   />
                 ))}
               </div>

@@ -7,12 +7,20 @@ type Meta struct {
 	Year            string        `json:"year"`
 	TMDBID          int           `json:"tmdbID"`
 	Season          int           `json:"season"`
+	Seasons         []Season      `json:"seasons,omitzero"`
 	EpisodeTotalNum int           `json:"episodeTotalNum"`
 	AirWeekday      *time.Weekday `json:"airWeekday"`
 	PosterURL       string        `json:"posterURL"`
 	BackdropURL     string        `json:"backdropURL"`
 	Overview        string        `json:"overview"`
 	Genres          string        `json:"genres"`
+}
+
+type Season struct {
+	Number          int    `json:"number"`
+	AirDate         string `json:"airDate"`
+	EpisodeTotalNum int    `json:"episodeTotalNum"`
+	PosterURL       string `json:"posterURL"`
 }
 
 type EpisodeDetails struct {
