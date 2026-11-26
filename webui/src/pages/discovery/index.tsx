@@ -11,7 +11,7 @@ import magnetAPI, {
   DownloadType,
   DownloadTypeSet,
 } from "@/api/magnet";
-import { ParseRSSResponse } from "@/api/subscription";
+import type { ParseRSSResponse } from "@/api/subscription";
 import { ConfirmSubscriptionDialog } from "@/components/subscription/confirm-subscription-dialog";
 import { useToast } from "@/hooks/useToast";
 import { extractErrorMessage } from "@/utils/error";
@@ -28,19 +28,6 @@ import { useSeasonDiscovery } from "./hooks/use-season-discovery";
 import { resolveDiscoveryBangumiName, isTMDBMatchFailure } from "./parse-fallback";
 import { getDefaultSubscriptionPriority } from "./subscription-defaults";
 
-const emptyParseRSS: ParseRSSResponse = {
-  name: "",
-  season: 1,
-  year: "",
-  tmdbID: 0,
-  releaseGroup: "",
-  episodeTotalNum: 0,
-  airWeekday: 0,
-  rssLink: "",
-  posterURL: "",
-  backdropURL: "",
-};
-
 interface ManualParseContext {
   bangumiID: string;
   group: ReleaseGroupCandidate;
@@ -54,9 +41,8 @@ export default function DiscoveryPage() {
   const seasonDiscovery = useSeasonDiscovery();
   const search = useDiscoverySearch();
   const detail = useBangumiDetail();
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [parseRSSResponse, setParseRSSResponse] =
-    useState<ParseRSSResponse>(emptyParseRSS);
+    useState<ParseRSSResponse>();
   const [defaultSubscriptionPriority, setDefaultSubscriptionPriority] =
     useState(1);
   const [resource, setResource] = useState<ResourceCandidate>();
@@ -96,7 +82,6 @@ export default function DiscoveryPage() {
       setDefaultSubscriptionPriority(getDefaultSubscriptionPriority(group));
       setParseRSSResponse(response);
       setManualParse(undefined);
-      setConfirmOpen(true);
     } catch (error) {
       if (requestID !== candidateRequestIDRef.current) return;
       const errorMessage = extractErrorMessage(error);
@@ -302,13 +287,15 @@ export default function DiscoveryPage() {
         onConfirm={(tmdbID) => void retryParseWithTMDB(tmdbID)}
       />
 
-      <ConfirmSubscriptionDialog
-        open={confirmOpen}
-        parseRSSRsp={parseRSSResponse}
-        defaultPriority={defaultSubscriptionPriority}
-        onOpenChange={setConfirmOpen}
-        onSubscribed={handleSubscribed}
-      />
+      {parseRSSResponse && (
+        <ConfirmSubscriptionDialog
+          key={parseRSSResponse.rssLink}
+          parseRSSRsp={parseRSSResponse}
+          defaultPriority={defaultSubscriptionPriority}
+          onClose={() => setParseRSSResponse(undefined)}
+          onSubscribed={handleSubscribed}
+        />
+      )}
     </div>
   );
 }

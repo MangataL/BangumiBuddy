@@ -1,6 +1,10 @@
 package subscriber
 
-import "time"
+import (
+	"time"
+
+	"github.com/MangataL/BangumiBuddy/internal/meta"
+)
 
 // Bangumi 番剧信息
 type Bangumi struct {
@@ -35,16 +39,18 @@ type ParserRSSReq struct {
 
 // ParseRSSRsp 解析RSS返回的番剧信息
 type ParseRSSRsp struct {
-	Name            string        `json:"name"`
-	Season          int           `json:"season"`
-	Year            string        `json:"year"`
-	TMDBID          int           `json:"tmdbID"`
-	RSSLink         string        `json:"rssLink"`
-	ReleaseGroup    string        `json:"releaseGroup"`
-	EpisodeTotalNum int           `json:"episodeTotalNum"`
-	AirWeekday      *time.Weekday `json:"airWeekday"`
-	PosterURL       string        `json:"posterURL"`
-	BackdropURL     string        `json:"backdropURL"`
+	Name               string        `json:"name"`
+	Season             int           `json:"season"`
+	Seasons            []meta.Season `json:"seasons"`
+	RecommendationDate string        `json:"recommendationDate,omitempty"`
+	Year               string        `json:"year"`
+	TMDBID             int           `json:"tmdbID"`
+	RSSLink            string        `json:"rssLink"`
+	ReleaseGroup       string        `json:"releaseGroup"`
+	EpisodeTotalNum    int           `json:"episodeTotalNum"`
+	AirWeekday         *time.Weekday `json:"airWeekday"`
+	PosterURL          string        `json:"posterURL"`
+	BackdropURL        string        `json:"backdropURL"`
 }
 
 // RSS RSS信息
@@ -58,6 +64,7 @@ type RSS struct {
 // RSSItem RSS节点信息
 type RSSItem struct {
 	GUID        string
+	Title       string
 	TorrentLink string
 	PublishedAt time.Time
 }

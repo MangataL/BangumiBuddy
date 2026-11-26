@@ -1,15 +1,18 @@
 import { http } from "./index";
+import type { TMDBSeason } from "./meta";
 
 // RSS解析响应类型
 export interface ParseRSSResponse {
   name: string;
   season: number;
+  seasons: TMDBSeason[];
+  recommendationDate?: string;
   year: string;
   tmdbID: number;
   rssLink: string;
   releaseGroup: string;
   episodeTotalNum: number;
-  airWeekday: number;
+  airWeekday: number | null;
   posterURL: string;
   backdropURL: string;
 }
@@ -149,11 +152,12 @@ export interface ListRecentUpdatedTorrentsReq {
 
 export const subscriptionAPI = {
   // 解析RSS链接
-  parseRSS: async (data: {
-    rssLink: string;
-    tmdbID?: number;
-  }): Promise<ParseRSSResponse> => {
+  parseRSS: async (
+    data: { rssLink: string; tmdbID?: number },
+    signal?: AbortSignal
+  ): Promise<ParseRSSResponse> => {
     return http.get("/bangumis/rss", {
+      signal,
       params: {
         rss_link: data.rssLink,
         tmdb_id: data.tmdbID,

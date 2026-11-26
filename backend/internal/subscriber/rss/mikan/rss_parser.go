@@ -1,10 +1,12 @@
 package mikan
 
 import (
+	"cmp"
 	"context"
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"regexp"
 	"strings"
 	"time"
@@ -58,7 +60,7 @@ func (p *parser) parseReleaseGroup(ctx context.Context, items []subscriber.RSSIt
 	if len(items) == 0 {
 		return ""
 	}
-	bf, err := p.bfParser.Parse(ctx, items[0].GUID,
+	bf, err := p.bfParser.Parse(ctx, items[0].Title,
 		bangumifile.IgnoreValidateEpisode(),
 		bangumifile.PreserveOriginName(),
 	)
@@ -95,6 +97,7 @@ func getItems(ctx context.Context, items []*gofeed.Item) []subscriber.RSSItem {
 		}
 		rssItems = append(rssItems, subscriber.RSSItem{
 			GUID:        item.GUID,
+			Title:       cmp.Or(item.Title, item.GUID),
 			TorrentLink: item.Enclosures[0].URL,
 			PublishedAt: parsePublishedAt(ctx, item),
 		})
@@ -108,16 +111,24 @@ func parsePublishedAt(ctx context.Context, item *gofeed.Item) time.Time {
 		var pubDate struct {
 			PubDate string `xml:"pubDate"`
 		}
-		if err := xml.Unmarshal([]byte(wrappedData), &pubDate); err != nil {
-			log.Warnf(ctx, "解析发布时间失败: %v", err)
-			return time.Time{}
+		if err := xml.Unmarshal([]byte(wrappedData), &pubDate); err == nil {
+			for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05"} {
+				if t, err := time.ParseInLocation(layout, strings.TrimSpace(pubDate.PubDate), time.Local); err == nil {
+					return t
+				}
+			}
 		}
-		t, err := time.ParseInLocation("2006-01-02T15:04:05.999", pubDate.PubDate, time.Local)
-		if err != nil {
-			log.Warnf(ctx, "解析发布时间失败: %v", err)
-			return time.Time{}
+		log.Warnf(ctx, "无法解析 torrent 发布时间: %s", pubDate.PubDate)
+	}
+	if item.PublishedParsed != nil {
+		// gofeed 将标准日期转换为 UTC，推荐使用发布者原时区的日历日。
+		if t, err := mail.ParseDate(item.Published); err == nil {
+			return t
 		}
-		return t
+		if t, err := time.Parse(time.RFC3339, item.Published); err == nil {
+			return t
+		}
+		return *item.PublishedParsed
 	}
 	return time.Time{}
 }

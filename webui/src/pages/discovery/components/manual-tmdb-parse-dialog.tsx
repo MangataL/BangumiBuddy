@@ -63,14 +63,16 @@ export function ManualTMDBParseDialog(props: ManualTMDBParseDialogProps) {
             <p className="text-destructive">{props.errorMessage}</p>
           </div>
 
-          <TMDBInput
-            type="tv"
-            value={tmdbID}
-            onTMDBIDChange={setTmdbID}
-            initialSearchName={props.suggestedName}
-            label="TMDB ID"
-            placeholder="输入 TMDB ID 或点击搜索"
-          />
+          <fieldset disabled={props.submitting}>
+            <TMDBInput
+              type="tv"
+              value={tmdbID}
+              onTMDBIDChange={setTmdbID}
+              initialSearchName={props.suggestedName}
+              label="TMDB ID"
+              placeholder="输入 TMDB ID 或点击搜索"
+            />
+          </fieldset>
         </div>
 
         <DialogFooter>

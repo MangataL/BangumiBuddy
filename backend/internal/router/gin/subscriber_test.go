@@ -11,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/MangataL/BangumiBuddy/internal/meta"
 	"github.com/MangataL/BangumiBuddy/internal/subscriber"
 )
 
@@ -54,16 +55,20 @@ func TestSubscriber_ParseRSS(t *testing.T) {
 					RSSLink: "link",
 					TMDBID:  1,
 				}).Return(subscriber.ParseRSSRsp{
-					Name:    "name",
-					Season:  2,
-					Year:    "2024",
-					TMDBID:  1,
-					RSSLink: "link",
+					Name:               "name",
+					Season:             2,
+					Seasons:            []meta.Season{{Number: 2, AirDate: "2024-07-04", EpisodeTotalNum: 12, PosterURL: "s2.jpg"}},
+					RecommendationDate: "2024-07-05",
+					EpisodeTotalNum:    12,
+					PosterURL:          "s2.jpg",
+					Year:               "2024",
+					TMDBID:             1,
+					RSSLink:            "link",
 				}, nil).AnyTimes()
 				return sm, ctrl.Finish
 			},
 			wantStatus: http.StatusOK,
-			wantBody:   `{"name":"name","season":2,"year":"2024","tmdbID":1,"rssLink":"link","releaseGroup":"","episodeTotalNum":0,"airWeekday":null,"posterURL":"","backdropURL":""}`,
+			wantBody:   `{"name":"name","season":2,"seasons":[{"number":2,"airDate":"2024-07-04","episodeTotalNum":12,"posterURL":"s2.jpg"}],"recommendationDate":"2024-07-05","year":"2024","tmdbID":1,"rssLink":"link","releaseGroup":"","episodeTotalNum":12,"airWeekday":null,"posterURL":"s2.jpg","backdropURL":""}`,
 		},
 	}
 	for _, tc := range testCases {
@@ -77,7 +82,7 @@ func TestSubscriber_ParseRSS(t *testing.T) {
 			a.ParseRSS(tc.args.ctx)
 
 			assert.Equal(t, tc.wantStatus, tc.args.writer.Code)
-			assert.Equal(t, tc.wantBody, tc.args.writer.Body.String())
+			assert.JSONEq(t, tc.wantBody, tc.args.writer.Body.String())
 		})
 	}
 }

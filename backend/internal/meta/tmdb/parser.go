@@ -1,9 +1,11 @@
 package tmdb
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -57,7 +59,6 @@ type Client struct {
 	client  *tmdb.Client
 	network network.HTTPClientProvider
 }
-
 
 func (t *Client) currentClient() *tmdb.Client {
 	t.mu.RLock()
@@ -151,11 +152,24 @@ func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
 	}
 	log.Debugf(ctx, "获取tmdb元数据: %+v", tv)
 	season := getSeason(tv)
+	seasons := make([]meta.Season, 0, len(tv.Seasons))
+	for _, s := range tv.Seasons {
+		if s.SeasonNumber <= 0 {
+			continue
+		}
+		seasons = append(seasons, meta.Season{
+			Number:          s.SeasonNumber,
+			AirDate:         s.AirDate,
+			EpisodeTotalNum: s.EpisodeCount,
+			PosterURL:       getImageURL(cmp.Or(s.PosterPath, tv.PosterPath)),
+		})
+	}
 	return meta.Meta{
 		ChineseName:     tv.Name,
 		Year:            getYear(ctx, tv.FirstAirDate),
 		TMDBID:          int(tv.ID),
 		Season:          season,
+		Seasons:         seasons,
 		EpisodeTotalNum: getSeasonEpisodeTotalNum(tv, season),
 		AirWeekday:      getAirWeekday(tv),
 		PosterURL:       getImageURL(tv.PosterPath),
@@ -163,6 +177,25 @@ func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
 		Overview:        tv.Overview,
 		Genres:          getGeneres(tv.Genres),
 	}, nil
+}
+
+func (t *Client) GetSeasonAirDates(ctx context.Context, tmdbID, season int) ([]string, error) {
+	client := t.currentClient()
+	if client == nil {
+		return nil, ErrTMDBTokenNotSet
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	details, err := client.GetTVSeasonDetails(tmdbID, season, nil)
+	if err != nil {
+		return nil, err
+	}
+	dates := make([]string, 0, len(details.Episodes))
+	for _, episode := range details.Episodes {
+		dates = append(dates, episode.AirDate)
+	}
+	return dates, nil
 }
 
 func (t *Client) GetSeasonEpisodeTotalNum(
@@ -242,7 +275,7 @@ func getGeneres(generes []struct {
 	return strings.Join(genres, ", ")
 }
 
-func (t *Client) SearchTVs(ctx context.Context, name string) ([]meta.Meta, error) {
+func (t *Client) searchTVIDs(ctx context.Context, name string) ([]int, error) {
 	client := t.currentClient()
 	if client == nil {
 		return nil, ErrTMDBTokenNotSet
@@ -258,39 +291,40 @@ func (t *Client) SearchTVs(ctx context.Context, name string) ([]meta.Meta, error
 	if len(tvs.Results) == 0 {
 		return nil, errs.NewNotFoundf("未搜索到番剧，番剧名称: %s", name)
 	}
-	animeMetas := make([]meta.Meta, 0)
-	otherMetas := make([]meta.Meta, 0)
+	var animeIDs, otherIDs []int
 	for _, tv := range tvs.Results {
-		hasAnimeGenre := false
-		for _, genreID := range tv.GenreIDs {
-			if genreID == animeGenreID {
-				hasAnimeGenre = true
-				break
-			}
+		if slices.Contains(tv.GenreIDs, animeGenreID) {
+			animeIDs = append(animeIDs, int(tv.ID))
+		} else {
+			otherIDs = append(otherIDs, int(tv.ID))
 		}
-		m, err := t.ParseTV(ctx, int(tv.ID))
+	}
+	return append(animeIDs, otherIDs...), nil
+}
+
+func (t *Client) SearchTVs(ctx context.Context, name string) ([]meta.Meta, error) {
+	ids, err := t.searchTVIDs(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]meta.Meta, 0, len(ids))
+	for _, id := range ids {
+		m, err := t.ParseTV(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		if hasAnimeGenre {
-			animeMetas = append(animeMetas, m)
-		} else {
-			otherMetas = append(otherMetas, m)
-		}
+		result = append(result, m)
 	}
-	return append(animeMetas, otherMetas...), nil
+	return result, nil
 }
 
 // TODO: 后期有必要可以改为多次分页去查找满足条件的，当前从简只查一页
 func (t *Client) SearchTV(ctx context.Context, name string) (meta.Meta, error) {
-	tvs, err := t.SearchTVs(ctx, name)
+	ids, err := t.searchTVIDs(ctx, name)
 	if err != nil {
 		return meta.Meta{}, err
 	}
-	if len(tvs) == 0 {
-		return meta.Meta{}, errs.NewNotFoundf("未搜索到番剧，番剧名称: %s", name)
-	}
-	return tvs[0], nil
+	return t.ParseTV(ctx, ids[0])
 }
 
 func getYear(ctx context.Context, date string) string {

@@ -194,3 +194,30 @@ func TestAntiParser_parseEpisodeWithLocation(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyRelease(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		want  ReleaseKind
+	}{
+		{"[LoliHouse] Yofukashi no Uta [01-13]", EpisodeCollection},
+		{"[Group] Anime [01～13]", EpisodeCollection},
+		{"[Group] Anime 第01至13话", EpisodeCollection},
+		{"[Group] Anime [第01話 - 第12話]", EpisodeCollection},
+		{"[Group] Anime [全集]", EpisodeCollection},
+		{"[Group] Anime [Batch]", EpisodeCollection},
+		{"[Group] Anime S02E01", SingleEpisode},
+		{"[Group] Anime - 01 [TV]", SingleEpisode},
+		{"[Group] Anime - 第12话 [END]", SingleEpisode},
+		{"[Group] Anime SP01", UnknownRelease},
+		{"[Group] Anime 总集篇 01", UnknownRelease},
+		{"[Group] Anime - 01 [OVA]", UnknownRelease},
+		{"[Group] Anime - 01 [ONA]", UnknownRelease},
+		{"[Group] Anime - 特别篇 01", UnknownRelease},
+		{"[Group] Anime [1080p]", UnknownRelease},
+	} {
+		t.Run(tc.title, func(t *testing.T) {
+			assert.Equal(t, tc.want, ClassifyRelease(tc.title))
+		})
+	}
+}

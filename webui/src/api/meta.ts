@@ -1,5 +1,12 @@
 import { http } from "./index";
 
+export interface TMDBSeason {
+  number: number;
+  airDate: string;
+  episodeTotalNum: number;
+  posterURL: string;
+}
+
 // TMDB 元数据接口
 export interface Meta {
   chineseName: string;
@@ -14,6 +21,10 @@ export interface Meta {
   genres: string;
 }
 
+export interface TVMeta extends Meta {
+  seasons: TMDBSeason[];
+}
+
 const metaAPI = {
   // 搜索电视剧（番剧）
   searchTVs: async (name: string): Promise<Meta[]> => {
@@ -26,7 +37,7 @@ const metaAPI = {
   },
 
   // 根据TMDB ID获取电视剧元数据
-  getTVMeta: async (tmdbID: number): Promise<Meta> => {
+  getTVMeta: async (tmdbID: number): Promise<TVMeta> => {
     return http.get(`/meta/tv/${tmdbID}`);
   },
 

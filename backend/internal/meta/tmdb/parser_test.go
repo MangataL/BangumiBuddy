@@ -2,8 +2,7 @@ package tmdb
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,162 +12,77 @@ import (
 	tmdb "github.com/cyruzin/golang-tmdb"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/MangataL/BangumiBuddy/internal/meta"
 )
 
-func TestClient_Search(t *testing.T) {
-	testCases := []struct {
-		name        string
-		fake        func() (*tmdb.Client, func())
-		bangumiName string
-		wantErr     bool
-		want        meta.Meta
-	}{
-		{
-			name: "success",
-			fake: func() (*tmdb.Client, func()) {
-				ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if strings.Contains(r.URL.Path, "search/tv") {
-						rsp := `{"results":[{"id":1,"name":"test","first_air_date":"2021-01-01"}]}`
-						_, _ = w.Write([]byte(rsp))
-					} else {
-						rsp := `{"id":1,"name":"test","first_air_date":"2021-01-01"}`
-						_, _ = w.Write([]byte(rsp))
-					}
-				}))
-				certPool := x509.NewCertPool()
-				certPool.AddCert(ts.Certificate())
-				customTransport := &CustomRoundTripper{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							RootCAs: certPool,
-						},
-					},
-					NewURL: ts.URL[len("https://"):], // 提取主机和端口部分
-				}
-
-				httpClient := http.Client{
-					Transport: customTransport,
-				}
-				c, _ := tmdb.Init("test")
-				c.SetClientConfig(httpClient)
-				return c, ts.Close
-			},
-			bangumiName: "test1",
-			wantErr:     false,
-			want: meta.Meta{
-				ChineseName: "test",
-				Year:        "2021",
-				TMDBID:      1,
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			c, clo := tc.fake()
-			defer clo()
-			p := &Client{
-				client: c,
-			}
-
-			got, err := p.SearchTV(context.Background(), tc.bangumiName)
-			t.Log(err)
-
-			assert.Equal(t, tc.wantErr, err != nil)
-			assert.Equal(t, tc.want, got)
-		})
-	}
+func testTMDBClient(t *testing.T, handler http.HandlerFunc) *Client {
+	t.Helper()
+	server := httptest.NewTLSServer(handler)
+	t.Cleanup(server.Close)
+	c, err := tmdb.Init("test")
+	require.NoError(t, err)
+	c.SetClientConfig(http.Client{Transport: &CustomRoundTripper{
+		Transport: server.Client().Transport,
+		NewURL:    strings.TrimPrefix(server.URL, "https://"),
+	}})
+	return &Client{client: c}
 }
 
-func TestClient_Parse(t *testing.T) {
-	testCases := []struct {
-		name    string
-		fake    func() (*tmdb.Client, func())
-		id      int
-		wantErr bool
-		want    meta.Meta
-	}{
-		{
-			name: "success",
-			fake: func() (*tmdb.Client, func()) {
-				ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					rsp := `{"id":1,"name":"test","first_air_date":"2021-01-01"}`
-					_, _ = w.Write([]byte(rsp))
-				}))
-				certPool := x509.NewCertPool()
-				certPool.AddCert(ts.Certificate())
-				customTransport := &CustomRoundTripper{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							RootCAs: certPool,
-						},
-					},
-					NewURL: ts.URL[len("https://"):], // 提取主机和端口部分
-				}
+func TestClientTVSeasons(t *testing.T) {
+	const tv = `{"id":1,"name":"彻夜之歌","first_air_date":"2022-07-08","poster_path":"/show.jpg",
+		"seasons":[{"season_number":0,"episode_count":1},{"season_number":1,"air_date":"2022-07-08","episode_count":13},
+		{"season_number":2,"air_date":"2025-07-04","episode_count":12,"poster_path":"/s2.jpg"}],
+		"last_episode_to_air":{"season_number":2}}`
+	var paths []string
+	client := testTMDBClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case "/3/search/tv":
+			fmt.Fprint(w, `{"results":[{"id":2,"genre_ids":[18]},{"id":1,"genre_ids":[16]}]}`)
+		case "/3/tv/1":
+			fmt.Fprint(w, tv)
+		case "/3/tv/2":
+			fmt.Fprint(w, `{"id":2,"name":"Another show","first_air_date":"2021-01-01","seasons":[]}`)
+		case "/3/tv/1/season/2":
+			fmt.Fprint(w, `{"episodes":[{"air_date":"2025-07-04"},{"air_date":"2025-07-11"},{"air_date":null}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 
-				httpClient := http.Client{
-					Transport: customTransport,
-				}
-				c, _ := tmdb.Init("test")
-				c.SetClientConfig(httpClient)
-				return c, ts.Close
-			},
-			id:      1,
-			wantErr: false,
-			want: meta.Meta{
-				ChineseName: "test",
-				Year:        "2021",
-				TMDBID:      1,
-			},
+	expected := meta.Meta{
+		ChineseName: "彻夜之歌", Year: "2022", TMDBID: 1, Season: 2, EpisodeTotalNum: 12, PosterURL: imageBaseURL + "/show.jpg",
+		Seasons: []meta.Season{
+			{Number: 1, AirDate: "2022-07-08", EpisodeTotalNum: 13, PosterURL: imageBaseURL + "/show.jpg"},
+			{Number: 2, AirDate: "2025-07-04", EpisodeTotalNum: 12, PosterURL: imageBaseURL + "/s2.jpg"},
 		},
 	}
+	ctx := context.Background()
+	got, err := client.SearchTV(ctx, "彻夜之歌")
+	require.NoError(t, err)
+	assert.Equal(t, expected, got)
+	assert.Equal(t, []string{"/3/search/tv", "/3/tv/1"}, paths)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			c, clo := tc.fake()
-			defer clo()
-			p := &Client{
-				client: c,
-			}
+	got, err = client.ParseTV(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, expected, got)
+	gotAll, err := client.SearchTVs(ctx, "彻夜之歌")
+	require.NoError(t, err)
+	require.Len(t, gotAll, 2)
+	assert.Equal(t, expected, gotAll[0])
+	assert.Equal(t, []meta.Season{}, gotAll[1].Seasons)
 
-			got, err := p.ParseTV(context.Background(), tc.id)
-			t.Log(err)
+	paths = nil
+	dates, err := client.GetSeasonAirDates(ctx, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"2025-07-04", "2025-07-11", ""}, dates)
+	assert.Equal(t, []string{"/3/tv/1/season/2"}, paths)
 
-			assert.Equal(t, tc.wantErr, err != nil)
-			assert.Equal(t, tc.want, got)
-		})
-	}
-}
-
-func TestClient_GetSeasonEpisodeTotalNum(t *testing.T) {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rsp := `{"id":1,"name":"test","seasons":[{"season_number":1,"episode_count":12},{"season_number":2,"episode_count":13}]}`
-		_, _ = w.Write([]byte(rsp))
-	}))
-	defer ts.Close()
-	certPool := x509.NewCertPool()
-	certPool.AddCert(ts.Certificate())
-	customTransport := &CustomRoundTripper{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: certPool,
-			},
-		},
-		NewURL: ts.URL[len("https://"):],
-	}
-	httpClient := http.Client{
-		Transport: customTransport,
-	}
-	c, _ := tmdb.Init("test")
-	c.SetClientConfig(httpClient)
-	p := &Client{client: c}
-
-	got, err := p.GetSeasonEpisodeTotalNum(context.Background(), 1, 2)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 13, got)
+	total, err := client.GetSeasonEpisodeTotalNum(ctx, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, 12, total)
 }
 
 func Test_cacheAdapter_GetSeasonEpisodeTotalNum(t *testing.T) {

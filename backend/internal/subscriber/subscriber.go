@@ -1,6 +1,7 @@
 package subscriber
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"path"
@@ -115,39 +116,39 @@ func (s *Subscriber) ParseRSS(ctx context.Context, req ParserRSSReq) (ParseRSSRs
 	if rssLink == "" && req.TMDBID == 0 {
 		return ParseRSSRsp{}, errs.NewBadRequest("RSS链接不能为空")
 	}
-	var (
-		meta meta.Meta
-		err  error
-	)
 	rss, err := s.rssParser.Parse(ctx, rssLink)
 	if err != nil {
 		return ParseRSSRsp{}, err
 	}
+	var tv meta.Meta
 	if req.TMDBID != 0 {
-		meta, err = s.metaParser.ParseTV(ctx, req.TMDBID)
+		tv, err = s.metaParser.ParseTV(ctx, req.TMDBID)
 	} else {
-		meta, err = s.metaParser.SearchTV(ctx, rss.BangumiName)
+		tv, err = s.metaParser.SearchTV(ctx, rss.BangumiName)
 	}
 	if err != nil {
 		return ParseRSSRsp{}, err
 	}
 
+	season, recommendationDate := s.recommendSeason(ctx, tv, rss.Items)
 	return ParseRSSRsp{
-		Name:            meta.ChineseName,
-		Season:          meta.Season,
-		Year:            meta.Year,
-		TMDBID:          meta.TMDBID,
-		RSSLink:         rssLink,
-		ReleaseGroup:    rss.ReleaseGroup,
-		EpisodeTotalNum: meta.EpisodeTotalNum,
-		AirWeekday:      meta.AirWeekday,
-		PosterURL:       meta.PosterURL,
-		BackdropURL:     meta.BackdropURL,
+		Seasons:            tv.Seasons,
+		RecommendationDate: recommendationDate,
+		Name:               tv.ChineseName,
+		Season:             season.Number,
+		Year:               tv.Year,
+		TMDBID:             tv.TMDBID,
+		RSSLink:            rssLink,
+		ReleaseGroup:       rss.ReleaseGroup,
+		EpisodeTotalNum:    season.EpisodeTotalNum,
+		AirWeekday:         tv.AirWeekday,
+		PosterURL:          cmp.Or(season.PosterURL, tv.PosterURL),
+		BackdropURL:        tv.BackdropURL,
 	}, nil
 }
 
 func (s *Subscriber) Subscribe(ctx context.Context, req SubscribeReq) (Bangumi, error) {
-	meta, err := s.metaParser.ParseTV(ctx, req.TMDBID)
+	tv, err := s.metaParser.ParseTV(ctx, req.TMDBID)
 	if err != nil {
 		return Bangumi{}, fmt.Errorf("解析元数据失败: %w", err)
 	}
@@ -158,9 +159,16 @@ func (s *Subscriber) Subscribe(ctx context.Context, req SubscribeReq) (Bangumi, 
 		return Bangumi{}, fmt.Errorf("获取订阅失败: %w", err)
 	}
 
+	poster := tv.PosterURL
+	for _, season := range tv.Seasons {
+		if season.Number == req.Season {
+			poster = cmp.Or(season.PosterURL, tv.PosterURL)
+			break
+		}
+	}
 	bangumi := Bangumi{
 		SubscriptionID:  uuid.New().String(),
-		Name:            meta.ChineseName,
+		Name:            tv.ChineseName,
 		RSSLink:         req.RSSLink,
 		Active:          true, // 默认为活跃状态
 		IncludeRegs:     req.IncludeRegs,
@@ -168,14 +176,14 @@ func (s *Subscriber) Subscribe(ctx context.Context, req SubscribeReq) (Bangumi, 
 		EpisodeOffset:   req.EpisodeOffset,
 		Priority:        req.Priority,
 		Season:          req.Season,
-		Year:            meta.Year,
+		Year:            tv.Year,
 		TMDBID:          req.TMDBID,
 		ReleaseGroup:    req.ReleaseGroup,
 		EpisodeLocation: req.EpisodeLocation,
-		PosterURL:       meta.PosterURL,
-		BackdropURL:     meta.BackdropURL,
-		Overview:        meta.Overview,
-		Genres:          meta.Genres,
+		PosterURL:       poster,
+		BackdropURL:     tv.BackdropURL,
+		Overview:        tv.Overview,
+		Genres:          tv.Genres,
 		AirWeekday:      req.AirWeekday,
 		EpisodeTotalNum: req.EpisodeTotalNum,
 	}

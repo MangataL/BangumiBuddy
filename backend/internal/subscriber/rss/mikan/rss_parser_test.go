@@ -32,11 +32,13 @@ func TestParser_Parse(t *testing.T) {
 				Items: []subscriber.RSSItem{
 					{
 						GUID:        "[喵萌Production&LoliHouse] GIRLS BAND CRY - 02 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
+						Title:       "[喵萌Production&LoliHouse] GIRLS BAND CRY - 02 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
 						TorrentLink: "https://mikanime.tv/Download/20240414/3a2e456a689ead23ca8f49fdc74ba1872c6f0c12.torrent",
 						PublishedAt: time.Date(2024, 4, 14, 0, 35, 38, 0, time.Local),
 					},
 					{
 						GUID:        "[喵萌Production&LoliHouse] GIRLS BAND CRY - 01 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
+						Title:       "[喵萌Production&LoliHouse] GIRLS BAND CRY - 01 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]",
 						TorrentLink: "https://mikanime.tv/Download/20240407/b13d145d95d9acdd5fc50784a6906007b540b468.torrent",
 						PublishedAt: time.Date(2024, 4, 7, 18, 50, 3, 0, time.Local),
 					},
@@ -52,6 +54,7 @@ func TestParser_Parse(t *testing.T) {
 				Items: []subscriber.RSSItem{
 					{
 						GUID:        "[千夏字幕组&LoliHouse] 吹响吧！上低音号 3 / Hibike! Euphonium 3 - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+						Title:       "[千夏字幕组&LoliHouse] 吹响吧！上低音号 3 / Hibike! Euphonium 3 - 09 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
 						TorrentLink: "https://mikanani.me/Download/20240614/0486ae4aafa5fe9406e61e9289b7d81f874fc7fa.torrent",
 						PublishedAt: time.Date(2024, 6, 14, 22, 54, 27, 0, time.Local),
 					},
@@ -68,6 +71,7 @@ func TestParser_Parse(t *testing.T) {
 				Items: []subscriber.RSSItem{
 					{
 						GUID:        "[LoliHouse] 为美好的世界献上祝福！3 / Kono Subarashii Sekai ni Shukufuku wo! S3 - 10 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+						Title:       "[LoliHouse] 为美好的世界献上祝福！3 / Kono Subarashii Sekai ni Shukufuku wo! S3 - 10 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
 						TorrentLink: "https://mikanani.me/Download/20240613/305bcdb1dc367d1684d8350188beab851c8d75e1.torrent",
 						PublishedAt: time.Date(2024, 6, 13, 13, 2, 6, 0, time.Local),
 					},
@@ -137,4 +141,23 @@ func getRSSContent(t *testing.T, name string) []byte {
 	data, err := os.ReadFile(fmt.Sprintf("./testdata/%s.xml", name))
 	require.Nil(t, err)
 	return data
+}
+
+func TestParseStandardItemDateAndTitle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<rss version="2.0"><channel><title>Mikan Project - 彻夜之歌 第二季</title><item>
+			<title>[LoliHouse] Yofukashi no Uta S2 - 01</title><guid isPermaLink="false">opaque-id</guid>
+			<torrent><pubDate>invalid</pubDate></torrent><pubDate>Sat, 05 Jul 2025 00:12:00 +0800</pubDate>
+			<enclosure type="application/x-bittorrent" url="https://example.com/test.torrent" length="12"/>
+			</item></channel></rss>`)
+	}))
+	defer server.Close()
+	p := NewParser(anito.NewParser(), staticHTTPClientProvider{server.Client()})
+	rss, err := p.Parse(context.Background(), server.URL)
+	require.NoError(t, err)
+	require.Len(t, rss.Items, 1)
+	assert.Equal(t, "LoliHouse", rss.ReleaseGroup)
+	assert.Equal(t, "opaque-id", rss.Items[0].GUID)
+	assert.Equal(t, "[LoliHouse] Yofukashi no Uta S2 - 01", rss.Items[0].Title)
+	assert.Equal(t, "2025-07-05", rss.Items[0].PublishedAt.Format(time.DateOnly))
 }
