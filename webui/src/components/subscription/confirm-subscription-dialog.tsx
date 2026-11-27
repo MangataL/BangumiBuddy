@@ -59,6 +59,10 @@ interface ConfirmSubscriptionDialogProps {
   onSubscribed?: () => void;
 }
 
+type SubscriptionForm = Omit<SubscribeRequest, "airWeekday"> & {
+  airWeekday: number | null;
+};
+
 function positiveInteger(value: number) {
   return Number.isSafeInteger(value) && value > 0;
 }
@@ -79,7 +83,7 @@ function parsedSeasonFields(result: ParseRSSResponse) {
     tmdbID: result.tmdbID,
     season: validSeason ? result.season : 0,
     episodeTotalNum: validSeason ? result.episodeTotalNum : 0,
-    airWeekday: result.airWeekday ?? 0,
+    airWeekday: validSeason ? result.airWeekday : null,
   };
 }
 
@@ -93,7 +97,7 @@ export function ConfirmSubscriptionDialog({
   const [metadata, setMetadata] = useState<ParseRSSResponse | undefined>(
     parseRSSRsp
   );
-  const [subscription, setSubscription] = useState<SubscribeRequest>(() => ({
+  const [subscription, setSubscription] = useState<SubscriptionForm>(() => ({
     ...parsedSeasonFields(parseRSSRsp),
     rssLink: parseRSSRsp.rssLink,
     releaseGroup: parseRSSRsp.releaseGroup,
@@ -134,6 +138,7 @@ export function ConfirmSubscriptionDialog({
     Boolean(subscription.rssLink.trim()) &&
     Number.isSafeInteger(subscription.priority) &&
     Number.isSafeInteger(subscription.episodeOffset) &&
+    subscription.airWeekday !== null &&
     isValidWeekDay(subscription.airWeekday) &&
     !loading &&
     !submitting;
@@ -176,10 +181,11 @@ export function ConfirmSubscriptionDialog({
   }, [handlePreview]);
 
   const handleSubscribe = async () => {
-    if (!canSubscribe) return;
+    const { airWeekday } = subscription;
+    if (!canSubscribe || airWeekday === null) return;
     setSubmitting(true);
     try {
-      await subscriptionAPI.subscribe(subscription);
+      await subscriptionAPI.subscribe({ ...subscription, airWeekday });
       onClose();
       toast({ title: "订阅成功" });
       onSubscribed?.();
@@ -194,9 +200,9 @@ export function ConfirmSubscriptionDialog({
     }
   };
 
-  function updateSubscription<K extends keyof SubscribeRequest>(
+  function updateSubscription<K extends keyof SubscriptionForm>(
     field: K,
-    value: SubscribeRequest[K]
+    value: SubscriptionForm[K]
   ) {
     setSubscription((prev) => ({ ...prev, [field]: value }));
   }
@@ -209,7 +215,7 @@ export function ConfirmSubscriptionDialog({
       tmdbID,
       season: 0,
       episodeTotalNum: 0,
-      airWeekday: 0,
+      airWeekday: null,
     }));
   };
 
@@ -365,6 +371,7 @@ export function ConfirmSubscriptionDialog({
                               ...prev,
                               season: season.number,
                               episodeTotalNum: season.episodeTotalNum,
+                              airWeekday: season.airWeekday,
                             }));
                           }
                         }}
@@ -445,7 +452,7 @@ export function ConfirmSubscriptionDialog({
                       <Calendar className="w-4 h-4" /> 更新时间
                     </Label>
                     <Select
-                      value={subscription.airWeekday.toString()}
+                      value={subscription.airWeekday?.toString() ?? ""}
                       onValueChange={(value) =>
                         updateSubscription("airWeekday", parseInt(value))
                       }
@@ -454,7 +461,7 @@ export function ConfirmSubscriptionDialog({
                         id="airWeekDay"
                         className="rounded-xl bg-muted/30 border-muted-foreground/10"
                       >
-                        <SelectValue placeholder="更新星期" />
+                        <SelectValue placeholder="请选择更新星期" />
                       </SelectTrigger>
                       <SelectContent>
                         {getSortedWeekDays().map(([value, label]) => (

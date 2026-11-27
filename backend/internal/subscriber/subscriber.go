@@ -141,7 +141,7 @@ func (s *Subscriber) ParseRSS(ctx context.Context, req ParserRSSReq) (ParseRSSRs
 		RSSLink:            rssLink,
 		ReleaseGroup:       rss.ReleaseGroup,
 		EpisodeTotalNum:    season.EpisodeTotalNum,
-		AirWeekday:         tv.AirWeekday,
+		AirWeekday:         season.AirWeekday,
 		PosterURL:          cmp.Or(season.PosterURL, tv.PosterURL),
 		BackdropURL:        tv.BackdropURL,
 	}, nil

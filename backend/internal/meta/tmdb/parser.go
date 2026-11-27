@@ -160,6 +160,7 @@ func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
 		seasons = append(seasons, meta.Season{
 			Number:          s.SeasonNumber,
 			AirDate:         s.AirDate,
+			AirWeekday:      seasonAirWeekday(tv, s.SeasonNumber, s.AirDate),
 			EpisodeTotalNum: s.EpisodeCount,
 			PosterURL:       getImageURL(cmp.Or(s.PosterPath, tv.PosterPath)),
 		})
@@ -238,7 +239,25 @@ func getAirWeekday(tv *tmdb.TVDetails) *time.Weekday {
 	if tv.NextEpisodeToAir.ID == 0 && tv.NextEpisodeToAir.AirDate == "" {
 		airDay = tv.LastEpisodeToAir.AirDate
 	}
-	airDate, err := time.Parse(time.DateOnly, airDay)
+	return weekdayOf(airDay)
+}
+
+func seasonAirWeekday(tv *tmdb.TVDetails, season int, firstAirDate string) *time.Weekday {
+	if ep := tv.NextEpisodeToAir; ep.SeasonNumber == season {
+		if day := weekdayOf(ep.AirDate); day != nil {
+			return day
+		}
+	}
+	if ep := tv.LastEpisodeToAir; ep.SeasonNumber == season {
+		if day := weekdayOf(ep.AirDate); day != nil {
+			return day
+		}
+	}
+	return weekdayOf(firstAirDate)
+}
+
+func weekdayOf(date string) *time.Weekday {
+	airDate, err := time.Parse(time.DateOnly, date)
 	if err != nil {
 		return nil
 	}

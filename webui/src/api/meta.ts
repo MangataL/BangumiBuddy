@@ -3,6 +3,7 @@ import { http } from "./index";
 export interface TMDBSeason {
   number: number;
   airDate: string;
+  airWeekday: number | null;
   episodeTotalNum: number;
   posterURL: string;
 }

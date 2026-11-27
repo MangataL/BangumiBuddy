@@ -68,7 +68,7 @@ func TestSubscriber_ParseRSS(t *testing.T) {
 				return sm, ctrl.Finish
 			},
 			wantStatus: http.StatusOK,
-			wantBody:   `{"name":"name","season":2,"seasons":[{"number":2,"airDate":"2024-07-04","episodeTotalNum":12,"posterURL":"s2.jpg"}],"recommendationDate":"2024-07-05","year":"2024","tmdbID":1,"rssLink":"link","releaseGroup":"","episodeTotalNum":12,"airWeekday":null,"posterURL":"s2.jpg","backdropURL":""}`,
+			wantBody:   `{"name":"name","season":2,"seasons":[{"number":2,"airDate":"2024-07-04","airWeekday":null,"episodeTotalNum":12,"posterURL":"s2.jpg"}],"recommendationDate":"2024-07-05","year":"2024","tmdbID":1,"rssLink":"link","releaseGroup":"","episodeTotalNum":12,"airWeekday":null,"posterURL":"s2.jpg","backdropURL":""}`,
 		},
 	}
 	for _, tc := range testCases {

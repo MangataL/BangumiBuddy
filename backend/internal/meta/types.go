@@ -17,10 +17,11 @@ type Meta struct {
 }
 
 type Season struct {
-	Number          int    `json:"number"`
-	AirDate         string `json:"airDate"`
-	EpisodeTotalNum int    `json:"episodeTotalNum"`
-	PosterURL       string `json:"posterURL"`
+	Number          int           `json:"number"`
+	AirDate         string        `json:"airDate"`
+	AirWeekday      *time.Weekday `json:"airWeekday"`
+	EpisodeTotalNum int           `json:"episodeTotalNum"`
+	PosterURL       string        `json:"posterURL"`
 }
 
 type EpisodeDetails struct {

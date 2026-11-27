@@ -32,9 +32,9 @@ func testTMDBClient(t *testing.T, handler http.HandlerFunc) *Client {
 
 func TestClientTVSeasons(t *testing.T) {
 	const tv = `{"id":1,"name":"彻夜之歌","first_air_date":"2022-07-08","poster_path":"/show.jpg",
-		"seasons":[{"season_number":0,"episode_count":1},{"season_number":1,"air_date":"2022-07-08","episode_count":13},
+		"seasons":[{"season_number":0,"episode_count":1},{"season_number":1,"air_date":"2022-07-04","episode_count":13},
 		{"season_number":2,"air_date":"2025-07-04","episode_count":12,"poster_path":"/s2.jpg"}],
-		"last_episode_to_air":{"season_number":2}}`
+		"last_episode_to_air":{"season_number":2,"air_date":"2025-07-06"}}`
 	var paths []string
 	client := testTMDBClient(t, func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
@@ -52,11 +52,12 @@ func TestClientTVSeasons(t *testing.T) {
 		}
 	})
 
+	monday, sunday := time.Monday, time.Sunday
 	expected := meta.Meta{
-		ChineseName: "彻夜之歌", Year: "2022", TMDBID: 1, Season: 2, EpisodeTotalNum: 12, PosterURL: imageBaseURL + "/show.jpg",
+		ChineseName: "彻夜之歌", Year: "2022", TMDBID: 1, Season: 2, EpisodeTotalNum: 12, AirWeekday: &sunday, PosterURL: imageBaseURL + "/show.jpg",
 		Seasons: []meta.Season{
-			{Number: 1, AirDate: "2022-07-08", EpisodeTotalNum: 13, PosterURL: imageBaseURL + "/show.jpg"},
-			{Number: 2, AirDate: "2025-07-04", EpisodeTotalNum: 12, PosterURL: imageBaseURL + "/s2.jpg"},
+			{Number: 1, AirDate: "2022-07-04", AirWeekday: &monday, EpisodeTotalNum: 13, PosterURL: imageBaseURL + "/show.jpg"},
+			{Number: 2, AirDate: "2025-07-04", AirWeekday: &sunday, EpisodeTotalNum: 12, PosterURL: imageBaseURL + "/s2.jpg"},
 		},
 	}
 	ctx := context.Background()
