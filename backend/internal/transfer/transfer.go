@@ -486,65 +486,35 @@ var audioExtensions = map[string]struct{}{
 
 // 转移相关的字幕和音频文件
 func (t *Transfer) transferRelatedFiles(ctx context.Context, meta Meta, newFilePathWithoudExt string) error {
-	var files []string
-	var err error
-	if meta.sidecars != nil {
-		files, err = meta.sidecars.files, meta.sidecars.err
-	} else {
-		files, err = utils.FindSameBaseFiles(meta.FilePath)
-	}
+	files, err := utils.FindSameBaseFiles(meta.FilePath)
 	if err != nil {
 		return errors.WithMessage(err, "获取相关文件列表失败")
 	}
 
-	fontSubsetter := meta.FontSubsetter
-	if fontSubsetter == nil {
-		fontSubsetter = t.fontSubsetter
-	}
 	mediaBase := utils.GetFileBaseName(meta.FilePath)
-	generatedExt := make(map[string]string)
 	newFiles := make([]string, 0, len(files))
 	for _, file := range files {
-		if meta.sidecars != nil {
-			// 原字幕缺字体时，忽略上次生成的子集。
-			original := strings.Replace(filepath.Base(file), ".subset.", ".", 1)
-			if original != filepath.Base(file) && meta.sidecars.prepared[filepath.Join(filepath.Dir(file), original)].err != nil {
-				continue
-			}
-		}
-		if t.config.EnableSubtitleSubset && needsFontSubset(file) {
-			var newFile string
-			var err error
-			if meta.sidecars == nil {
-				newFile, err = fontSubsetter.SubsetFont(ctx, file)
-			} else {
-				prepared := meta.sidecars.prepared[file]
-				err = prepared.err
-				if err == nil {
-					newFile, err = prepared.write()
-				}
-			}
+		suffix := strings.TrimPrefix(file, mediaBase)
+		if t.config.EnableSubtitleSubset && needsFontSubset(suffix) {
+			subsetPath := mediaBase + subtitle.SubtitleSubsetExt + suffix
+			newFile, err := t.subsetSubtitle(ctx, meta, file, subsetPath)
 			if err != nil {
 				if !t.config.IgnoreSubsetError {
 					return errors.WithMessagef(err, "子集化字幕文件 %s 失败", file)
 				}
 				log.Warnf(ctx, "子集化字幕文件 %s 失败: %v，跳过", file, err)
-			} else if newFile != file {
-				generatedExt[newFile] = subtitle.SubtitleSubsetExt + strings.TrimPrefix(file, mediaBase)
+			} else {
 				newFiles = append(newFiles, newFile)
 			}
 		}
 		newFiles = append(newFiles, file)
 	}
 
-	for _, file := range lo.Uniq(newFiles) {
+	for _, file := range newFiles {
 		if file == meta.FilePath {
 			continue
 		}
-		fileExt, generated := generatedExt[file]
-		if !generated {
-			fileExt = strings.TrimPrefix(file, mediaBase)
-		}
+		fileExt := strings.TrimPrefix(file, mediaBase)
 
 		// 检查是否是字幕或音频文件
 		isSubtitle := utils.IsSubtitleFile(fileExt)
@@ -567,8 +537,8 @@ func (t *Transfer) transferRelatedFiles(ctx context.Context, meta Meta, newFileP
 	return nil
 }
 
-func notSubsetFile(file string) bool {
-	return !strings.Contains(file, subtitle.SubtitleSubsetExt)
+func needsFontSubset(suffix string) bool {
+	return utils.IsSubtitleFile(suffix) && !strings.Contains(suffix, subtitle.SubtitleSubsetExt)
 }
 
 func (t *Transfer) makeFileExt(fileExt string, isSubtitle bool) string {

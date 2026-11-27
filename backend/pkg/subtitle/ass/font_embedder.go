@@ -5,11 +5,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
 )
 
 // FontEmbedder 字体嵌入器，负责将子集化的字体嵌入到字幕文件中
@@ -23,9 +20,8 @@ func NewFontEmbedder() *FontEmbedder {
 // EmbedFonts 将子集化的字体嵌入到字幕文件中
 func (fe *FontEmbedder) EmbedFonts(
 	ctx context.Context,
-	filePath string,
-	fonts map[Font][]byte,
-	newFile bool) (string, error) {
+	filePath, outputPath string,
+	fonts map[Font][]byte) (string, error) {
 	if len(fonts) == 0 {
 		return filePath, nil
 	}
@@ -46,7 +42,6 @@ func (fe *FontEmbedder) EmbedFonts(
 	finalContent := fe.mergeContent(originalContent, fontEmbedContent)
 
 	// 写入文件
-	outputPath := fe.getOutputPath(filePath, newFile)
 	if err := fe.writeToFile(outputPath, finalContent); err != nil {
 		return "", fmt.Errorf("写入文件失败: %w", err)
 	}
@@ -214,25 +209,6 @@ func (fe *FontEmbedder) mergeContent(originalLines []string, fontEmbedLines []st
 	}
 
 	return result
-}
-
-// getOutputPath 获取输出文件路径
-func (fe *FontEmbedder) getOutputPath(originalPath string, newFile bool) string {
-	if newFile {
-		dir := filepath.Dir(originalPath)
-		baseName := filepath.Base(originalPath)
-		// 找到第一个点的位置，在文件名和第一个扩展名之间插入.subset
-		firstDot := strings.Index(baseName, ".")
-		if firstDot == -1 {
-			// 没有扩展名，直接添加.subset
-			return filepath.Join(dir, fmt.Sprintf("%s%s", baseName, subtitle.SubtitleSubsetExt))
-		}
-		name := baseName[:firstDot]
-		extensions := baseName[firstDot:]
-		return filepath.Join(dir, fmt.Sprintf("%s%s%s", name, subtitle.SubtitleSubsetExt, extensions))
-	}
-	// 覆盖原文件
-	return originalPath
 }
 
 // writeToFile 写入文件

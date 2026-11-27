@@ -16,7 +16,7 @@ type Meta struct {
 	SubscriptionID  string
 	ReleaseGroup    string
 	FontSubsetter   subtitle.Subsetter
-	sidecars        *taskSidecars
+	preparedSubsets map[string]preparedSubtitle
 }
 
 type DeletePriorityReq struct {

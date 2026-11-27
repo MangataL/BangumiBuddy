@@ -40,3 +40,22 @@ func TestPreflightIncludesMovedFonts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, original, string(data))
 }
+
+func TestGlyphCheckKeepsFontBytesOutOfPreparedSubtitles(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "01.ass")
+	require.NoError(t, os.WriteFile(file, []byte("[Events]\n"), 0600))
+	fonts := []SubsetFont{{Location: FontLocation{Path: "testdata/multilingual.ttf"}, CodePoints: CodePoints{'A': {}}}}
+	s := NewSubsetter(nil, FontSubsetterConfig{CheckGlyphs: true, GenerateNewFile: true})
+	subsetPath := filepath.Join(filepath.Dir(file), "01.subset.ass")
+	output, err := s.embedSubset(t.Context(), file, subsetPath, fonts)
+	require.NoError(t, err)
+	data, err := os.ReadFile(output)
+	require.NoError(t, err)
+	require.Contains(t, string(data), "[Fonts]")
+	require.Nil(t, fonts[0].FontData)
+
+	fonts[0].CodePoints['界'] = struct{}{}
+	_, err = s.embedSubset(t.Context(), file, subsetPath, fonts)
+	require.ErrorContains(t, err, "缺失")
+	require.Nil(t, fonts[0].FontData)
+}
