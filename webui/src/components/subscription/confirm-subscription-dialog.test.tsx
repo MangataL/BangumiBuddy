@@ -26,25 +26,27 @@ const rss: ParseRSSResponse = {
   releaseGroup: "字幕组 A",
   season: 1,
   episodeTotalNum: 12,
-  airWeekday: null,
+  airWeekday: 3,
   posterURL: "first.jpg",
   backdropURL: "background.jpg",
   recommendationDate: "2020-04-05",
   seasons: [
-    { number: 0, airDate: "", episodeTotalNum: 2, posterURL: "special.jpg" },
+    { number: 0, airDate: "", airWeekday: null, episodeTotalNum: 2, posterURL: "special.jpg" },
     {
       number: 1,
       airDate: "2020-04-01",
+      airWeekday: 3,
       episodeTotalNum: 12,
       posterURL: "first.jpg",
     },
     {
       number: 3,
       airDate: "2022-10-01",
+      airWeekday: 6,
       episodeTotalNum: 24,
       posterURL: "third.jpg",
     },
-    { number: 4, airDate: "", episodeTotalNum: 0, posterURL: "series.jpg" },
+    { number: 4, airDate: "", airWeekday: null, episodeTotalNum: 0, posterURL: "series.jpg" },
   ],
 };
 
@@ -73,6 +75,13 @@ const submit = () =>
   screen.getByRole<HTMLButtonElement>("button", { name: "确认订阅" });
 const episodes = () => screen.getByLabelText<HTMLInputElement>("总集数");
 
+const weekday = () => screen.getByRole("combobox", { name: "更新时间" });
+
+function pickWeekday(label: string) {
+  fireEvent.keyDown(weekday(), { key: "Enter" });
+  fireEvent.click(screen.getByRole("option", { name: label }));
+}
+
 function openSeasons() {
   fireEvent.keyDown(screen.getByRole("combobox", { name: "季度" }), {
     key: "Enter",
@@ -100,6 +109,7 @@ it("保留推荐季，切季后使用该季海报，并且仅提交最终的订�
   );
   expect(screen.queryByText(/推荐第/)).toBeNull();
   expect(episodes().value).toBe("12");
+  expect(weekday().textContent).toBe("周三");
   openSeasons();
   expect(screen.getAllByRole("option").map((item) => item.textContent)).toEqual(
     ["第 1 季", "第 3 季", "第 4 季"]
@@ -108,6 +118,7 @@ it("保留推荐季，切季后使用该季海报，并且仅提交最终的订�
   expect(screen.getByRole("img").getAttribute("src")).toBe("third.jpg");
   expect(screen.getByText("2022")).toBeTruthy();
   expect(episodes().value).toBe("24");
+  expect(weekday().textContent).toBe("周六");
   input(episodes(), "21");
   await act(async () => fireEvent.click(submit()));
   expect(http.post).toHaveBeenCalledWith("/bangumis", {
@@ -118,7 +129,7 @@ it("保留推荐季，切季后使用该季海报，并且仅提交最终的订�
     episodeTotalNum: 21,
     priority: 5,
     episodeOffset: 0,
-    airWeekday: 0,
+    airWeekday: 6,
     episodeLocation: "",
     includeRegs: [],
     excludeRegs: [],
@@ -144,6 +155,9 @@ it("未推荐季时等待手选，没有集数的季需要填写有效集数", (
     expect(submit().disabled).toBe(true);
   }
   input(episodes(), "3");
+  expect(weekday().textContent).toBe("请选择更新星期");
+  expect(submit().disabled).toBe(true);
+  pickWeekday("周日");
   expect(submit().disabled).toBe(false);
   input(screen.getByLabelText("字幕组"), "   ");
   expect(submit().disabled).toBe(true);
@@ -198,6 +212,7 @@ it("重新确认和搜索 TMDB 时使用当前 RSS，忽略先前 ID 的迟到�
   input(episodes(), "8");
   expect(submit().disabled).toBe(true);
   input(season, "2");
+  pickWeekday("周一");
   await act(async () => earlier.resolve({ ...rss, tmdbID: 200 }));
   expect(season.value).toBe("2");
   expect(episodes().value).toBe("8");
