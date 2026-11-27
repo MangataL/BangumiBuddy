@@ -100,6 +100,7 @@ export interface ScraperTask {
 
 // 字体库状态类型
 export interface FontMetaSetStats {
+  needsRebuild: boolean;
   total: number; // 字体总数
   initDone: boolean; // 是否已初始化
 }

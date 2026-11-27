@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/freetype"
 )
 
@@ -67,6 +69,32 @@ func TestCreateSubfontData_PreserveChineseNamesAndKeepBasicGlyphs(t *testing.T) 
 		subsetNames := freetype.ExtractFontNames(subsetFace)
 		if subsetNames.ChineseFamilyName == "" {
 			t.Fatalf("subset font lost Chinese family name (orig=%q)", origNames.ChineseFamilyName)
+		}
+	}
+}
+
+func TestSubsetPreservesLocalizedNames(t *testing.T) {
+	data, err := os.ReadFile("testdata/multilingual.ttf")
+	require.NoError(t, err)
+	subset, err := CreateSubfontData(data, 0, []rune{'A'})
+	require.NoError(t, err)
+	lib, err := freetype.NewLibrary()
+	require.NoError(t, err)
+	defer lib.Done()
+	for _, font := range [][]byte{data, subset} {
+		face, err := lib.NewFaceFromMemory(font, 0)
+		require.NoError(t, err)
+		names := freetype.ExtractFontNames(face)
+		face.Done()
+		require.Equal(t, "Test Multi Regular", names.FullName)
+		for _, want := range []freetype.FontName{
+			{Kind: freetype.NameIDFamily, Value: "多言語テスト"},
+			{Kind: freetype.NameIDFullName, Value: "多言語テスト 標準"},
+			{Kind: freetype.NameIDFullName, Value: "Тест Шрифт"},
+			{Kind: freetype.NameIDFamily, Value: "Écriture"},
+			{Kind: freetype.NameIDFamily, Value: "手書き明朝"}, // 只存在于 Mac 日文编码中
+		} {
+			require.Contains(t, names.Aliases, want)
 		}
 	}
 }

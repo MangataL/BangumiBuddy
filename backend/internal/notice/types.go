@@ -39,6 +39,7 @@ type NoticeSubscriptionTransferredReq struct {
 }
 
 type NoticeTaskTransferredReq struct {
+	Warning        string
 	BangumiName    string
 	TorrentName    string
 	Error          error

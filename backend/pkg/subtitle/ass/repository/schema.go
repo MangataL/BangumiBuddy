@@ -60,3 +60,12 @@ func toFontMeta(model fontMetaSchema) ass.FontMeta {
 		Type:       ass.FontType(model.Type),
 	}
 }
+
+// FontName records belong exclusively to the face kept in fonts_meta.
+type fontNameSchema struct {
+	FontID uint   `gorm:"primaryKey;autoIncrement:false"`
+	Kind   uint16 `gorm:"primaryKey;autoIncrement:false;index:idx_font_name_lookup,priority:2"`
+	Name   string `gorm:"primaryKey;index:idx_font_name_lookup,priority:1"`
+}
+
+func (fontNameSchema) TableName() string { return "font_names" }

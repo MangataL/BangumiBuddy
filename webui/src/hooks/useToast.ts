@@ -7,7 +7,7 @@ type ToastOptions = {
   title?: ReactNode;
   description?: ReactNode;
   variant?: ToastVariant;
-} & Omit<Parameters<typeof sonnerToast>[1], "description">;
+} & Omit<NonNullable<Parameters<typeof sonnerToast>[1]>, "description">;
 
 const toast = ({
   title,

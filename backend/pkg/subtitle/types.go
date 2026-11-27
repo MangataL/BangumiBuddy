@@ -1,8 +1,9 @@
 package subtitle
 
 type FontMetaSetStats struct {
-	Total    int64 `json:"total"`
-	InitDone bool  `json:"initDone"`
+	NeedsRebuild bool  `json:"needsRebuild"`
+	Total        int64 `json:"total"`
+	InitDone     bool  `json:"initDone"`
 }
 
 const (

@@ -47,7 +47,8 @@ func CreateSubfontData(fontData []byte, fontIndex int, codePoints []rune) ([]byt
 	inputCodepoints := C.hb_subset_input_set(input, C.HB_SUBSET_SETS_UNICODE)
 	C.hb_set_union(inputCodepoints, cpSet)
 
-	// 保留所有 name table 的语言条目，避免子集化后丢失中文字体名导致无法按字体名匹配。
+	// 字幕可能引用只在旧编码或某种语言中出现的名称。
+	C.hb_subset_input_set_flags(input, C.uint(C.hb_subset_input_get_flags(input)|C.HB_SUBSET_FLAGS_NAME_LEGACY))
 	inputNameLangIDs := C.hb_subset_input_set(input, C.HB_SUBSET_SETS_NAME_LANG_ID)
 	C.hb_set_clear(inputNameLangIDs)
 	C.hb_set_invert(inputNameLangIDs)

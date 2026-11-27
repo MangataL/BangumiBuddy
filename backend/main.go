@@ -189,7 +189,11 @@ func main() {
 	if err != nil {
 		log.Fatalf(ctx, "get subtitle operator config failed %s", err)
 	}
-	fontMetaSet := ass.NewFontMetaSet(getFontDir(), assrepo.New(db))
+	fontRepo, err := assrepo.New(db)
+	if err != nil {
+		log.Fatalf(ctx, "初始化字体数据库失败: %v", err)
+	}
+	fontMetaSet := ass.NewFontMetaSet(getFontDir(), fontRepo)
 	subtitleOperator := ass.NewSubsetter(fontMetaSet, subtitleOperatorConfig)
 	conf.RegisterReloadable(viper.ComponentNameSubtitleOperator, subtitleOperator)
 

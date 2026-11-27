@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/MangataL/BangumiBuddy/pkg/log"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
 )
 
 type TempFontMetaRepository struct {
@@ -15,8 +16,8 @@ func NewTempFontMetaRepository(firstRepo FontMetaRepository, secondRepo FontMeta
 	return &TempFontMetaRepository{firstRepo: firstRepo, secondRepo: secondRepo}
 }
 
-func (r *TempFontMetaRepository) Save(ctx context.Context, fontMetas []FontMeta) error {
-	return r.firstRepo.Save(ctx, fontMetas)
+func (r *TempFontMetaRepository) Replace(ctx context.Context, fontMetas []FontMeta) error {
+	return r.firstRepo.Replace(ctx, fontMetas)
 }
 
 func (r *TempFontMetaRepository) Find(ctx context.Context, req FindFontMetaReq) ([]FontMeta, error) {
@@ -33,18 +34,12 @@ func (r *TempFontMetaRepository) Find(ctx context.Context, req FindFontMetaReq) 
 	return append(fontMetas, fontMetasSecond...), nil
 }
 
-func (r *TempFontMetaRepository) Count(ctx context.Context) (int64, error) {
-	count, err := r.firstRepo.Count(ctx)
+func (r *TempFontMetaRepository) Stats(ctx context.Context) (subtitle.FontMetaSetStats, error) {
+	first, err := r.firstRepo.Stats(ctx)
 	if err != nil {
-		return 0, err
+		return first, err
 	}
-	secondCount, err := r.secondRepo.Count(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return count + secondCount, nil
-}
-
-func (r *TempFontMetaRepository) Clean(ctx context.Context) error {
-	return r.firstRepo.Clean(ctx)
+	second, err := r.secondRepo.Stats(ctx)
+	second.Total += first.Total
+	return second, err
 }

@@ -73,6 +73,7 @@ export function SubtitleConfig({
   const [fontStats, setFontStats] = useState<FontMetaSetStats>({
     total: 0,
     initDone: false,
+    needsRebuild: false,
   });
 
   // 字体列表分页状态

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"sync"
 
@@ -44,23 +45,35 @@ func (s *Subsetter) InitFontMetaSet(ctx context.Context) error {
 }
 
 func (s *Subsetter) SubsetFont(ctx context.Context, filePath string) (string, error) {
+	write, err := s.PrepareSubset(ctx, filePath)
+	if err != nil {
+		return "", err
+	}
+	return write()
+}
+
+func (s *Subsetter) PrepareSubset(ctx context.Context, filePath string) (subtitle.PreparedSubset, error) {
 	var parseFontOpts []ParseFontSetOption
 	if !s.config.CoverExistSubFont {
 		parseFontOpts = append(parseFontOpts, IgnoreFontExist())
 	}
 	fontSet, noNeedSubset, err := s.parser.ParseFontSet(ctx, filePath, parseFontOpts...)
 	if err != nil {
-		return "", fmt.Errorf("解析字体集合失败: %w", err)
+		return nil, fmt.Errorf("解析字体集合失败: %w", err)
 	}
 	if noNeedSubset {
 		log.Infof(ctx, "文件 %s 已经子集化，跳过处理", filePath)
-		return filePath, nil
+		return func() (string, error) { return filePath, nil }, nil
 	}
 	subsetFonts, err := s.makeSubsetFonts(ctx, fontSet)
 	if err != nil {
-		return "", fmt.Errorf("获取字体库信息失败: %w", err)
+		return nil, fmt.Errorf("获取字体库信息失败: %w", err)
 	}
 
+	return func() (string, error) { return s.embedSubset(ctx, filePath, subsetFonts) }, nil
+}
+
+func (s *Subsetter) embedSubset(ctx context.Context, filePath string, subsetFonts []SubsetFont) (string, error) {
 	// 在子集化之前检查字形
 	if s.config.CheckGlyphs {
 		if err := s.checkGlyphs(subsetFonts); err != nil {
@@ -93,12 +106,20 @@ type SubsetFont struct {
 
 func (s *Subsetter) makeSubsetFonts(ctx context.Context, fontSet FontSet) ([]SubsetFont, error) {
 	var subsetFonts []SubsetFont
+	missing := make(subtitle.MissingFonts)
 	for font, codePoints := range fontSet {
-		subsetFont, err := s.makeSubsetFont(ctx, font, codePoints.Copy())
+		subsetFont, err := s.makeSubsetFont(ctx, font, codePoints)
+		if errors.Is(err, ErrFontNotFound) {
+			missing[font] = nil
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
 		subsetFonts = append(subsetFonts, subsetFont)
+	}
+	if len(missing) != 0 {
+		return nil, missing
 	}
 	return subsetFonts, nil
 }
@@ -111,10 +132,14 @@ func (s *Subsetter) makeSubsetFont(ctx context.Context, font Font, codePoints Co
 	}
 	fontMeta, err := s.fontMetaSet.FindFontMeta(ctx, req)
 	if err != nil {
-		if errors.Is(err, ErrFontNotFound) {
-			return SubsetFont{}, fmt.Errorf("字体 %s 未找到: %w", font.FontName, err)
-		}
 		return SubsetFont{}, err
+	}
+	// 字体文件可能在上次建库后被移走，预检也要报告这类缺失。
+	if _, err := os.Stat(fontMeta.Location.Path); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return SubsetFont{}, ErrFontNotFound
+		}
+		return SubsetFont{}, fmt.Errorf("检查字体文件 %s 失败: %w", fontMeta.Location.Path, err)
 	}
 	subsetFont := SubsetFont{
 		Font:       font,
@@ -273,7 +298,7 @@ func (s *Subsetter) subsetSingleFont(ctx context.Context, subsetFont SubsetFont)
 	return subfontData, nil
 }
 
-// appendAdditionalCodePoints 
+// appendAdditionalCodePoints
 // - 基本 ASCII 可见字符（含空格）
 // - 全角 ASCII 区间
 // 这些字符不参与缺字检查，但会参与子集化，避免字幕使用 \h 等转义时缺失基础字符。

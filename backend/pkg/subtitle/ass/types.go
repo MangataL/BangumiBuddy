@@ -1,5 +1,12 @@
 package ass
 
+import (
+	"golang.org/x/text/cases"
+
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/freetype"
+)
+
 type ParseFontSetOption func(*parseFontSetOptions)
 
 type parseFontSetOptions struct {
@@ -14,11 +21,7 @@ func IgnoreFontExist() ParseFontSetOption {
 
 type FontSet map[Font]CodePoints
 
-type Font struct {
-	FontName   string
-	BoldWeight int
-	Italic     bool
-}
+type Font = subtitle.FontStyle
 
 type CodePoints map[rune]struct{}
 
@@ -52,7 +55,13 @@ const (
 	FontTypeOTF FontType = "otf"
 )
 
+// FontNameKey 供临时库和 SQLite 按相同的 Unicode 大小写规则查询名称。
+func FontNameKey(name string) string { return fontNameFold.String(name) }
+
+var fontNameFold = cases.Fold()
+
 type FontMeta struct {
+	Aliases               []freetype.FontName
 	FamilyName            string
 	FullName              string
 	PostScriptName        string
