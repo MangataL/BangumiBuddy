@@ -111,3 +111,34 @@ func TestFullNameBeatsLocalizedAlias(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, exact.FullName, got.FullName)
 }
+
+func TestPostScriptNameBeatsLocalizedAlias(t *testing.T) {
+	ctx := t.Context()
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "fonts.db")))
+	require.NoError(t, err)
+	global, err := New(db)
+	require.NoError(t, err)
+	temp := ass.NewMemoryRepository()
+	const name = "StudioSans-Regular"
+	req := ass.FindFontReq{Font: ass.Font{FontName: name}, UseOTF: true}
+	exact := ass.FontMeta{FullName: "Studio Sans Regular", PostScriptName: name, Type: ass.FontTypeTTF}
+	alias := ass.FontMeta{FullName: "Other Face", Type: ass.FontTypeTTF}
+	for _, kind := range []uint16{freetype.NameIDFullName, freetype.NameIDPostScript} {
+		alias.Aliases = []freetype.FontName{{Kind: kind, Value: name}}
+		for _, repo := range []ass.FontMetaRepository{temp, global} {
+			require.NoError(t, repo.Replace(ctx, []ass.FontMeta{alias, exact}))
+			got, err := ass.NewFontMetaSet("", repo).FindFontMeta(ctx, req)
+			require.NoError(t, err)
+			require.Equal(t, exact.FullName, got.FullName)
+		}
+	}
+
+	// 种子内的 TTF 别名和全局库中 OTF 的 PostScript 名重合。
+	exact.Type = ass.FontTypeOTF
+	require.NoError(t, global.Replace(ctx, []ass.FontMeta{exact}))
+	require.NoError(t, temp.Replace(ctx, []ass.FontMeta{alias}))
+	set := ass.NewFontMetaSet("", ass.NewTempFontMetaRepository(temp, global))
+	got, err := set.FindFontMeta(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, exact.FullName, got.FullName)
+}

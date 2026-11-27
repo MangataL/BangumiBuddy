@@ -283,31 +283,28 @@ func (r *FontMetaSet) FindFontMeta(ctx context.Context, req FindFontReq) (FontMe
 	return fontMetaOTF, nil
 }
 
-// 同名候选中，字体自身的完整名称优先于本地化别名和字重匹配。
-const exactFullNameMatch = -1
+// 偏差越小越优先。字体自身的完整名和 PostScript 名都优先于别名。
+const (
+	exactFullNameMatch   = -2
+	exactPostScriptMatch = -1
+)
 
 func (r *FontMetaSet) findFontMeta(ctx context.Context, font Font, fontType FontType, useSimilarFont bool) (FontMeta, int, error) {
-	var deviationValue = math.MaxInt
-	// 先用FullName查找
-	fontMetas, err := r.repo.Find(ctx, FindFontMetaReq{
+	key := FontNameKey(font.FontName)
+	fullNames, err := r.repo.Find(ctx, FindFontMetaReq{
 		FullName: font.FontName,
 		Type:     fontType,
 	})
 	if err != nil {
 		return FontMeta{}, 0, err
 	}
-	if len(fontMetas) != 0 {
-		key := FontNameKey(font.FontName)
-		for _, candidate := range fontMetas {
-			if FontNameKey(candidate.FullName) == key {
-				return candidate, exactFullNameMatch, nil
-			}
+	for _, candidate := range fullNames {
+		if FontNameKey(candidate.FullName) == key {
+			return candidate, exactFullNameMatch, nil
 		}
-		return fontMetas[0], 0, nil
 	}
 
-	// 再用PostScriptName查找
-	fontMetas, err = r.repo.Find(ctx, FindFontMetaReq{
+	postScriptNames, err := r.repo.Find(ctx, FindFontMetaReq{
 		PostScriptName: font.FontName,
 		Type:           fontType,
 	})
@@ -315,8 +312,16 @@ func (r *FontMetaSet) findFontMeta(ctx context.Context, font Font, fontType Font
 		return FontMeta{}, 0, err
 	}
 
-	if len(fontMetas) != 0 {
-		return fontMetas[0], 0, nil
+	for _, candidate := range postScriptNames {
+		if FontNameKey(candidate.PostScriptName) == key {
+			return candidate, exactPostScriptMatch, nil
+		}
+	}
+	if len(fullNames) > 0 {
+		return fullNames[0], 0, nil
+	}
+	if len(postScriptNames) > 0 {
+		return postScriptNames[0], 0, nil
 	}
 
 	if !useSimilarFont {
@@ -324,16 +329,15 @@ func (r *FontMetaSet) findFontMeta(ctx context.Context, font Font, fontType Font
 	}
 
 	// 查找同Family字体，寻找最相似的字体
-	fontMetas, err = r.repo.Find(ctx, FindFontMetaReq{
+	fontMetas, err := r.repo.Find(ctx, FindFontMetaReq{
 		FamilyName: font.FontName,
 		Type:       fontType,
 	})
 	if err != nil {
 		return FontMeta{}, 0, err
 	}
-	var (
-		bestMatchFont FontMeta
-	)
+	var bestMatchFont FontMeta
+	deviationValue := math.MaxInt
 	for _, fontMeta := range fontMetas {
 		if fontMeta.Italic != font.Italic {
 			continue
