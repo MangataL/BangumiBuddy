@@ -1,6 +1,7 @@
 package ass
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -19,7 +20,7 @@ import (
 )
 
 var (
-	ErrFontNotFound = errors.New("字体未找到")
+	ErrFontNotFound = subtitle.ErrFontNotFound
 )
 
 type FontMetaSet struct {
@@ -29,10 +30,9 @@ type FontMetaSet struct {
 }
 
 type FontMetaRepository interface {
-	Clean(ctx context.Context) error
-	Save(ctx context.Context, fontMetas []FontMeta) error
+	Replace(ctx context.Context, fontMetas []FontMeta) error
 	Find(ctx context.Context, req FindFontMetaReq) ([]FontMeta, error)
-	Count(ctx context.Context) (int64, error)
+	Stats(ctx context.Context) (subtitle.FontMetaSetStats, error)
 }
 
 type FindFontMetaReq struct {
@@ -51,23 +51,12 @@ func NewFontMetaSet(fontDir string, repo FontMetaRepository) *FontMetaSet {
 }
 
 func (r *FontMetaSet) GetFontMetaSetStats(ctx context.Context) (subtitle.FontMetaSetStats, error) {
-	total, err := r.repo.Count(ctx)
-	if err != nil {
-		return subtitle.FontMetaSetStats{}, err
+	stats, err := r.repo.Stats(ctx)
+	if err == nil && stats.Total > 0 && r.mu.TryLock() {
+		stats.InitDone = true
+		r.mu.Unlock()
 	}
-	var initDone bool
-	if total == 0 {
-		initDone = false
-	} else {
-		if ok := r.mu.TryLock(); ok {
-			initDone = true
-			r.mu.Unlock()
-		}
-	}
-	return subtitle.FontMetaSetStats{
-		Total:    total,
-		InitDone: initDone,
-	}, nil
+	return stats, err
 }
 
 func (r *FontMetaSet) ListFonts(ctx context.Context, req subtitle.ListFontsReq) ([]subtitle.Font, error) {
@@ -101,10 +90,6 @@ func (r *FontMetaSet) Init(ctx context.Context, useSystemFontsDir bool) error {
 	}
 	defer r.mu.Unlock()
 
-	if err := r.repo.Clean(ctx); err != nil {
-		return fmt.Errorf("清理已有字体元数据失败: %w", err)
-	}
-
 	fontPaths := r.getFontPaths(useSystemFontsDir)
 	if len(fontPaths) == 0 {
 		return errors.New("未找到字体文件")
@@ -120,7 +105,10 @@ func (r *FontMetaSet) Init(ctx context.Context, useSystemFontsDir bool) error {
 
 		allFontMetas = append(allFontMetas, fontMetas...)
 	}
-	if err := r.repo.Save(ctx, allFontMetas); err != nil {
+	if len(allFontMetas) == 0 {
+		return errors.New("未找到可解析的字体")
+	}
+	if err := r.repo.Replace(ctx, allFontMetas); err != nil {
 		return fmt.Errorf("保存字体元数据失败: %w", err)
 	}
 	return nil
@@ -232,6 +220,11 @@ func (r *FontMetaSet) extractFontMeta(face *freetype.Face, fontPath string, inde
 
 	// 提取字体名称（包括英文和中文）
 	names := freetype.ExtractFontNames(face)
+	names.FullName = cmp.Or(names.FullName, names.PostScriptName, names.FamilyName)
+	if names.FullName == "" {
+		return FontMeta{}, errors.New("字体缺少完整名称")
+	}
+	meta.Aliases = names.Aliases
 	meta.FamilyName = names.FamilyName
 	meta.FullName = names.FullName
 	meta.PostScriptName = names.PostScriptName

@@ -800,15 +800,15 @@ export function MagnetDetailDialog({
               {/* 错误详情 */}
               {task.downloadStatusDetail && (
                 <Alert
-                  variant="destructive"
-                  className="border-red-500/20 bg-red-500/5 anime-card"
+                  variant={task.downloadStatus === TorrentStatusSet.Transferred ? "default" : "destructive"}
+                  className={task.downloadStatus === TorrentStatusSet.Transferred ? "border-amber-500/30 bg-amber-500/5 anime-card" : "border-red-500/20 bg-red-500/5 anime-card"}
                 >
                   <Activity className={isMobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
                   <AlertDescription
                     className={isMobile ? "text-xs" : "text-sm"}
                   >
                     <span className="font-medium block mb-1">状态详情</span>
-                    {task.downloadStatusDetail}
+                    <span className="whitespace-pre-wrap break-words">{task.downloadStatusDetail}</span>
                   </AlertDescription>
                 </Alert>
               )}

@@ -4,84 +4,71 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pkg/errors"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/MangataL/BangumiBuddy/pkg/log"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle"
 	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass"
+	"github.com/MangataL/BangumiBuddy/pkg/subtitle/ass/freetype"
 )
 
-func New(db *gorm.DB) ass.FontMetaRepository {
+func New(db *gorm.DB) (ass.FontMetaRepository, error) {
 	// 自动迁移表结构
-	db.AutoMigrate(&fontMetaSchema{})
-	return &fontMetaRepository{db: db}
+	if err := db.AutoMigrate(&fontMetaSchema{}, &fontNameSchema{}); err != nil {
+		return nil, err
+	}
+	return &fontMetaRepository{db: db}, nil
 }
 
 type fontMetaRepository struct {
 	db *gorm.DB
 }
 
-// Clean implements FontMetaRepository.
-func (f *fontMetaRepository) Clean(ctx context.Context) error {
-	// 使用ORM方式删除所有记录
-	if err := f.db.Session(&gorm.Session{
-		AllowGlobalUpdate: true,
-		Context:           ctx,
-	}).Delete(&fontMetaSchema{}).Error; err != nil {
-		return fmt.Errorf("清理字体元数据失败: %w", err)
-	}
-
-	// 重置SQLite自增值（SQLite特有，无法通过ORM实现）
-	if err := f.db.WithContext(ctx).Exec("DELETE FROM sqlite_sequence WHERE name='fonts_meta'").Error; err != nil {
-		// 如果sqlite_sequence表不存在或者没有记录，这是正常的，不算错误
-		// 忽略这个错误
-		log.Warnf(ctx, "重置SQLite自增值失败: %v", err)
-	}
-
-	return nil
-}
-
-// Save implements FontMetaRepository.
-func (f *fontMetaRepository) Save(ctx context.Context, fontMetas []ass.FontMeta) error {
-	if len(fontMetas) == 0 {
-		return nil
-	}
-
-	// 转换为数据库模型
-	models := make([]fontMetaSchema, 0, len(fontMetas))
-	for _, fontMeta := range fontMetas {
-		models = append(models, fromFontMeta(fontMeta))
-	}
-
-	// 使用Clauses进行批量Upsert操作，避免重复插入相同fullName的记录
-	// SQLite使用ON CONFLICT DO NOTHING来处理唯一约束冲突
-	return errors.WithMessage(
-		f.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "full_name"}},
-			DoNothing: true,
-		}).CreateInBatches(&models, 200).Error,
-		"保存字体元数据失败",
-	)
+func (f *fontMetaRepository) Replace(ctx context.Context, fonts []ass.FontMeta) error {
+	return f.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("DELETE FROM font_names").Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("DELETE FROM fonts_meta").Error; err != nil {
+			return err
+		}
+		var aliases []fontNameSchema
+		for _, font := range fonts {
+			face := fromFontMeta(font)
+			result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "full_name"}}, DoNothing: true}).Create(&face)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				continue
+			}
+			for _, name := range font.Aliases {
+				aliases = append(aliases, fontNameSchema{FontID: face.ID, Kind: name.Kind, Name: ass.FontNameKey(name.Value)})
+			}
+		}
+		if len(aliases) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(aliases, 200).Error
+	})
 }
 
 // Find implements FontMetaRepository.
 func (f *fontMetaRepository) Find(ctx context.Context, req ass.FindFontMetaReq) ([]ass.FontMeta, error) {
 	var models []fontMetaSchema
 	query := f.db.WithContext(ctx)
-	if req.Type == "ttf" {
-		query = query.Debug()
+	byName := func(columns string, kind uint16, name string) {
+		query = query.Where("("+columns+" OR id IN (SELECT font_id FROM font_names WHERE kind = ? AND name = ?))",
+			name, name, kind, ass.FontNameKey(name))
 	}
-
-	// 构建查询条件
 	if req.FullName != "" {
-		query = query.Where("full_name = ? OR chinese_full_name = ?", req.FullName, req.FullName)
+		byName("full_name = ? OR chinese_full_name = ?", freetype.NameIDFullName, req.FullName)
 	}
 	if req.PostScriptName != "" {
-		query = query.Where("post_script_name = ? OR chinese_post_script_name = ?", req.PostScriptName, req.PostScriptName)
+		byName("post_script_name = ? OR chinese_post_script_name = ?", freetype.NameIDPostScript, req.PostScriptName)
 	}
 	if req.FamilyName != "" {
-		query = query.Where("family_name = ? OR chinese_family_name = ?", req.FamilyName, req.FamilyName)
+		byName("family_name = ? OR chinese_family_name = ?", freetype.NameIDFamily, req.FamilyName)
 	}
 	if req.Type != "" {
 		query = query.Where("type = ?", string(req.Type))
@@ -102,10 +89,8 @@ func (f *fontMetaRepository) Find(ctx context.Context, req ass.FindFontMetaReq) 
 	return fontMetas, nil
 }
 
-func (f *fontMetaRepository) Count(ctx context.Context) (int64, error) {
-	var count int64
-	if err := f.db.WithContext(ctx).Model(&fontMetaSchema{}).Count(&count).Error; err != nil {
-		return 0, fmt.Errorf("查询字体元数据数量失败: %w", err)
-	}
-	return count, nil
+func (f *fontMetaRepository) Stats(ctx context.Context) (subtitle.FontMetaSetStats, error) {
+	var stats subtitle.FontMetaSetStats
+	err := f.db.WithContext(ctx).Raw("SELECT count(*) AS total, count(*) > 0 AND NOT EXISTS (SELECT 1 FROM font_names) AS needs_rebuild FROM fonts_meta").Scan(&stats).Error
+	return stats, err
 }

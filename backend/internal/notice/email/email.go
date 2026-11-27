@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/smtp"
 	"strings"
 	"sync"
@@ -354,8 +355,8 @@ func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
 		statusColor = "#FF3B30" // 红色
 		detailsHtml = fmt.Sprintf(`
         <div style="margin-top: 20px; color: #FF3B30; background-color: #FFEBE9; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <strong>错误详情:</strong> %s
-        </div>`, req.Error.Error())
+            <strong>错误详情:</strong><div style="white-space: pre-wrap">%s</div>
+        </div>`, html.EscapeString(req.Error.Error()))
 	} else if successCount > 0 && !hasFailures {
 		// 全部转移成功
 		subject = fmt.Sprintf("磁力任务转移成功：%s", req.BangumiName)
@@ -374,7 +375,7 @@ func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
                 <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all; margin-bottom: 8px;">%s</code>
                 <div style="font-size: 13px; color: #666; margin-bottom: 3px;">媒体库路径:</div>
                 <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">%s</code>
-            </div>`, originFile, mediaFile)
+            </div>`, html.EscapeString(originFile), html.EscapeString(mediaFile))
 		}
 		fileListHtml += `</div>`
 		detailsHtml = fileListHtml
@@ -399,7 +400,7 @@ func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
                 <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all; margin-bottom: 8px;">%s</code>
                 <div style="font-size: 13px; color: #666; margin-bottom: 3px;">媒体库路径:</div>
                 <code style="display: block; background-color: #f0f0f0; padding: 5px; border-radius: 4px; font-size: 12px; color: #333; word-break: break-all;">%s</code>
-            </div>`, originFile, mediaFile)
+            </div>`, html.EscapeString(originFile), html.EscapeString(mediaFile))
 			}
 			detailsHtml += `</div>`
 		}
@@ -408,11 +409,14 @@ func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
 		if hasFailures {
 			detailsHtml += fmt.Sprintf(`
         <div style="margin-top: 20px; color: #FF3B30; background-color: #FFEBE9; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <strong>转移失败详情:</strong> %s
-        </div>`, req.Error.Error())
+            <strong>转移失败详情:</strong><div style="white-space: pre-wrap">%s</div>
+        </div>`, html.EscapeString(req.Error.Error()))
 		}
 	}
 
+	if req.Warning != "" {
+		detailsHtml += `<div style="white-space: pre-wrap">` + html.EscapeString(req.Warning) + "</div>"
+	}
 	htmlBody := fmt.Sprintf(`
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); background-color: #ffffff;">
         <div style="text-align: center; margin-bottom: 25px;">
@@ -438,7 +442,7 @@ func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
             <p style="margin-top: 5px; font-size: 12px;">© %d BangumiBuddy</p>
         </div>
     </div>
-    `, req.TorrentName, statusColor, statusMsg, detailsHtml, time.Now().Year())
+    `, html.EscapeString(req.TorrentName), statusColor, statusMsg, detailsHtml, time.Now().Year())
 
 	return n.sendEmail(subject, htmlBody)
 }

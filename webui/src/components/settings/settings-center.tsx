@@ -243,6 +243,7 @@ export default function SettingsCenter() {
   const [fontStats, setFontStats] = useState<FontMetaSetStats>({
     total: 0,
     initDone: false,
+    needsRebuild: false,
   });
 
   // 验证下载设置表单字段

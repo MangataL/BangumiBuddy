@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/MangataL/BangumiBuddy/internal/network"
 	"github.com/MangataL/BangumiBuddy/internal/notice"
@@ -229,40 +230,39 @@ func (t *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
 	}
 
 	// 构建基本信息部分
-	baseInfo := fmt.Sprintf("*磁力任务转移通知*\n\n"+
-		"🎬 *番剧/剧场版*: `%s`\n"+
-		"📁 *种子名*: `%s`\n", req.BangumiName, req.TorrentName)
+	baseInfo := fmt.Sprintf("磁力任务转移通知\n\n"+
+		"🎬 番剧/剧场版: %s\n"+
+		"📁 种子名: %s\n", req.BangumiName, req.TorrentName)
 
 	if successCount == 0 && hasFailures {
 		// 全部转移失败
 		emoji = "❌"
-		text = fmt.Sprintf("%s\n%s *全部转移失败*\n⚠️ *错误详情*: %s", baseInfo, emoji, req.Error.Error())
+		text = fmt.Sprintf("%s\n%s 全部转移失败\n⚠️ 错误详情: %s", baseInfo, emoji, req.Error.Error())
 	} else if successCount > 0 && !hasFailures {
 		// 全部转移成功
 		emoji = "✅"
-		text = fmt.Sprintf("%s\n%s *全部转移成功* (%d个文件)\n", baseInfo, emoji, successCount)
+		text = fmt.Sprintf("%s\n%s 全部转移成功 (%d个文件)\n", baseInfo, emoji, successCount)
 		text += fileBody
 	} else {
 		// 部分成功，部分失败
 		emoji = "⚠️"
-		text = fmt.Sprintf("%s\n%s *部分转移成功* (%d个文件成功)\n", baseInfo, emoji, successCount)
+		text = fmt.Sprintf("%s\n%s 部分转移成功 (%d个文件成功)\n", baseInfo, emoji, successCount)
 		text += fileBody
 
 		// 添加失败信息
 		if hasFailures {
-			text += fmt.Sprintf("\n\n❌ *转移失败详情*: %s", req.Error.Error())
+			text += fmt.Sprintf("\n\n❌ 转移失败详情: %s", req.Error.Error())
 		}
 	}
 
 	// 创建消息
-	msg := tgbotapi.NewMessage(t.cfg.ChatID, text)
-	msg.ParseMode = tgbotapi.ModeMarkdown
-
-	// 发送消息
-	_, err := t.bot.Send(msg)
-	if err != nil {
-		return fmt.Errorf("发送任务转移通知失败: %w", err)
+	if req.Warning != "" {
+		text += "\n\n" + req.Warning
 	}
-
+	for _, part := range notice.SplitMessage(text, 4096, utf16.RuneLen) {
+		if _, err := t.bot.Send(tgbotapi.NewMessage(t.cfg.ChatID, part)); err != nil {
+			return fmt.Errorf("发送任务转移通知失败: %w", err)
+		}
+	}
 	return nil
 }

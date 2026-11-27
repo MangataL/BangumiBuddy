@@ -184,16 +184,20 @@ func (t *Transfer) transferTorrent(ctx context.Context, torrent downloader.Torre
 			log.Warnf(ctx, "使用临时字体目录创建字体库失败: %v", err)
 		}
 	}
+	var warning string
 	if torrent.SubscriptionID != "" {
 		err = t.transferTorrentForSubscribe(ctx, torrent, fontSubsetter)
 	} else {
-		err = t.transferTorrentForTask(ctx, torrent, fontSubsetter)
+		warning, err = t.transferTorrentForTask(ctx, torrent, fontSubsetter)
 	}
 	transferState := downloader.TorrentStatusTransferred
-	var transferDetail string
+	transferDetail := warning
 	if err != nil {
 		transferState = downloader.TorrentStatusTransferredError
 		transferDetail = err.Error()
+		if warning != "" {
+			transferDetail += "\n" + warning
+		}
 	}
 	if err := t.torrentOperator.SetTorrentStatus(ctx, torrent.Hash, transferState, transferDetail, &downloader.SetTorrentStatusOptions{
 		TransferType: t.config.TransferType,
@@ -482,36 +486,65 @@ var audioExtensions = map[string]struct{}{
 
 // 转移相关的字幕和音频文件
 func (t *Transfer) transferRelatedFiles(ctx context.Context, meta Meta, newFilePathWithoudExt string) error {
-	files, err := utils.FindSameBaseFiles(meta.FilePath)
+	var files []string
+	var err error
+	if meta.sidecars != nil {
+		files, err = meta.sidecars.files, meta.sidecars.err
+	} else {
+		files, err = utils.FindSameBaseFiles(meta.FilePath)
+	}
 	if err != nil {
 		return errors.WithMessage(err, "获取相关文件列表失败")
 	}
 
-	fontSubsetter := t.fontSubsetter
+	fontSubsetter := meta.FontSubsetter
+	if fontSubsetter == nil {
+		fontSubsetter = t.fontSubsetter
+	}
+	mediaBase := utils.GetFileBaseName(meta.FilePath)
+	generatedExt := make(map[string]string)
 	newFiles := make([]string, 0, len(files))
 	for _, file := range files {
-		if utils.IsSubtitleFile(file) && t.config.EnableSubtitleSubset && notSubsetFile(file) {
-			if meta.FontSubsetter != nil {
-				fontSubsetter = meta.FontSubsetter
+		if meta.sidecars != nil {
+			// 原字幕缺字体时，忽略上次生成的子集。
+			original := strings.Replace(filepath.Base(file), ".subset.", ".", 1)
+			if original != filepath.Base(file) && meta.sidecars.prepared[filepath.Join(filepath.Dir(file), original)].err != nil {
+				continue
 			}
-			newFile, err := fontSubsetter.SubsetFont(ctx, file)
+		}
+		if t.config.EnableSubtitleSubset && needsFontSubset(file) {
+			var newFile string
+			var err error
+			if meta.sidecars == nil {
+				newFile, err = fontSubsetter.SubsetFont(ctx, file)
+			} else {
+				prepared := meta.sidecars.prepared[file]
+				err = prepared.err
+				if err == nil {
+					newFile, err = prepared.write()
+				}
+			}
 			if err != nil {
 				if !t.config.IgnoreSubsetError {
 					return errors.WithMessagef(err, "子集化字幕文件 %s 失败", file)
 				}
 				log.Warnf(ctx, "子集化字幕文件 %s 失败: %v，跳过", file, err)
-			} else {
+			} else if newFile != file {
+				generatedExt[newFile] = subtitle.SubtitleSubsetExt + strings.TrimPrefix(file, mediaBase)
 				newFiles = append(newFiles, newFile)
 			}
 		}
 		newFiles = append(newFiles, file)
 	}
 
-	for _, file := range newFiles {
+	for _, file := range lo.Uniq(newFiles) {
 		if file == meta.FilePath {
 			continue
 		}
-		fileExt := strings.TrimPrefix(file, utils.GetFileBaseName(meta.FilePath))
+		fileExt, generated := generatedExt[file]
+		if !generated {
+			fileExt = strings.TrimPrefix(file, mediaBase)
+		}
 
 		// 检查是否是字幕或音频文件
 		isSubtitle := utils.IsSubtitleFile(fileExt)
@@ -556,90 +589,94 @@ func (t *Transfer) makeFileExt(fileExt string, isSubtitle bool) string {
 	return fileExt
 }
 
-func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloader.Torrent, fontSubsetter subtitle.Subsetter) error {
+type taskMedia struct {
+	kind downloader.DownloadType
+	file magnet.TorrentFile
+	meta Meta
+}
+
+func (t *Transfer) transferTorrentForTask(ctx context.Context, torrent downloader.Torrent, fontSubsetter subtitle.Subsetter) (string, error) {
 	task, err := t.magnetManager.GetTask(ctx, torrent.TaskID)
 	if err != nil {
-		return errors.WithMessage(err, "获取任务失败")
+		return "", errors.WithMessage(err, "获取任务失败")
 	}
-	taskTorrents := lo.SliceToMap(task.Torrent.Files, func(file magnet.TorrentFile) (string, magnet.TorrentFile) {
-		return file.FileName, file
-	})
-	transferErr := &transferError{fileNum: len(torrent.FileNames)}
-	successFilePaths := make(map[string]string)
-
-	for _, fileName := range torrent.FileNames {
-		file, ok := taskTorrents[fileName]
+	if fontSubsetter == nil {
+		fontSubsetter = t.fontSubsetter
+	}
+	taskFiles := lo.KeyBy(task.Torrent.Files, func(file magnet.TorrentFile) string { return file.FileName })
+	var media []taskMedia
+	for _, name := range torrent.FileNames {
+		file, ok := taskFiles[name]
 		if !ok {
-			log.Warnf(ctx, "任务中没有找到文件 %s", fileName)
+			log.Warnf(ctx, "任务中没有找到文件 %s", name)
 			continue
 		}
-		if !file.Download {
-			log.Infof(ctx, "文件 %s 未下载，跳过转移", fileName)
+		if !file.Download || !file.Media {
 			continue
 		}
-		if !file.Media {
-			log.Infof(ctx, "文件 %s 不是待入库文件，跳过转移", fileName)
-			continue
+		kind := task.DownloadType
+		meta := Meta{
+			ChineseName:   task.Meta.ChineseName,
+			Year:          task.Meta.Year,
+			FileName:      name,
+			FilePath:      filepath.Join(torrent.Path, name),
+			ReleaseGroup:  task.Meta.ReleaseGroup,
+			FontSubsetter: fontSubsetter,
 		}
-
-		// 确定文件使用的类型和元数据
-		var downloadType downloader.DownloadType
-		var fileMeta Meta
 		if file.Meta != nil {
-			// 使用文件级别的类型和元数据
-			downloadType = file.Meta.MediaType
-			fileMeta = Meta{
-				ChineseName:   file.Meta.ChineseName,
-				Year:          file.Meta.Year,
-				FileName:      fileName,
-				FilePath:      filepath.Join(torrent.Path, fileName),
-				ReleaseGroup:  task.Meta.ReleaseGroup,
-				FontSubsetter: fontSubsetter,
-			}
-			log.Infof(ctx, "文件 %s 使用自定义元数据: 类型=%s, 中文名=%s", fileName, downloadType, fileMeta.ChineseName)
-		} else {
-			// 使用任务级别的类型和元数据
-			downloadType = task.DownloadType
-			fileMeta = Meta{
-				ChineseName:   task.Meta.ChineseName,
-				Year:          task.Meta.Year,
-				FileName:      fileName,
-				FilePath:      filepath.Join(torrent.Path, fileName),
-				ReleaseGroup:  task.Meta.ReleaseGroup,
-				FontSubsetter: fontSubsetter,
+			kind = file.Meta.MediaType
+			meta.ChineseName = file.Meta.ChineseName
+			meta.Year = file.Meta.Year
+		}
+		if kind == downloader.DownloadTypeTV || kind == downloader.DownloadTypeMovie {
+			media = append(media, taskMedia{kind, file, meta})
+		}
+	}
+
+	var warning string
+	if t.config.EnableSubtitleSubset {
+		missing := prepareTaskSubtitles(ctx, torrent.Path, media, fontSubsetter)
+		if len(missing) > 0 {
+			if t.config.IgnoreSubsetError {
+				warning = "字幕子集化警告：" + missing.Error()
+			} else {
+				err = missing
 			}
 		}
-
-		newFileID := fmt.Sprintf("%s-%s", torrent.Hash, fileName)
-		var originFile, newFilePath string
-		switch downloadType {
-		case downloader.DownloadTypeTV:
-			originFile, newFilePath, err = t.transferForTaskTV(ctx, fileMeta, file, newFileID)
-		case downloader.DownloadTypeMovie:
-			originFile, newFilePath, err = t.transferForTaskMovie(ctx, fileMeta, newFileID)
+	}
+	successFilePaths := make(map[string]string)
+	if err == nil {
+		transferErr := &transferError{fileNum: len(media)}
+		for _, m := range media {
+			id := torrent.Hash + "-" + m.file.FileName
+			var origin, dest string
+			var fileErr error
+			if m.kind == downloader.DownloadTypeTV {
+				origin, dest, fileErr = t.transferForTaskTV(ctx, m.meta, m.file, id)
+			} else {
+				origin, dest, fileErr = t.transferForTaskMovie(ctx, m.meta, id)
+			}
+			if fileErr != nil {
+				log.Errorf(ctx, "文件 %s 转移失败：%v", m.file.FileName, fileErr)
+				transferErr.Append(fileErr, m.file.FileName)
+			} else {
+				successFilePaths[origin] = dest
+			}
 		}
-
-		if err != nil {
-			log.Errorf(ctx, "文件 %s 转移失败： %v", fileName, err)
-			transferErr.Append(err, fileName)
+		err = transferErr.ErrorOrNil()
+	}
+	if torrent.Status != downloader.TorrentStatusTransferredError || err == nil {
+		if notifyErr := t.notifier.NoticeTaskTransferred(ctx, notice.NoticeTaskTransferredReq{
+			BangumiName:    task.Meta.ChineseName,
+			TorrentName:    torrent.Name,
+			Error:          err,
+			Warning:        warning,
+			MediaFilePaths: successFilePaths,
+		}); notifyErr != nil {
+			log.Warnf(ctx, "通知任务转移结果失败: %v", notifyErr)
 		}
-		successFilePaths[originFile] = newFilePath
 	}
-	err = transferErr.ErrorOrNil()
-	if torrent.Status == downloader.TorrentStatusTransferredError && err != nil {
-		return err
-	}
-
-	if nerr := t.notifier.NoticeTaskTransferred(ctx, notice.NoticeTaskTransferredReq{
-		BangumiName:    task.Meta.ChineseName,
-		TorrentName:    torrent.Name,
-		Error:          err,
-		MediaFilePaths: successFilePaths,
-	}); nerr != nil {
-		log.Warnf(ctx, "通知任务转移结果失败: %v", nerr)
-	}
-
-	return err
+	return warning, err
 }
 
 // isFontArchive 判断文件名是否为包含 "fonts" 的压缩包

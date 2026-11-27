@@ -1,6 +1,7 @@
 import type React from "react";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { configAPI } from "@/api/config";
 import { useLocation, Link } from "react-router-dom";
 import {
   Rss,
@@ -46,6 +47,28 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const [fadeOut, setFadeOut] = useState(false);
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
+  useEffect(() => {
+    const key = "font-name-index-rebuild-notice-v1";
+    let active = true;
+    async function checkFontLibrary() {
+      if (localStorage.getItem(key)) return;
+      const stats = await configAPI.getSubtitleFontMetaSetStats();
+      if (active && stats.needsRebuild && !localStorage.getItem(key)) {
+        toast({
+          title: "字体库需要重建",
+          description: "请到设置中心的工具设置中点「初始化」，以支持日文等多语言字体名称。",
+          duration: 15000,
+          closeButton: true,
+        });
+        localStorage.setItem(key, "1");
+      }
+    }
+    void checkFontLibrary().catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [toast]);
+
   const navigation = [
     { name: "订阅管理", href: "/", icon: Rss },
     { name: "发现", href: "/discover", icon: Compass },

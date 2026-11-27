@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/MangataL/BangumiBuddy/internal/notice"
 	"github.com/MangataL/BangumiBuddy/pkg/utils"
@@ -105,7 +106,6 @@ func (n *notifier) sendNotification(title, body string) error {
 var (
 	client = &http.Client{Timeout: 30 * time.Second}
 )
-
 
 // NoticeSubscriptionUpdated 实现Notifier接口，通知订阅更新状态
 func (n *notifier) NoticeSubscriptionUpdated(ctx context.Context, req notice.NoticeSubscriptionUpdatedReq) error {
@@ -218,5 +218,14 @@ func (n *notifier) NoticeTaskTransferred(ctx context.Context, req notice.NoticeT
 		}
 	}
 
-	return n.sendNotification(title, body)
+	if req.Warning != "" {
+		body += "\n\n" + req.Warning
+	}
+	// 为推送标题和 Bark/APNs 元数据预留空间。
+	for _, part := range notice.SplitMessage(body, 2400, utf8.RuneLen) {
+		if err := n.sendNotification(title, part); err != nil {
+			return err
+		}
+	}
+	return nil
 }
