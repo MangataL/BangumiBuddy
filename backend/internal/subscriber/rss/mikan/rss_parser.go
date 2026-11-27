@@ -1,7 +1,6 @@
 package mikan
 
 import (
-	"cmp"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -60,7 +59,7 @@ func (p *parser) parseReleaseGroup(ctx context.Context, items []subscriber.RSSIt
 	if len(items) == 0 {
 		return ""
 	}
-	bf, err := p.bfParser.Parse(ctx, items[0].Title,
+	bf, err := p.bfParser.Parse(ctx, items[0].GUID,
 		bangumifile.IgnoreValidateEpisode(),
 		bangumifile.PreserveOriginName(),
 	)
@@ -72,6 +71,13 @@ func (p *parser) parseReleaseGroup(ctx context.Context, items []subscriber.RSSIt
 
 var (
 	mikanTitleRegex = regexp.MustCompile(`Mikan Project - (.+?)(?:\s*第|$)`)
+	shanghai        = func() *time.Location {
+		loc, err := time.LoadLocation("Asia/Shanghai")
+		if err != nil {
+			return time.FixedZone("Asia/Shanghai", 8*60*60)
+		}
+		return loc
+	}()
 )
 
 func getBangumiName(ctx context.Context, title string) string {
@@ -97,7 +103,6 @@ func getItems(ctx context.Context, items []*gofeed.Item) []subscriber.RSSItem {
 		}
 		rssItems = append(rssItems, subscriber.RSSItem{
 			GUID:        item.GUID,
-			Title:       cmp.Or(item.Title, item.GUID),
 			TorrentLink: item.Enclosures[0].URL,
 			PublishedAt: parsePublishedAt(ctx, item),
 		})
@@ -112,10 +117,8 @@ func parsePublishedAt(ctx context.Context, item *gofeed.Item) time.Time {
 			PubDate string `xml:"pubDate"`
 		}
 		if err := xml.Unmarshal([]byte(wrappedData), &pubDate); err == nil {
-			for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05"} {
-				if t, err := time.ParseInLocation(layout, strings.TrimSpace(pubDate.PubDate), time.Local); err == nil {
-					return t
-				}
+			if t, err := parseMikanTimestamp(pubDate.PubDate); err == nil {
+				return t
 			}
 		}
 		log.Warnf(ctx, "无法解析 torrent 发布时间: %s", pubDate.PubDate)
@@ -125,10 +128,18 @@ func parsePublishedAt(ctx context.Context, item *gofeed.Item) time.Time {
 		if t, err := mail.ParseDate(item.Published); err == nil {
 			return t
 		}
-		if t, err := time.Parse(time.RFC3339, item.Published); err == nil {
+		if t, err := parseMikanTimestamp(item.Published); err == nil {
 			return t
 		}
 		return *item.PublishedParsed
 	}
 	return time.Time{}
+}
+
+func parseMikanTimestamp(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t, nil
+	}
+	return time.ParseInLocation("2006-01-02T15:04:05", value, shanghai)
 }

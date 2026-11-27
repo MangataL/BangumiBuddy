@@ -180,25 +180,6 @@ func (t *Client) ParseTV(ctx context.Context, id int) (meta.Meta, error) {
 	}, nil
 }
 
-func (t *Client) GetSeasonAirDates(ctx context.Context, tmdbID, season int) ([]string, error) {
-	client := t.currentClient()
-	if client == nil {
-		return nil, ErrTMDBTokenNotSet
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	details, err := client.GetTVSeasonDetails(tmdbID, season, nil)
-	if err != nil {
-		return nil, err
-	}
-	dates := make([]string, 0, len(details.Episodes))
-	for _, episode := range details.Episodes {
-		dates = append(dates, episode.AirDate)
-	}
-	return dates, nil
-}
-
 func (t *Client) GetSeasonEpisodeTotalNum(
 	ctx context.Context,
 	tmdbID, season int,

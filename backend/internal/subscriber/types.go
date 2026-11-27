@@ -64,7 +64,6 @@ type RSS struct {
 // RSSItem RSS节点信息
 type RSSItem struct {
 	GUID        string
-	Title       string
 	TorrentLink string
 	PublishedAt time.Time
 }
