@@ -12,6 +12,13 @@ CLAUDE.md
 .pnpm-store
 .codegraph
 .agents
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/verify/
 docs/
 CONTEXT.md
 AGENTS.md
+
+/.agents/skills/verify/scripts/__pycache__/
