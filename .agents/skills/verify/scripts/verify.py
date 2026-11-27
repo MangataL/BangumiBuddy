@@ -14,7 +14,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, contextmanager
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -35,6 +35,7 @@ from subtitle_fixture import (
 
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parents[3]
+PROOF_ROOT = ROOT / "artifacts/verify"
 FONTS_DIR = ROOT / "backend/pkg/subtitle/ass/testdata"
 HTTP = build_opener(ProxyHandler({}))
 
@@ -341,10 +342,38 @@ def subtitles(session, scratch):
         )
 
 
-def run(mode, path):
+@contextmanager
+def evidence_directory(path):
     evidence = path.resolve()
     evidence.mkdir(parents=True, exist_ok=False)
-    with tempfile.TemporaryDirectory(prefix="bangumibuddy-verify-") as tmp, ExitStack() as stack:
+    if evidence.parent != PROOF_ROOT:
+        yield evidence
+        return
+
+    result = "failed"
+    try:
+        yield evidence
+        result = "passed"
+    finally:
+        # 用 SQLite 写锁串行清理。运行中的目录还没有结果标记。
+        with closing(sqlite3.connect(PROOF_ROOT / ".verify.lock", timeout=60)) as lock:
+            lock.execute("BEGIN IMMEDIATE")
+            marker = ".verify-result"
+            (evidence / marker).write_text(result)
+            for previous in PROOF_ROOT.iterdir():
+                if previous == evidence or previous.is_symlink():
+                    continue
+                receipt = previous / marker
+                if receipt.is_file() and (result == "passed" or receipt.read_text() == "failed"):
+                    shutil.rmtree(previous)
+
+
+def run(mode, path):
+    with (
+        evidence_directory(path) as evidence,
+        tempfile.TemporaryDirectory(prefix="bangumibuddy-verify-") as tmp,
+        ExitStack() as stack,
+    ):
         scratch = Path(tmp).resolve()
         server = stack.enter_context(ThreadingHTTPServer(("127.0.0.1", 0), Boundaries))
         server.added = server.started = False
@@ -356,7 +385,10 @@ def run(mode, path):
             subtitles(session, scratch)
         else:
             print("Ctrl-C 结束本次实例", flush=True)
-            threading.Event().wait()
+            try:
+                threading.Event().wait()
+            except KeyboardInterrupt:
+                return 130
     print(f"PASS {evidence}", flush=True)
 
 
@@ -375,7 +407,7 @@ if __name__ == "__main__":
     if args.mode in ("subtitles", "serve"):
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
         try:
-            run(args.mode, args.evidence)
+            sys.exit(run(args.mode, args.evidence))
         except KeyboardInterrupt:
             sys.exit(130)
     else:
