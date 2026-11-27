@@ -17,6 +17,7 @@ CLAUDE.md
 !/.agents/skills/
 /.agents/skills/*
 !/.agents/skills/verify/
+/artifacts/
 docs/
 CONTEXT.md
 AGENTS.md
