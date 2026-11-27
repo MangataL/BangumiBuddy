@@ -73,7 +73,7 @@ func (f *fontMetaRepository) Find(ctx context.Context, req ass.FindFontMetaReq) 
 	if req.Type != "" {
 		query = query.Where("type = ?", string(req.Type))
 	}
-	query = req.Page.Apply(query)
+	query = req.Page.Apply(query.Order("id ASC"))
 
 	// 执行查询
 	if err := query.Find(&models).Error; err != nil {

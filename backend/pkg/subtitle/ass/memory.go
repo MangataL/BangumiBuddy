@@ -10,18 +10,25 @@ import (
 )
 
 func NewMemoryRepository() FontMetaRepository {
-	return &MemoryRepository{fonts: make(map[string]FontMeta)}
+	return &MemoryRepository{}
 }
 
 type MemoryRepository struct {
 	mu    sync.RWMutex
-	fonts map[string]FontMeta
+	fonts []FontMeta
 }
 
 func (r *MemoryRepository) Replace(ctx context.Context, fontMetas []FontMeta) error {
-	fonts := make(map[string]FontMeta, len(fontMetas))
+	fonts := make([]FontMeta, 0, len(fontMetas))
+	positions := make(map[string]int, len(fontMetas))
 	for _, m := range fontMetas {
-		fonts[strings.ToLower(m.FullName)] = m
+		key := strings.ToLower(m.FullName)
+		if i, ok := positions[key]; ok {
+			fonts[i] = m
+			continue
+		}
+		positions[key] = len(fonts)
+		fonts = append(fonts, m)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
