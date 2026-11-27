@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -44,12 +45,12 @@ func (s *Subsetter) InitFontMetaSet(ctx context.Context) error {
 	return s.fontMetaSet.Init(ctx, s.config.UseSystemFontsDir)
 }
 
-func (s *Subsetter) SubsetFont(ctx context.Context, filePath string) (string, error) {
+func (s *Subsetter) SubsetFont(ctx context.Context, filePath, subsetPath string) (string, error) {
 	write, err := s.PrepareSubset(ctx, filePath)
 	if err != nil {
 		return "", err
 	}
-	return write()
+	return write(subsetPath)
 }
 
 func (s *Subsetter) PrepareSubset(ctx context.Context, filePath string) (subtitle.PreparedSubset, error) {
@@ -63,19 +64,25 @@ func (s *Subsetter) PrepareSubset(ctx context.Context, filePath string) (subtitl
 	}
 	if noNeedSubset {
 		log.Infof(ctx, "文件 %s 已经子集化，跳过处理", filePath)
-		return func() (string, error) { return filePath, nil }, nil
+		return func(string) (string, error) { return filePath, nil }, nil
 	}
 	subsetFonts, err := s.makeSubsetFonts(ctx, fontSet)
 	if err != nil {
 		return nil, fmt.Errorf("获取字体库信息失败: %w", err)
 	}
-
-	return func() (string, error) { return s.embedSubset(ctx, filePath, subsetFonts) }, nil
+	return func(subsetPath string) (string, error) {
+		if !s.config.GenerateNewFile {
+			subsetPath = filePath
+		}
+		return s.embedSubset(ctx, filePath, subsetPath, subsetFonts)
+	}, nil
 }
 
-func (s *Subsetter) embedSubset(ctx context.Context, filePath string, subsetFonts []SubsetFont) (string, error) {
+func (s *Subsetter) embedSubset(ctx context.Context, filePath, outputPath string, subsetFonts []SubsetFont) (string, error) {
 	// 在子集化之前检查字形
 	if s.config.CheckGlyphs {
+		// 字体文件只在本次写入中复用，预检结果可以由整批字幕持有。
+		subsetFonts = slices.Clone(subsetFonts)
 		if err := s.checkGlyphs(subsetFonts); err != nil {
 			return "", fmt.Errorf("字形检查失败: %w", err)
 		}
@@ -88,13 +95,13 @@ func (s *Subsetter) embedSubset(ctx context.Context, filePath string, subsetFont
 	}
 
 	// 嵌入字体到字幕文件
-	outputPath, err := s.fontEmbedder.EmbedFonts(ctx, filePath, fonts, s.config.GenerateNewFile)
+	writtenPath, err := s.fontEmbedder.EmbedFonts(ctx, filePath, outputPath, fonts)
 	if err != nil {
 		return "", fmt.Errorf("嵌入字体失败: %w", err)
 	}
 
-	log.Infof(ctx, "字体子集化完成，输出文件: %s", outputPath)
-	return outputPath, nil
+	log.Infof(ctx, "字体子集化完成，输出文件: %s", writtenPath)
+	return writtenPath, nil
 }
 
 type SubsetFont struct {

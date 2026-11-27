@@ -15,26 +15,32 @@ type preparedSubtitle struct {
 	err   error
 }
 
-type taskSidecars struct {
-	files    []string
-	err      error
-	prepared map[string]preparedSubtitle
+func (t *Transfer) subsetSubtitle(ctx context.Context, meta Meta, file, subsetPath string) (string, error) {
+	if prepared, ok := meta.preparedSubsets[file]; ok {
+		if prepared.err != nil {
+			return "", prepared.err
+		}
+		return prepared.write(subsetPath)
+	}
+	subsetter := meta.FontSubsetter
+	if subsetter == nil {
+		subsetter = t.fontSubsetter
+	}
+	return subsetter.SubsetFont(ctx, file, subsetPath)
 }
 
-func needsFontSubset(file string) bool {
-	ext := strings.ToLower(filepath.Ext(file))
-	return (ext == ".ass" || ext == ".ssa") && notSubsetFile(filepath.Base(file))
-}
-
-// Inspect exactly the files the transfer will process, before replacing anything in the library.
 func prepareTaskSubtitles(ctx context.Context, root string, media []taskMedia, subsetter subtitle.Subsetter) subtitle.MissingFonts {
 	missing := make(subtitle.MissingFonts)
 	prepared := make(map[string]preparedSubtitle)
 	for i := range media {
-		files, readErr := utils.FindSameBaseFiles(media[i].meta.FilePath)
-		media[i].meta.sidecars = &taskSidecars{files: files, err: readErr, prepared: prepared}
+		media[i].meta.preparedSubsets = prepared
+		files, err := utils.FindSameBaseFiles(media[i].meta.FilePath)
+		if err != nil {
+			continue // 转移该视频时会返回目录读取错误。
+		}
+		mediaBase := utils.GetFileBaseName(media[i].meta.FilePath)
 		for _, file := range files {
-			if !needsFontSubset(file) {
+			if !needsFontSubset(strings.TrimPrefix(file, mediaBase)) {
 				continue
 			}
 			if _, seen := prepared[file]; seen {
