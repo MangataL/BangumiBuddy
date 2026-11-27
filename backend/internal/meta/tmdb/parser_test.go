@@ -45,8 +45,6 @@ func TestClientTVSeasons(t *testing.T) {
 			fmt.Fprint(w, tv)
 		case "/3/tv/2":
 			fmt.Fprint(w, `{"id":2,"name":"Another show","first_air_date":"2021-01-01","seasons":[]}`)
-		case "/3/tv/1/season/2":
-			fmt.Fprint(w, `{"episodes":[{"air_date":"2025-07-04"},{"air_date":"2025-07-11"},{"air_date":null}]}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -74,12 +72,6 @@ func TestClientTVSeasons(t *testing.T) {
 	require.Len(t, gotAll, 2)
 	assert.Equal(t, expected, gotAll[0])
 	assert.Equal(t, []meta.Season{}, gotAll[1].Seasons)
-
-	paths = nil
-	dates, err := client.GetSeasonAirDates(ctx, 1, 2)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"2025-07-04", "2025-07-11", ""}, dates)
-	assert.Equal(t, []string{"/3/tv/1/season/2"}, paths)
 
 	total, err := client.GetSeasonEpisodeTotalNum(ctx, 1, 2)
 	require.NoError(t, err)

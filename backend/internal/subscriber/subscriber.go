@@ -130,7 +130,7 @@ func (s *Subscriber) ParseRSS(ctx context.Context, req ParserRSSReq) (ParseRSSRs
 		return ParseRSSRsp{}, err
 	}
 
-	season, recommendationDate := s.recommendSeason(ctx, tv, rss.Items)
+	season, recommendationDate := recommendSeason(tv.Seasons, rss.Items)
 	return ParseRSSRsp{
 		Seasons:            tv.Seasons,
 		RecommendationDate: recommendationDate,

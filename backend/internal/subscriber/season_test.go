@@ -2,7 +2,6 @@ package subscriber
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -22,58 +21,43 @@ var callOfTheNight = meta.Meta{
 	},
 }
 
-func rssItem(title, date string) RSSItem {
-	published, _ := time.Parse(time.DateOnly, date)
-	return RSSItem{Title: title, PublishedAt: published}
-}
-
-func weeklyAirDates(first string, count int) []string {
-	date, _ := time.Parse(time.DateOnly, first)
-	dates := make([]string, count)
-	for i := range dates {
-		dates[i] = date.AddDate(0, 0, 7*i).Format(time.DateOnly)
-	}
-	return dates
-}
-
 func TestParseRSSCallOfTheNight(t *testing.T) {
-	const batch = "[星空字幕组&LoliHouse] 彻夜之歌 / Yofukashi no Uta [01-13] [WebRip 1080p]"
-	const single = "[LoliHouse] 彻夜之歌 第二季 / Yofukashi no Uta S2 - 01 [WebRip 1080p]"
 	cases := []struct {
 		name       string
 		tmdbID     int
-		items      []RSSItem
+		dates      []string
 		wantSeason int
 		wantDate   string
 	}{
-		{"第一季仅有完结后发布的合集", 0, []RSSItem{rssItem(batch, "2022-12-01")}, 1, "2022-12-01"},
-		{"第二季第一条是合集，中间缺日期，最早的有效单集排在最后", callOfTheNight.TMDBID, []RSSItem{
-			rssItem(batch, "2025-09-20"), rssItem(single, ""),
-			rssItem(single, "2025-07-19"), rssItem(single, "2025-07-05"),
-		}, 2, "2025-07-05"},
-		{"两季皆已播出的合集", 0, []RSSItem{rssItem(batch, "2025-09-20")}, 0, ""},
-		{"单集补档明显晚于所有播出日期", 0, []RSSItem{rssItem(single, "2025-12-01")}, 0, ""},
-		{"单集缺少日期时不得改用合集日期", 0, []RSSItem{rssItem(batch, "2022-12-01"), rssItem(single, "")}, 0, ""},
-		{"单集标题写第二季但日期属于第一季", 0, []RSSItem{rssItem(single, "2022-07-09")}, 1, "2022-07-09"},
-		{"晚发单集不能回退到可推断的合集", 0, []RSSItem{rssItem(batch, "2022-12-01"), rssItem(single, "2022-12-02")}, 0, ""},
-		{"无法识别条目类型", 0, []RSSItem{rssItem("[Group] Yofukashi no Uta [1080p]", "2022-07-09")}, 0, ""},
-		{"尚未开播的合集", 0, []RSSItem{rssItem(batch, "2022-07-07")}, 0, ""},
+		{"第一季完结后的合集", 0, []string{"2022-12-01"}, 1, "2022-12-01"},
+		{"第二季首播当天", 1, []string{"2025-07-04"}, 2, "2025-07-04"},
+		{"第二季开播三周后才更新", 1, []string{"2025-07-25"}, 2, "2025-07-25"},
+		{"两季均已完结的补档默认最近开播的季", 0, []string{"2025-12-01"}, 2, "2025-12-01"},
+		{"按最早的有效日期选季", 1, []string{"2025-07-25", "", "2022-07-09"}, 1, "2022-07-09"},
+		{"所有正季都尚未开播", 0, []string{"2022-07-07"}, 0, ""},
+		{"日期缺失或在未来", 0, []string{"", time.Now().AddDate(0, 0, 2).Format(time.DateOnly)}, 0, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			var items []RSSItem
+			for _, date := range tc.dates {
+				var item RSSItem
+				if date != "" {
+					var err error
+					item.PublishedAt, err = time.Parse(time.DateOnly, date)
+					require.NoError(t, err)
+				}
+				items = append(items, item)
+			}
+			ctx := t.Context()
 			ctrl := gomock.NewController(t)
 			rss := NewMockRSSParser(ctrl)
 			parser := meta.NewMockParser(ctrl)
-			ctx := context.Background()
-			rss.EXPECT().Parse(ctx, "rss").Return(RSS{BangumiName: "彻夜之歌", Items: tc.items}, nil)
+			rss.EXPECT().Parse(ctx, "rss").Return(RSS{BangumiName: "彻夜之歌", Items: items}, nil)
 			if tc.tmdbID == 0 {
 				parser.EXPECT().SearchTV(ctx, "彻夜之歌").Return(callOfTheNight, nil)
 			} else {
 				parser.EXPECT().ParseTV(ctx, tc.tmdbID).Return(callOfTheNight, nil)
-			}
-			for _, season := range callOfTheNight.Seasons {
-				parser.EXPECT().GetSeasonAirDates(ctx, callOfTheNight.TMDBID, season.Number).
-					Return(weeklyAirDates(season.AirDate, season.EpisodeTotalNum), nil).MaxTimes(1)
 			}
 			s := Subscriber{rssParser: rss, metaParser: parser}
 			got, err := s.ParseRSS(ctx, ParserRSSReq{RSSLink: "rss", TMDBID: tc.tmdbID})
@@ -88,75 +72,35 @@ func TestParseRSSCallOfTheNight(t *testing.T) {
 	}
 }
 
-func TestParseRSSEpisodeSchedules(t *testing.T) {
-	seasons := []meta.Season{
-		{Number: 1, AirDate: "2023-01-05", EpisodeTotalNum: 2, PosterURL: "s1"},
-		{Number: 2, AirDate: "2023-03-03", EpisodeTotalNum: 2, PosterURL: "s2"},
-	}
-	cases := []struct {
-		name       string
-		firstDates []string
-		nextDates  []string
-		nextErr    error
-		want       int
-	}{
-		{"第一季分割放送，下半篇晚于第二季首播", []string{"2023-01-05", "2023-10-05"}, []string{"2023-03-03", "2023-03-10"}, nil, 1},
-		{"两季都有同时期单集", []string{"2023-01-05", "2023-10-05"}, []string{"2023-03-03", "2023-10-02"}, nil, 0},
-		{"另一季播出日期不全", []string{"2023-01-05", "2023-10-05"}, []string{"2023-03-03", ""}, nil, 0},
-		{"另一季详情请求失败，仍然可以手选", []string{"2023-01-05", "2023-10-05"}, nil, errors.New("unavailable"), 0},
-		{"落在两段放送之间", []string{"2023-01-05", "2023-12-15"}, []string{"2023-03-03", "2023-03-10"}, nil, 0},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			rss := NewMockRSSParser(ctrl)
-			parser := meta.NewMockParser(ctrl)
-			ctx := context.Background()
-			rss.EXPECT().Parse(ctx, "rss").Return(RSS{Items: []RSSItem{rssItem("[Group] Some Anime S2 - 01", "2023-10-06")}}, nil)
-			parser.EXPECT().ParseTV(ctx, 1).Return(meta.Meta{TMDBID: 1, Seasons: seasons}, nil)
-			parser.EXPECT().GetSeasonAirDates(ctx, 1, 1).Return(tc.firstDates, nil)
-			parser.EXPECT().GetSeasonAirDates(ctx, 1, 2).Return(tc.nextDates, tc.nextErr)
-			s := Subscriber{rssParser: rss, metaParser: parser}
-			got, err := s.ParseRSS(ctx, ParserRSSReq{RSSLink: "rss", TMDBID: 1})
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, got.Season)
-			assert.Equal(t, seasons, got.Seasons)
-			if tc.want == 0 {
-				assert.Empty(t, got.RecommendationDate)
-			}
-		})
-	}
-}
-
-func TestParseRSSWithoutSeasonRequests(t *testing.T) {
-	var manySeasons []meta.Season
-	for i := 1; i <= 30; i++ {
-		manySeasons = append(manySeasons, meta.Season{Number: i, AirDate: "2020-01-01"})
-	}
-	cases := []struct {
+func TestRecommendSeasonByPremiereDate(t *testing.T) {
+	published, err := time.Parse(time.RFC3339, "2025-07-04T00:12:00+08:00")
+	require.NoError(t, err)
+	items := []RSSItem{{PublishedAt: published}}
+	older := meta.Season{Number: 1, AirDate: "2022-07-08"}
+	latest := meta.Season{Number: 2, AirDate: "2025-07-04"}
+	sameDay := meta.Season{Number: 3, AirDate: latest.AirDate}
+	for _, tc := range []struct {
 		name    string
 		seasons []meta.Season
 		items   []RSSItem
 		want    int
 	}{
-		{"无正季", nil, nil, 0},
-		{"仅一个正季可以默认", callOfTheNight.Seasons[:1], nil, 1},
-		{"候选过多时跳过查询", manySeasons, []RSSItem{rssItem("[Group] Anime - 01", "2022-01-01")}, 0},
-		{"某季首播日未知的合集", []meta.Season{{Number: 1, AirDate: "2022-01-01"}, {Number: 2}}, []RSSItem{rssItem("Anime [01-13]", "2022-06-01")}, 0},
-	}
-	for _, tc := range cases {
+		{"忽略特别篇并按日期比较乱序的季度", []meta.Season{latest, {Number: 0}, older}, items, 2},
+		{"最新首播日并列", []meta.Season{latest, older, sameDay}, items, 0},
+		{"较早的两季同日开播不影响最近的季", []meta.Season{older, {Number: 3, AirDate: older.AirDate}, latest}, items, 2},
+		{"正季首播日未知", []meta.Season{older, {Number: 2}}, items, 0},
+		{"没有正季", nil, items, 0},
+		{"只有一季但没有有效发布日期", []meta.Season{older}, nil, 0},
+		{"只有一季但还没开播", []meta.Season{{Number: 1, AirDate: "2025-07-05"}}, items, 0},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			rss := NewMockRSSParser(ctrl)
-			parser := meta.NewMockParser(ctrl)
-			ctx := context.Background()
-			rss.EXPECT().Parse(ctx, "rss").Return(RSS{Items: tc.items}, nil)
-			parser.EXPECT().ParseTV(ctx, 1).Return(meta.Meta{TMDBID: 1, Seasons: tc.seasons}, nil)
-			s := Subscriber{rssParser: rss, metaParser: parser}
-			got, err := s.ParseRSS(ctx, ParserRSSReq{RSSLink: "rss", TMDBID: 1})
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, got.Season)
-			assert.Empty(t, got.RecommendationDate)
+			got, date := recommendSeason(tc.seasons, tc.items)
+			require.Equal(t, tc.want, got.Number)
+			if tc.want == 0 {
+				require.Empty(t, date)
+			} else {
+				require.Equal(t, "2025-07-04", date)
+			}
 		})
 	}
 }
