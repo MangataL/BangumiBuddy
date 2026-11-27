@@ -75,3 +75,39 @@ func TestTempFontNameOnlyResolvesToKeptFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []ass.FontMeta{last}, found)
 }
+
+func TestFullNameBeatsLocalizedAlias(t *testing.T) {
+	ctx := t.Context()
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "fonts.db")))
+	require.NoError(t, err)
+	global, err := New(db)
+	require.NoError(t, err)
+	temp := ass.NewMemoryRepository()
+	alias := ass.FontMeta{FullName: "Alias Face", Type: ass.FontTypeTTF, Aliases: []freetype.FontName{{Kind: freetype.NameIDFullName, Value: "Requested"}}}
+	exact := ass.FontMeta{FullName: "Requested", Type: ass.FontTypeTTF}
+	req := ass.FindFontReq{Font: ass.Font{FontName: "requested"}}
+	for _, repo := range []ass.FontMetaRepository{temp, global} {
+		require.NoError(t, repo.Replace(ctx, []ass.FontMeta{alias, exact}))
+		set := ass.NewFontMetaSet("", repo)
+		for range 32 {
+			got, err := set.FindFontMeta(ctx, req)
+			require.NoError(t, err)
+			require.Equal(t, exact.FullName, got.FullName)
+		}
+	}
+	require.NoError(t, temp.Replace(ctx, []ass.FontMeta{alias}))
+	set := ass.NewFontMetaSet("", ass.NewTempFontMetaRepository(temp, global))
+	got, err := set.FindFontMeta(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, exact.FullName, got.FullName)
+
+	exact.Type = ass.FontTypeOTF
+	require.NoError(t, global.Replace(ctx, []ass.FontMeta{exact}))
+	got, err = set.FindFontMeta(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, alias.FullName, got.FullName)
+	req.UseOTF = true
+	got, err = set.FindFontMeta(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, exact.FullName, got.FullName)
+}

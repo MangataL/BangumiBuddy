@@ -254,9 +254,12 @@ func (r *FontMetaSet) extractFontMeta(face *freetype.Face, fontPath string, inde
 func (r *FontMetaSet) FindFontMeta(ctx context.Context, req FindFontReq) (FontMeta, error) {
 	// 先查找TTF字体
 	fontMetaTTF, deviationValueTTF, err := r.findFontMeta(ctx, req.Font, FontTypeTTF, req.UseSimilarFont)
+	if !req.UseOTF || (err == nil && deviationValueTTF == exactFullNameMatch) {
+		return fontMetaTTF, err
+	}
 	if err != nil {
 		// ttf匹配不到时，如果可以尝试otf，则尝试otf，否则返回错误
-		if errors.Is(err, ErrFontNotFound) && req.UseOTF {
+		if errors.Is(err, ErrFontNotFound) {
 			fontMeta, _, err := r.findFontMeta(ctx, req.Font, FontTypeOTF, req.UseSimilarFont)
 			return fontMeta, err
 		}
@@ -280,6 +283,9 @@ func (r *FontMetaSet) FindFontMeta(ctx context.Context, req FindFontReq) (FontMe
 	return fontMetaOTF, nil
 }
 
+// 同名候选中，字体自身的完整名称优先于本地化别名和字重匹配。
+const exactFullNameMatch = -1
+
 func (r *FontMetaSet) findFontMeta(ctx context.Context, font Font, fontType FontType, useSimilarFont bool) (FontMeta, int, error) {
 	var deviationValue = math.MaxInt
 	// 先用FullName查找
@@ -291,6 +297,12 @@ func (r *FontMetaSet) findFontMeta(ctx context.Context, font Font, fontType Font
 		return FontMeta{}, 0, err
 	}
 	if len(fontMetas) != 0 {
+		key := FontNameKey(font.FontName)
+		for _, candidate := range fontMetas {
+			if FontNameKey(candidate.FullName) == key {
+				return candidate, exactFullNameMatch, nil
+			}
+		}
 		return fontMetas[0], 0, nil
 	}
 
